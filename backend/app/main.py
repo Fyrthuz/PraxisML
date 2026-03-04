@@ -1,0 +1,120 @@
+import subprocess
+import sys
+import os
+import logging
+from contextlib import asynccontextmanager
+
+os.environ["GIT_PYTHON_REFRESH"] = "quiet"
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+# ── MLFlow UI subprocess (local dev only) ─────────────────────────────────────
+_mlflow_proc: subprocess.Popen | None = None
+
+MLFLOW_UI_PORT = 5001
+
+
+def _start_mlflow_ui() -> None:
+    """
+    Lanza `mlflow ui` en background en el puerto MLFLOW_UI_PORT.
+    Si MLFlow no está disponible o ya hay algo corriendo en ese puerto,
+    lo registra y sigue (no es crítico para la API).
+    """
+    global _mlflow_proc
+    from pathlib import Path
+    from app.services.mlflow_service import MLFlowService
+
+    try:
+        tracking_uri = MLFlowService().get_tracking_uri()
+        # Si el tracking URI es remoto (http), no iniciamos el proceso local
+        if tracking_uri.startswith("http"):
+            logger.info("MLFlow tracking URI es remoto (%s), saltando MLFlow UI local.", tracking_uri)
+            return
+
+        _mlflow_proc = subprocess.Popen(
+            [
+                sys.executable, "-m", "mlflow", "ui",
+                "--backend-store-uri", tracking_uri,
+                "--port", str(MLFLOW_UI_PORT),
+                "--host", "0.0.0.0",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logger.info(
+            "MLFlow UI iniciado en http://localhost:%s (PID %s)",
+            MLFLOW_UI_PORT, _mlflow_proc.pid,
+        )
+    except Exception as exc:
+        logger.warning("No se pudo iniciar MLFlow UI: %s", exc)
+
+
+def _stop_mlflow_ui() -> None:
+    global _mlflow_proc
+    if _mlflow_proc and _mlflow_proc.poll() is None:
+        _mlflow_proc.terminate()
+        logger.info("MLFlow UI detenido.")
+
+
+# ── App lifecycle ─────────────────────────────────────────────────────────────
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    _start_mlflow_ui()
+    yield
+    _stop_mlflow_ui()
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title=settings.PROJECT_NAME,
+        openapi_url=f"{settings.API_V1_STR}/openapi.json",
+        description="API MVP para Antigravity SaaS",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+
+    # ── CORS ──────────────────────────────────────────────────────────────────
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Limitar al dominio del frontend en producción
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # ── Health ────────────────────────────────────────────────────────────────
+    @app.get("/health", tags=["System"])
+    def health_check():
+        return {"status": "ok", "project": settings.PROJECT_NAME}
+
+    # ── MLFlow UI redirect ────────────────────────────────────────────────────
+    @app.get("/mlflow", tags=["System"], include_in_schema=False)
+    def mlflow_ui_redirect():
+        """Redirige al dashboard de MLFlow UI."""
+        tracking_uri = settings.MLFLOW_TRACKING_URI
+        if tracking_uri and tracking_uri.startswith("http"):
+            return RedirectResponse(url=tracking_uri)
+        return RedirectResponse(url=f"http://localhost:{MLFLOW_UI_PORT}")
+
+    # ── Routers ───────────────────────────────────────────────────────────────
+    from app.api.routes.v1 import auth, tenants, datasets, models, predictions, preprocessing, training, profiling
+    app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
+    app.include_router(tenants.router, prefix=f"{settings.API_V1_STR}/tenants", tags=["Tenants"])
+    app.include_router(datasets.router, prefix=f"{settings.API_V1_STR}/datasets", tags=["Datasets"])
+    app.include_router(profiling.router, prefix=f"{settings.API_V1_STR}/profiling", tags=["Profiling"])
+    app.include_router(models.router, prefix=f"{settings.API_V1_STR}/models", tags=["Models"])
+    app.include_router(predictions.router, prefix=f"{settings.API_V1_STR}", tags=["Predictions"])
+    app.include_router(preprocessing.router, prefix=f"{settings.API_V1_STR}/preprocessing", tags=["Preprocessing"])
+    app.include_router(training.router, prefix=f"{settings.API_V1_STR}/training", tags=["Training"])
+
+    return app
+
+
+app = create_app()

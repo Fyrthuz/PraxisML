@@ -1,0 +1,109 @@
+services:
+  # 1. Database
+  db:
+    image: postgres:15
+    container_name: antigravity_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: antigravity_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Cache & Message Broker
+  redis:
+    image: redis:7
+    container_name: antigravity_redis
+    ports:
+      - "6379:6379"
+    restart: always
+
+  # 3. Experiment Tracking
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v3.10.0
+    container_name: mlflow_server
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/data:/app/data
+    environment:
+      - MLFLOW_SERVER_ALLOWED_HOSTS=*
+    command: >
+      mlflow server --backend-store-uri file:///app/data/mlruns --default-artifact-root file:///app/data/artifacts --artifacts-destination file:///app/data/artifacts --serve-artifacts --host 0.0.0.0 --port 5000 --allowed-hosts *
+    restart: always
+
+  # 4. FastAPI Backend
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: antigravity_api
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      mlflow:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/antigravity_db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/MRI:/app/MRI
+      - ./backend/models:/app/models
+      - ./backend/data:/app/data
+    restart: always
+
+  # 5. Celery Worker
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: antigravity_worker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/antigravity_db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    command: [ "uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--pool=solo" ]
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/MRI:/app/MRI
+      - ./backend/models:/app/models
+      - ./backend/data:/app/data
+    restart: always
+
+  # 6. Frontend
+  frontend:
+    build:
+      context: ./frontend/frontend
+      dockerfile: Dockerfile
+    container_name: antigravity_frontend
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    restart: always
+
+volumes:
+  postgres_data:
