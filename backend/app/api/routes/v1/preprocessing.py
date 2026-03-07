@@ -27,7 +27,7 @@ router = APIRouter()
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
 class PreprocessingStep(BaseModel):
-    type: str           # "impute", "scale", "encode", "feature_eng"
+    type: str           # "impute", "scale", "encode", "feature_eng", "drop"
     columns: List[str]
     strategy: Optional[str] = None   # para impute: mean, median, most_frequent, constant
     method: Optional[str] = None     # para scale/encode/feature_eng: standard, minmax, robust / onehot, ordinal / log_transform, polynomial, binning

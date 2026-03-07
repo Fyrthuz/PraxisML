@@ -16,3 +16,37 @@ carvana/train_images/
 **/*.tif
 medsam_vit_b.pth
 backend/data/*
+
+# ── Entornos ──────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+# Mantener .env.example (es el template documentado)
+
+# ── Python ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── Node ──────────────────────────────────────────────────────────
+node_modules/
+.next/
+.nuxt/
+out/
+
+# ── Docker ────────────────────────────────────────────────────────
+# Los volúmenes de datos de contenedores no se versionan
+backend/data/
+
+# ── IDE ───────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp

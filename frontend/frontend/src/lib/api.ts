@@ -89,7 +89,7 @@ export interface DatasetPreview {
 }
 
 export interface PreprocessingStep {
-    type: "impute" | "scale" | "encode";
+    type: "impute" | "scale" | "encode" | "feature_eng" | "drop";
     columns: string[];
     strategy?: string;
     method?: string;

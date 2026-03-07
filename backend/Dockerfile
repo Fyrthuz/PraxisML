@@ -22,5 +22,5 @@ COPY . .
 
 EXPOSE 8000
 
-# Al estar en /opt/venv, el uvicorn instalado allí siempre será visible
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Script de arranque: aplica migraciones y luego lanza el servidor
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

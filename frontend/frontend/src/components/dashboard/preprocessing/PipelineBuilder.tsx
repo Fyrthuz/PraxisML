@@ -44,6 +44,7 @@ export default function PipelineBuilder({ datasetId, tenantId, profile, onApply 
         { id: "scale", label: "Scaling" },
         { id: "encode", label: "Encoding" },
         { id: "feature_eng", label: "Feature Engineering" },
+        { id: "drop", label: "Drop Columns" },
     ];
 
     const strategies: Record<string, string[]> = {
@@ -51,6 +52,7 @@ export default function PipelineBuilder({ datasetId, tenantId, profile, onApply 
         scale: ["standard", "minmax", "robust"],
         encode: ["onehot", "ordinal"],
         feature_eng: ["log_transform", "polynomial", "binning"],
+        drop: ["drop"],
     };
 
     const addStep = (type: any) => {
@@ -177,9 +179,10 @@ export default function PipelineBuilder({ datasetId, tenantId, profile, onApply 
                                 <select
                                     value={step.type === 'impute' ? step.strategy : step.method}
                                     onChange={(e) => updateStep(idx, step.type === 'impute' ? { strategy: e.target.value } : { method: e.target.value })}
-                                    className="w-full text-sm border-slate-700 bg-slate-900 text-slate-200 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                    disabled={step.type === 'drop'}
+                                    className="w-full text-sm border-slate-700 bg-slate-900 text-slate-200 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50"
                                 >
-                                    {strategies[step.type].map(s => <option key={s} value={s}>{s}</option>)}
+                                    {strategies[step.type].map(s => <option key={s} value={s}>{s === 'drop' ? 'Remove Column(s)' : s}</option>)}
                                 </select>
                             </div>
 

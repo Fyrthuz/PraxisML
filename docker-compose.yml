@@ -11,6 +11,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-mlflow-db.sh:/docker-entrypoint-initdb.d/init-mlflow-db.sh:ro
     restart: always
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres" ]
@@ -36,11 +37,55 @@ services:
       - ./backend/data:/app/data
     environment:
       - MLFLOW_SERVER_ALLOWED_HOSTS=*
+      # Credenciales de S3 para hablar con MinIO (los mismos que MINIO_ROOT_USER)
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      # Endpoint explícito para boto3 (necesario porque no es AWS real)
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+    depends_on:
+      - minio
     command: >
-      mlflow server --backend-store-uri file:///app/data/mlruns --default-artifact-root file:///app/data/artifacts --artifacts-destination file:///app/data/artifacts --serve-artifacts --host 0.0.0.0 --port 5000 --allowed-hosts *
+      sh -c "pip install psycopg2-binary boto3 && mlflow server
+      --backend-store-uri postgresql://mlflow:mlflow@db:5432/mlflow_db
+      --default-artifact-root s3://antigravity/mlruns
+      --serve-artifacts
+      --host 0.0.0.0
+      --port 5000"
+    restart: always
+  # 4. Object Storage — MinIO (self-hosted S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: antigravity_minio
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # MinIO Console UI
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: always
 
-  # 4. FastAPI Backend
+  # 4b. MinIO Initialization (creates the default bucket)
+  minio-init:
+    image: minio/mc:latest
+    container_name: antigravity_minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/antigravity || true;
+      exit 0;
+      "
+  # 5. FastAPI Backend
   api:
     build:
       context: ./backend
@@ -53,11 +98,20 @@ services:
         condition: service_started
       mlflow:
         condition: service_started
+      minio:
+        condition: service_healthy
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/antigravity_db
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - STORAGE_BACKEND=minio
+      - MINIO_ENDPOINT=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
     ports:
       - "8000:8000"
     volumes:
@@ -65,9 +119,10 @@ services:
       - ./backend/MRI:/app/MRI
       - ./backend/models:/app/models
       - ./backend/data:/app/data
+      - ./backend/migrations:/app/migrations
     restart: always
 
-  # 5. Celery Worker
+  # 6. Celery Worker
   worker:
     build:
       context: ./backend
@@ -78,20 +133,30 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      minio:
+        condition: service_healthy
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/antigravity_db
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - STORAGE_BACKEND=minio
+      - MINIO_ENDPOINT=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
     command: [ "uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--pool=solo" ]
     volumes:
       - ./backend/app:/app/app
       - ./backend/MRI:/app/MRI
       - ./backend/models:/app/models
       - ./backend/data:/app/data
+      - ./backend/migrations:/app/migrations
     restart: always
 
-  # 6. Frontend
+  # 7. Frontend
   frontend:
     build:
       context: ./frontend/frontend
@@ -105,5 +170,40 @@ services:
       - NEXT_PUBLIC_API_URL=http://api:8000
     restart: always
 
+  # 8. Prometheus — scraping de métricas
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: antigravity_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    restart: always
+
+  # 9. Grafana — dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: antigravity_grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    restart: always
+
 volumes:
   postgres_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:

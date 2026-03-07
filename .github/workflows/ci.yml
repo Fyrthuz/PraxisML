@@ -1,0 +1,103 @@
+name: CI — Tests & Lint
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: antigravity_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Crear entorno virtual e instalar dependencias
+        run: uv sync --extra dev
+
+      - name: Instalar dependencias de test (si no están en pyproject)
+        run: uv add --dev pytest pytest-asyncio httpx aiosqlite pytest-cov
+
+      - name: Ejecutar tests unitarios
+        env:
+          ENVIRONMENT: testing
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/antigravity_test
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          CELERY_RESULT_BACKEND: redis://localhost:6379/0
+          MLFLOW_TRACKING_URI: ""
+          SECRET_KEY: test_secret_key_ci
+          STORAGE_BACKEND: local
+          CORS_ORIGINS: "http://localhost:3000"
+        run: uv run pytest tests/unit/ -v --tb=short
+
+      - name: Ejecutar tests de integración
+        env:
+          ENVIRONMENT: testing
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/antigravity_test
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          CELERY_RESULT_BACKEND: redis://localhost:6379/0
+          MLFLOW_TRACKING_URI: ""
+          SECRET_KEY: test_secret_key_ci
+          STORAGE_BACKEND: local
+          CORS_ORIGINS: "http://localhost:3000"
+        run: uv run pytest tests/integration/ -v --tb=short
+
+      - name: Generar reporte de cobertura
+        env:
+          ENVIRONMENT: testing
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/antigravity_test
+          CELERY_BROKER_URL: redis://localhost:6379/0
+          CELERY_RESULT_BACKEND: redis://localhost:6379/0
+          MLFLOW_TRACKING_URI: ""
+          SECRET_KEY: test_secret_key_ci
+          STORAGE_BACKEND: local
+          CORS_ORIGINS: "http://localhost:3000"
+        run: uv run pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=30
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      - name: Instalar ruff
+        run: uv add --dev ruff
+      - name: Ejecutar ruff
+        run: uv run ruff check app/ --select=E,F,W --ignore=E501

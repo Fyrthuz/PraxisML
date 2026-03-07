@@ -120,7 +120,10 @@ def build_pipeline(config: Dict[str, Any], column_names: List[str]) -> ColumnTra
                 f"Paso {i}: columnas no encontradas en el dataset: {sorted(invalid)}"
             )
 
-        if step_type == "impute":
+        if step_type == "drop":
+            transformers.append((f"drop_{i}", "drop", columns))
+
+        elif step_type == "impute":
             strategy = step.get("strategy", "mean")
             if strategy not in _IMPUTERS:
                 raise ValueError(f"Paso {i}: estrategia de imputación no soportada: {strategy}")

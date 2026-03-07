@@ -10,6 +10,10 @@ def generate_uuid():
 class MLModel(Base):
     """
     Rastrea los modelos registrados en MLFlow que el usuario puede usar.
+
+    Las columnas *_path guardan object keys del StorageService
+    (e.g. "{tenant_id}/models/{id}/pipeline.joblib"), NO rutas de disco.
+    Usa get_storage().download(key) para obtener el contenido.
     """
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     name = Column(String, nullable=False)
@@ -22,14 +26,16 @@ class MLModel(Base):
     # Metadatos como: {"framework": "pytorch", "architecture": "unet", "num_classes": 2}
     metrics_metadata = Column(JSON, nullable=True)
     
-    preprocessing_pipeline_path = Column(String, nullable=True) # Ruta al pipeline de preprocesamiento asociado
+    # Object key del pipeline de preprocesamiento en el StorageService
+    preprocessing_pipeline_path = Column(String, nullable=True)
     
     is_active = Column(Boolean, default=True)
-    is_public = Column(Boolean, default=False) # Si es público todos pueden usarlo, si no, solo el tenant.
+    is_public = Column(Boolean, default=False)  # Si es público todos pueden usarlo, si no, solo el tenant.
     
     # Soporte para TorchScript
     is_torchscript = Column(Boolean, default=False)
-    torchscript_path = Column(String, nullable=True) # file path si se subió un .pt
+    # Object key del modelo TorchScript exportado (.pt) en el StorageService
+    torchscript_path = Column(String, nullable=True)
     
     # Aislamiento
     tenant_id = Column(String, ForeignKey("tenant.id"), nullable=False, index=True)

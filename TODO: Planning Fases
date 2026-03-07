@@ -1,0 +1,229 @@
+# 🗺️ Roadmap de Desarrollo — TFM Productivo
+
+> **Stack actual:** FastAPI + MLflow, Celery + Redis, UNet + MLP/sklearn, uncertainty estimation (MC Dropout, TTA, Ensemble, Conformal), multi-tenant, Next.js frontend, PyTorch 2.10/CUDA 12, scikit-learn 1.7.
+>
+> **Decisión de almacenamiento:** **MinIO** en local (self-hosted, misma máquina), **S3/GCS** en producción cloud. El código usa un `StorageService` abstracto que cambia solo por configuración.
+
+---
+
+## Fase 0 — Fundamentos Técnicos (Pre-requisito)
+
+> ⛔ Estas tareas deben completarse **antes** de iniciar las fases siguientes. Afectan a seguridad, escalabilidad y calidad del código de forma transversal.
+
+### 0.1 Seguridad
+
+| Qué | Dónde | Detalle |
+|---|---|---|
+| Restringir CORS | `app/main.py` L86 | `allow_origins=["*"]` → dominio del frontend por entorno |
+| Mover `.env` | `backend/app/.env` → raíz del proyecto | Verificar `.gitignore`. Añadir `.env.example` documentado |
+| Rate limiting | Nuevo middleware | `slowapi` en endpoints de entrenamiento e inferencia |
+| RBAC básico | `app/models/`, `app/api/deps.py` | Roles `admin / editor / viewer` por tenant. Ahora solo hay `is_public` |
+
+### 0.2 Almacenamiento de Artefactos — `StorageService`
+
+**Estrategia:** `StorageService` abstracto con dos implementaciones intercambiables por variable de entorno `STORAGE_BACKEND=minio|s3|gcs`.
+
+| Qué | Dónde | Detalle |
+|---|---|---|
+| `StorageService` abstracto | `app/services/storage_service.py` (nuevo) | Interface: `upload(path, data)`, `download(path)`, `get_url(path)` |
+| Implementación MinIO | `app/services/storage_minio.py` (nuevo) | Usa `boto3` con endpoint MinIO local. Config: `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` |
+| Implementación S3 | `app/services/storage_s3.py` (nuevo) | Mismo `boto3`, endpoint AWS. Misma interface |
+| Migrar rutas disco | `app/models/prediction.py`, `app/models/ml_model.py` | Las columnas `*_path` pasan a guardar **object keys** (`tenant_id/predictions/xxx.npy`), no rutas de disco |
+| MinIO en docker-compose | `docker-compose.yml` | Añadir servicio `minio` (imagen `minio/minio`) con consola en puerto `9001` |
+
+### 0.3 Tests
+
+| Qué | Cómo |
+|---|---|
+| Tests de integración de endpoints críticos | `pytest` + `httpx.AsyncClient` para `/training`, `/predictions`, `/models` |
+| Tests unitarios de `core_ml` | `factory.py`, `preprocessing.py`, estimadores de incertidumbre |
+| CI en GitHub Actions | Workflow que ejecuta tests en cada PR |
+
+### 0.4 Observabilidad
+
+| Qué | Dónde | Detalle |
+|---|---|---|
+| Logging estructurado JSON | `app/core/logging.py` (nuevo) | Campos: `tenant_id`, `model_id`, `task_id`, `level`, `message` |
+| Endpoint `/metrics` | `app/main.py` | `prometheus-fastapi-instrumentator`: latencia, requests/s, errores |
+| Prometheus + Grafana | `docker-compose.yml` | Servicios `prometheus` y `grafana` para desarrollo local |
+
+### 0.5 Gestión de Errores Unificada
+
+| Qué | Dónde | Detalle |
+|---|---|---|
+| `app/core/exceptions.py` (nuevo) | Backend | Jerarquía de excepciones: `ModelNotFoundError`, `TrainingError`, `StorageError`... |
+| Handlers globales FastAPI | `app/main.py` | `@app.exception_handler` devuelve JSON estructurado con `code`, `message`, `detail` |
+
+---
+
+## Fase 1 — Gestión del Ciclo de Vida de Modelos (MLOps)
+
+> Con la infraestructura base lista, consolidar el control de versiones de modelos y datos antes de multiplicar los tipos de modelos.
+
+### 1.1 Model Registry — Versionado Semántico
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `app/models/ml_model.py` | MODIFICAR | Añadir: `version` (`"1.2.0"`), `stage` (`Staging/Production/Archived`), `promoted_at`, `promoted_by` |
+| `app/services/mlflow_service.py` | MODIFICAR | Usar **MLflow Model Registry**: `mlflow.register_model()`, `transition_model_version_stage()` |
+| `app/api/routes/v1/models.py` | MODIFICAR | Endpoints: `POST /models/{id}/promote`, `POST /models/{id}/archive` |
+| `backend/migrate.py` | MODIFICAR | Migración para nuevas columnas en `ml_model` |
+
+### 1.2 Control de Versiones de Datos — DVC
+
+| Elemento | Acción | Detalle |
+|---|---|---|
+| `.dvc/` (nuevo) | CREAR | `dvc init` en la raíz. Remote DVC → MinIO local / S3 en producción |
+| `app/models/dataset.py` | MODIFICAR | Añadir `dvc_commit_hash` para asociar dataset ↔ training run |
+| `utils/dataset.py` | MODIFICAR | Helper para consultar hash DVC de un dataset antes de lanzar entrenamiento |
+
+### 1.3 CI/CD de Modelos
+
+| Elemento | Acción | Detalle |
+|---|---|---|
+| `.github/workflows/model_ci.yml` (nuevo) | CREAR | Evalúa métricas mínimas antes de promocionar a `Production` |
+| `app/worker/` | MODIFICAR | Tarea Celery `promote_model_task`: evaluación automática → cambio de stage |
+
+
+---
+
+## Fase 2 — Visión por Computador: Clasificación + Segmentación
+
+> Extensión natural del UNet ya existente. Los artefactos (imágenes, pesos) ya van a MinIO gracias a la Fase 0.
+
+### 2.1 Clasificación de Imágenes
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `core_ml/models/image_classifier.py` (nuevo) | CREAR | `ImageClassifier` PyTorch con backbone configurable: `ResNet-18/50`, `EfficientNet-B0/B3`, `ViT-Small` via `timm` |
+| `core_ml/hyperparams.py` | MODIFICAR | Registrar `resnet`, `efficientnet`, `vit` con hiperparámetros: `backbone`, `freeze_layers`, `epochs`, `lr`, `augmentation` |
+| `core_ml/models/factory.py` | MODIFICAR | Instanciar los nuevos clasificadores de imagen |
+| `app/api/routes/v1/predictions.py` | MODIFICAR | Devolver `class_label + confidence` para clasificación, además de máscaras para segmentación |
+
+### 2.2 Segmentación — Mejora del UNet Actual
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `core_ml/models/unet.py` | MODIFICAR | Soporte para encoder preentrenado via `segmentation-models-pytorch` |
+| `core_ml/hyperparams.py` | MODIFICAR | Ampliar entrada `unet` con `encoder_backbone` (`resnet34`, `efficientnet-b2`...) |
+
+### 2.3 Frontend — Visor de Resultados de Imagen
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `frontend/src/components/ImageViewer` (nuevo) | CREAR | Renderiza imagen original + máscara superpuesta (canvas overlay) o bounding boxes |
+| `frontend/src/components/PredictionCard` | MODIFICAR | Mostrar `class_label` y `confidence` para clasificación de imágenes |
+
+---
+
+## Fase 3 — Modelos de NLP
+
+> Nueva capacidad desde cero. La infraestructura de texto requiere nuevos tipos de dataset y pipelines de preprocesamiento distintos al tabular.
+
+### 3.1 Infraestructura de Texto
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `core_ml/text_preprocessor.py` (nuevo) | CREAR | Pipeline: tokenización, truncamiento, padding via HuggingFace `AutoTokenizer` |
+| `app/models/dataset.py` | MODIFICAR | `dataset_type` enum: `tabular`, `image`, **`text`** |
+| `app/api/routes/v1/datasets.py` | MODIFICAR | Aceptar `.txt`, `.csv` (columna texto), `.jsonl` |
+
+### 3.2 Modelos NLU — Comprensión
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `core_ml/models/text_classifier.py` (nuevo) | CREAR | Wrapper `AutoModelForSequenceClassification`: clasificación, sentimiento, categorías |
+| `core_ml/models/ner_model.py` (nuevo) | CREAR | Wrapper `AutoModelForTokenClassification` para extracción de entidades (NER) |
+| `core_ml/hyperparams.py` | MODIFICAR | Registrar `text_classifier` y `ner`: `base_model`, `epochs`, `lr`, `max_length` |
+| `services/training_service.py` | MODIFICAR | Rama de entrenamiento para modelos HuggingFace (Trainer API) |
+
+### 3.3 RAG + LLM Generativo (Avanzado)
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `services/rag_service.py` (nuevo) | CREAR | Embeddings + búsqueda semántica. DB vectorial: **Qdrant** (añadir a docker-compose) |
+| `app/api/routes/v1/chat.py` (nuevo) | CREAR | Endpoint SSE/WebSocket para streaming desde LLM (OpenAI API o vLLM local) |
+| `docker-compose.yml` | MODIFICAR | Servicio `qdrant` |
+
+### 3.4 Frontend — UI de NLP
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `frontend/src/components/TextInput` (nuevo) | CREAR | Entrada de texto con resaltado de entidades (NER) y etiquetas de clasificación |
+| `frontend/src/components/ChatInterface` (nuevo) | CREAR | Interfaz de chat con streaming para LLMs |
+
+---
+
+## Fase 4 — Explicabilidad (XAI) y Monitorización de Producción
+
+> **Ya existe** una base sólida de incertidumbre en `core_ml/uncertainty/`. Esta fase añade *por qué* el modelo decidió algo (features relevantes) y métricas de salud en producción.
+
+### 4.1 XAI — Imágenes (Grad-CAM / SHAP)
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `core_ml/explainability/gradcam.py` (nuevo) | CREAR | Grad-CAM para PyTorch (UNet + clasificadores). Devuelve heatmap numpy |
+| `core_ml/explainability/shap_image.py` (nuevo) | CREAR | `shap.GradientExplainer` para modelos PyTorch de imagen |
+| `app/api/routes/v1/predictions.py` | MODIFICAR | Parámetro `?explain=true` → devuelve URL al heatmap en MinIO/S3 |
+| `app/models/prediction.py` | MODIFICAR | Columna `explanation_path` (object key en storage) |
+| `frontend/src/components/ImageViewer` | MODIFICAR | Renderizar heatmap Grad-CAM superpuesto con control de opacidad deslizable |
+
+### 4.2 XAI — Tabular (SHAP)
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `core_ml/explainability/shap_tabular.py` (nuevo) | CREAR | `TreeExplainer` (RF/GB) y `KernelExplainer` (SVM/KNN). Genera SHAP values |
+| `app/api/routes/v1/predictions.py` | MODIFICAR | Incluir `shap_values`, `feature_importances` en respuesta JSON con `explain=true` |
+| `frontend/src/components/ExplainabilityPanel` (nuevo) | CREAR | Barras de feature importance por predicción |
+
+### 4.3 XAI — NLP (Attention + SHAP)
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `core_ml/explainability/text_explainer.py` (nuevo) | CREAR | Pesos de atención BERT-like o `shap.Explainer` con transformers pipeline |
+| `frontend/src/components/TextInput` | MODIFICAR | Resaltar tokens según peso de atención (escala color verde → rojo) |
+
+### 4.4 Data Drift y Alertas
+
+| Archivo | Acción | Detalle |
+|---|---|---|
+| `services/drift_monitor.py` (nuevo) | CREAR | Calcular drift distribución training vs. producción (Evidently AI / alibi-detect) |
+| `app/api/routes/v1/models.py` | MODIFICAR | `GET /models/{id}/drift-report` → informe de drift |
+| `app/worker/` | MODIFICAR | Tarea Celery programada `drift_check_task`: ejecución diaria por tenant y modelo activo |
+| `frontend/src/` | MODIFICAR | Dashboard: gráfica de drift en el tiempo + alertas visuales |
+
+---
+
+## Cronograma
+
+| Fase | Descripción | Duración estimada | Dependencias |
+|---|---|---|---|
+| **0** | Fundamentos: seguridad, MinIO, tests, logging, errores | 2 semanas | — |
+| **1** | MLOps: model registry, versioning semántico, DVC | 2–3 semanas | Fase 0 |
+| **2** | CV: clasificación imagen + mejoras UNet | 3–4 semanas | Fase 1 |
+| **3** | NLP: texto, HuggingFace, RAG | 4–6 semanas | Fase 1 |
+| **4** | XAI + Data Drift | 2–3 semanas | Fases 2 y 3 (paralela) |
+
+```
+Fase 0  ██████
+Fase 1        ██████
+Fase 2              ████████
+Fase 3              ████████████
+Fase 4                        ██████
+```
+
+---
+
+## Stack de Servicios Docker (Entorno Local Completo)
+
+```yaml
+# Servicios a añadir/confirmar en docker-compose.yml
+services:
+  minio:          # Almacenamiento de artefactos (modelos, imágenes, .npy, heatmaps)
+  qdrant:         # Base de datos vectorial (Fase 3 NLP/RAG)
+  prometheus:     # Scraping de métricas
+  grafana:        # Dashboard de métricas y drift
+  mlflow:         # Ya existe — confirmar modo servidor con MinIO como artifact store
+  redis:          # Ya existe — Celery broker
+  postgres:       # Ya existe — base de datos principal
+```

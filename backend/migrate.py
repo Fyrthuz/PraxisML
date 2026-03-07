@@ -104,6 +104,26 @@ def run_migrations():
                 else:
                     print(f"  [=] dataset.{col_name} ya existe.")
 
+        # ── Fase 0: Seguridad — RBAC: columna role en users ─────────────────
+        if table_exists("users") and not column_exists("users", "role"):
+            print("  [+] Añadiendo columna users.role (RBAC) ...")
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN role VARCHAR NOT NULL DEFAULT 'viewer';"
+            ))
+            print("  [OK] Columna users.role añadida (default: 'viewer').")
+        else:
+            print("  [=] users.role ya existe o la tabla users no existe aún.")
+
+        # ── Fase 0: Seguridad — created_at en users ───────────────────────────
+        if table_exists("users") and not column_exists("users", "created_at"):
+            print("  [+] Añadiendo columna users.created_at ...")
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP;"
+            ))
+            print("  [OK] Columna users.created_at añadida.")
+        else:
+            print("  [=] users.created_at ya existe o la tabla users no existe aún.")
+
     # 2. Crear cualquier tabla nueva que aún no esté en la BD
     print("  [+] Sincronizando tablas (create_all checkfirst=True) ...")
     Base.metadata.create_all(bind=engine, checkfirst=True)

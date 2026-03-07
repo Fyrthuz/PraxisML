@@ -6,13 +6,24 @@ from contextlib import asynccontextmanager
 
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.config import settings
+from app.core.logging import setup_logging
+from app.core.exceptions import AntigravityError
 
+# ── Logging estructurado ───────────────────────────────────────────────────────
+setup_logging(level="DEBUG" if settings.ENVIRONMENT == "development" else "INFO")
 logger = logging.getLogger(__name__)
+
+# ── Rate Limiter (slowapi) ─────────────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
 
 # ── MLFlow UI subprocess (local dev only) ─────────────────────────────────────
 _mlflow_proc: subprocess.Popen | None = None
@@ -80,19 +91,57 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # ── CORS ──────────────────────────────────────────────────────────────────
+    # ── Rate Limiter state ────────────────────────────────────────────────────
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    # ── CORS — restringido al dominio del frontend por entorno ────────────────
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Limitar al dominio del frontend en producción
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
+    # ── Global exception handlers ─────────────────────────────────────────────
+
+    @app.exception_handler(AntigravityError)
+    async def antigravity_error_handler(request: Request, exc: AntigravityError):
+        logger.warning(
+            "AntigravityError [%s]: %s",
+            exc.code,
+            exc.message,
+            extra={"detail": str(exc.detail) if exc.detail else None},
+        )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "code": exc.code,
+                "message": exc.message,
+                "detail": exc.detail,
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.exception("Error no controlado en %s %s", request.method, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "code": "INTERNAL_ERROR",
+                "message": "Error interno del servidor",
+                "detail": str(exc) if settings.ENVIRONMENT == "development" else None,
+            },
+        )
+
+    # ── Prometheus metrics (/metrics) ─────────────────────────────────────────
+    Instrumentator().instrument(app).expose(app, endpoint="/metrics", tags=["System"])
+
     # ── Health ────────────────────────────────────────────────────────────────
     @app.get("/health", tags=["System"])
     def health_check():
-        return {"status": "ok", "project": settings.PROJECT_NAME}
+        return {"status": "ok", "project": settings.PROJECT_NAME, "env": settings.ENVIRONMENT}
 
     # ── MLFlow UI redirect ────────────────────────────────────────────────────
     @app.get("/mlflow", tags=["System"], include_in_schema=False)
