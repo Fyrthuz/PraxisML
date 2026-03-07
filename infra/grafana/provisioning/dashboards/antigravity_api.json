@@ -1,14 +1,4 @@
 {
-    "__inputs": [
-        {
-            "name": "DS_PROMETHEUS",
-            "label": "Prometheus",
-            "description": "",
-            "type": "datasource",
-            "pluginId": "prometheus",
-            "pluginName": "Prometheus"
-        }
-    ],
     "__requires": [
         {
             "type": "grafana",
@@ -38,7 +28,7 @@
     "annotations": {
         "list": []
     },
-    "description": "Métricas de la API Antigravity SaaS (FastAPI + Prometheus)",
+    "description": "M\u00e9tricas de la API Antigravity SaaS (FastAPI + Prometheus)",
     "editable": true,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 1,
@@ -48,7 +38,7 @@
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
+                "uid": "Prometheus"
             },
             "fieldConfig": {
                 "defaults": {
@@ -92,7 +82,7 @@
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
+                "uid": "Prometheus"
             },
             "fieldConfig": {
                 "defaults": {
@@ -132,7 +122,7 @@
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
+                "uid": "Prometheus"
             },
             "fieldConfig": {
                 "defaults": {
@@ -167,7 +157,7 @@
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
+                "uid": "Prometheus"
             },
             "fieldConfig": {
                 "defaults": {
@@ -211,13 +201,13 @@
                     "refId": "A"
                 }
             ],
-            "title": "Errores 5xx (últimos 5 min)",
+            "title": "Errores 5xx (\u00faltimos 5 min)",
             "type": "stat"
         },
         {
             "datasource": {
                 "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
+                "uid": "Prometheus"
             },
             "fieldConfig": {
                 "defaults": {
@@ -248,7 +238,7 @@
                     "refId": "A"
                 }
             ],
-            "title": "Total Requests (últimos 5 min)",
+            "title": "Total Requests (\u00faltimos 5 min)",
             "type": "stat"
         }
     ],
@@ -268,7 +258,7 @@
     },
     "timepicker": {},
     "timezone": "browser",
-    "title": "Antigravity API — Overview",
+    "title": "Antigravity API \u2014 Overview",
     "uid": "antigravity-api-overview",
     "version": 1
 }
