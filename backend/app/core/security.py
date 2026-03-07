@@ -3,7 +3,6 @@ from typing import Any, Union, Dict, Optional
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 import requests
-import urllib.parse
 from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -14,10 +13,10 @@ _jwks_last_fetched = None
 
 def get_jwks() -> Optional[Dict]:
     global _jwks_cache, _jwks_last_fetched
-    
+
     if not settings.EXTERNAL_AUTH_JWKS_URL:
         return None
-        
+
     # Recargar cada hora la cache de JWKS
     if _jwks_cache is None or _jwks_last_fetched is None or (datetime.utcnow() - _jwks_last_fetched) > timedelta(hours=1):
         try:
@@ -51,13 +50,13 @@ def create_access_token(
 
 def decode_token(token: str) -> Optional[Dict[str, Any]]:
     """Intenta decodificar el token, comprobando si es externo o interno."""
-    
+
     # Intento 1: Proveedor Externo (si JWKS está configurado)
     unverified_header = jwt.get_unverified_header(token)
     if "kid" in unverified_header and settings.EXTERNAL_AUTH_JWKS_URL:
         jwks = get_jwks()
         if jwks:
-            
+
             # Formato RS256 para Auth0 / Clerk
             rsa_key = {}
             for key in jwks.get("keys", []):
@@ -70,7 +69,7 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
                         "e": key["e"]
                     }
                     break
-            
+
             if rsa_key:
                 try:
                     # En entornos reales suele usarse un audience o issuer
@@ -78,14 +77,14 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
                         token,
                         rsa_key,
                         algorithms=["RS256"],
-                        options={"verify_aud": False, "verify_iss": False} 
+                        options={"verify_aud": False, "verify_iss": False}
                     )
                     return payload
                 except JWTError as e:
                     print(f"External JWT Error: {e}")
                     # Si falla, puede que intencionalmente fuera interno con 'kid'
                     pass
-    
+
     # Intento 2: Custom JWT Interno (HS256)
     try:
         payload = jwt.decode(

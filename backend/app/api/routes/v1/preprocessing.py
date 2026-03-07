@@ -1,17 +1,22 @@
 """
 API route para configurar y aplicar pipelines de preprocesamiento en datasets tabulares.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from pydantic import BaseModel
 import os
 import logging
 
 from app.database import get_db
 from app.models.dataset import Dataset
+from app.models.user import User
 from app.models.tenant import Tenant
-from app.api.deps import get_current_tenant
+from app.api.deps import (
+    get_current_tenant,
+    require_editor,
+    require_viewer,
+)
 from app.core.config import settings
 from app.core_ml.tabular_parser import read_tabular, is_tabular
 from app.core_ml.preprocessing import (
@@ -56,6 +61,7 @@ class PreprocessingPreviewResponse(BaseModel):
 @router.post("/preview", response_model=PreprocessingPreviewResponse)
 def preview_preprocessing(
     config: PreprocessingConfig,
+    _user: User = Depends(require_editor),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
@@ -63,6 +69,8 @@ def preview_preprocessing(
     Recibe la configuración de preprocesamiento, la aplica al dataset,
     y devuelve un preview de las primeras 10 filas transformadas.
     No persiste nada — solo validación y previsualización.
+
+    Requiere rol **editor** o superior.
     """
     dataset = _get_tabular_dataset(config.dataset_id, tenant, db)
     df = read_tabular(dataset.file_path, dataset.file_type)
@@ -94,6 +102,7 @@ def preview_preprocessing(
 def apply_preprocessing(
     dataset_id: str,
     config: PreprocessingConfig,
+    _user: User = Depends(require_editor),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
@@ -101,6 +110,8 @@ def apply_preprocessing(
     Aplica el pipeline de preprocesamiento al dataset, guarda:
       1. El dataset transformado como CSV (nueva versión del dataset)
       2. El pipeline serializado como artefacto (.joblib) para inferencia
+
+    Requiere rol **editor** o superior.
 
     Returns:
         dict con el nuevo dataset_id y la ruta del pipeline guardado.
@@ -176,20 +187,22 @@ def apply_preprocessing(
 @router.get("/pipeline/{dataset_id}")
 def get_dataset_pipeline_config(
     dataset_id: str,
+    _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
     """
     Recupera la configuración (pasos) del pipeline asociado a un dataset.
     Busca en los tags/params del run de MLFlow si existe.
+    Requiere rol **viewer** o superior.
     """
     dataset = db.query(Dataset).filter(
         Dataset.id == dataset_id, Dataset.tenant_id == tenant.id
     ).first()
-    
+
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset no encontrado.")
-    
+
     if not dataset.pipeline_path:
         return {"steps": [], "message": "Este dataset no tiene un pipeline de preprocesamiento asociado."}
 
@@ -198,15 +211,13 @@ def get_dataset_pipeline_config(
         try:
             from mlflow.tracking import MlflowClient
             from app.services.mlflow_service import MLFlowService
-            
+
             run_id = dataset.pipeline_path.split("/")[1]
             mlflow_svc = MLFlowService()
             client = MlflowClient(tracking_uri=mlflow_svc.tracking_uri)
             run = client.get_run(run_id)
-            
-            # Buscamos en los tags si guardamos la config allí (podríamos haberlo hecho en apply_preprocessing)
-            # Como no lo hicimos antes, vamos a mejorar apply_preprocessing para que lo guarde,
-            # pero por ahora, si no está, devolvemos un mensaje informativo.
+
+            # Buscamos en los tags si guardamos la config allí
             import json
             steps_json = run.data.tags.get("pipeline_steps")
             if steps_json:
@@ -219,7 +230,7 @@ def get_dataset_pipeline_config(
             logger.warning(f"No se pudo recuperar info detallada de MLFlow: {e}")
 
     return {
-        "steps": [], 
+        "steps": [],
         "pipeline_path": dataset.pipeline_path,
         "message": "Pipeline encontrado pero la configuración detallada no está disponible en MLFlow."
     }

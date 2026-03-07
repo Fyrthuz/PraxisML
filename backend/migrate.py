@@ -124,6 +124,24 @@ def run_migrations():
         else:
             print("  [=] users.created_at ya existe o la tabla users no existe aún.")
 
+        # ── Fase 0: Seguridad — Quota Limiting: columnas en tenant ──────────
+        if table_exists("tenant"):
+            quota_cols = {
+                "max_datasets": "INTEGER DEFAULT 50",
+                "max_models": "INTEGER DEFAULT 20",
+                "max_predictions_per_day": "INTEGER DEFAULT 500",
+                "max_training_jobs_per_day": "INTEGER DEFAULT 10",
+            }
+            for col_name, col_type in quota_cols.items():
+                if not column_exists("tenant", col_name):
+                    print(f"  [+] Añadiendo columna tenant.{col_name} ...")
+                    conn.execute(text(
+                        f"ALTER TABLE tenant ADD COLUMN {col_name} {col_type};"
+                    ))
+                    print(f"  [OK] Columna tenant.{col_name} añadida.")
+                else:
+                    print(f"  [=] tenant.{col_name} ya existe.")
+
     # 2. Crear cualquier tabla nueva que aún no esté en la BD
     print("  [+] Sincronizando tablas (create_all checkfirst=True) ...")
     Base.metadata.create_all(bind=engine, checkfirst=True)

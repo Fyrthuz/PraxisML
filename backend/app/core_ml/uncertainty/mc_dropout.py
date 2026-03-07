@@ -21,7 +21,7 @@ class MCDropoutHook:
             return output * mask
         return output
 
-    def enable(self, 
+    def enable(self,
                ignore_specific_layers: Optional[List] = None,
                ignore_type_layers: Optional[List] = None,
                layer_types: Optional[List] = None):
@@ -94,8 +94,8 @@ class MCDropoutEstimator(BaseUncertaintyEstimator):
         return avg_probs, entropy
 
 class CalibratedMCDropoutEstimator(BaseUncertaintyEstimator):
-    def __init__(self, model: nn.Module, device: torch.device, data_loader: torch.utils.data.DataLoader, 
-                 p_values: List[float] = [0.1, 0.3, 0.5], mc_samples: int = 5, num_classes: int = 2, 
+    def __init__(self, model: nn.Module, device: torch.device, data_loader: torch.utils.data.DataLoader,
+                 p_values: List[float] = [0.1, 0.3, 0.5], mc_samples: int = 5, num_classes: int = 2,
                  calib_tolerance: float = 0.02, scale_entropy: bool = False):
         super().__init__(model, device)
         self.data_loader = data_loader
@@ -119,7 +119,7 @@ class CalibratedMCDropoutEstimator(BaseUncertaintyEstimator):
         for p in self.p_values:
             self.mc_manager.p = p
             self.mc_manager.enable(ignore_type_layers=[nn.ReLU, nn.Softmax])
-            
+
             total_loss = 0.0
             total_batches = 0
 
@@ -127,7 +127,7 @@ class CalibratedMCDropoutEstimator(BaseUncertaintyEstimator):
                 for x, y in tqdm(self.data_loader, desc=f"Testing p={p}"):
                     x, y = x.to(self.device), y.to(self.device)
                     y_indices = y.squeeze(1).long() if y.dim() > 3 else y.long()
-                    
+
                     mc_probs = []
                     for _ in range(self.mc_samples):
                         logits = self.model(x)
@@ -136,7 +136,7 @@ class CalibratedMCDropoutEstimator(BaseUncertaintyEstimator):
                         probs = F.softmax(logits, dim=1)
                         mc_probs.append(probs)
                     avg_probs = torch.stack(mc_probs).mean(dim=0)
-                    
+
                     avg_log_probs = torch.log(avg_probs + EPS)
                     loss = F.nll_loss(avg_log_probs, y_indices)
                     total_loss += loss.item()
@@ -164,13 +164,13 @@ class CalibratedMCDropoutEstimator(BaseUncertaintyEstimator):
                         scale_relaxed = self._find_relaxed_scale(avg_probs, entropy, y_indices, scale)
 
             avg_loss = total_loss / total_batches
-            
+
             if avg_loss < best_loss:
                 best_loss = avg_loss
                 best_phi = p
                 best_scale = scale
                 best_scale_relaxed = scale_relaxed
-                
+
             self.mc_manager.remove()
 
         self.best_phi = best_phi
@@ -213,7 +213,7 @@ class CalibratedMCDropoutEstimator(BaseUncertaintyEstimator):
             raise RuntimeError("Call optimize_parameters() first.")
 
         scale = self.best_scale_relaxed if use_relaxed else self.best_scale
-        
+
         self.mc_manager.p = self.best_phi
         self.mc_manager.enable(ignore_type_layers=[nn.ReLU, nn.Softmax])
 
@@ -227,7 +227,7 @@ class CalibratedMCDropoutEstimator(BaseUncertaintyEstimator):
                 if logits.shape[1] == 1:
                     logits = torch.cat([1-logits, logits], dim=1)
                 mc_probs.append(F.softmax(logits, dim=1))
-        
+
         self.mc_manager.remove()
 
         avg_probs = torch.stack(mc_probs).mean(dim=0)

@@ -19,24 +19,24 @@ class MLModel(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # ID del run en MLFlow para cargarlo vía mlflow.pytorch.load_model(f"runs:/{run_id}/model")
     mlflow_run_id = Column(String, nullable=False, unique=True, index=True)
-    
+
     # Metadatos como: {"framework": "pytorch", "architecture": "unet", "num_classes": 2}
     metrics_metadata = Column(JSON, nullable=True)
-    
+
     # Object key del pipeline de preprocesamiento en el StorageService
     preprocessing_pipeline_path = Column(String, nullable=True)
-    
+
     is_active = Column(Boolean, default=True)
     is_public = Column(Boolean, default=False)  # Si es público todos pueden usarlo, si no, solo el tenant.
-    
+
     # Soporte para TorchScript
     is_torchscript = Column(Boolean, default=False)
     # Object key del modelo TorchScript exportado (.pt) en el StorageService
     torchscript_path = Column(String, nullable=True)
-    
+
     # Aislamiento
     tenant_id = Column(String, ForeignKey("tenant.id"), nullable=False, index=True)
     tenant = relationship("Tenant", back_populates="models")

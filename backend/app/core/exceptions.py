@@ -50,7 +50,7 @@ class TenantNotFoundError(AntigravityError):
     code = "TENANT_NOT_FOUND"
 
     def __init__(self, tenant_id: str | None = None, detail: Any = None):
-        msg = f"Tenant no encontrado" + (f": {tenant_id}" if tenant_id else "")
+        msg = "Tenant no encontrado" + (f": {tenant_id}" if tenant_id else "")
         super().__init__(msg, detail)
 
 
@@ -165,3 +165,15 @@ class RateLimitExceededError(AntigravityError):
 
     def __init__(self, message: str = "Demasiadas solicitudes. Inténtalo más tarde.", detail: Any = None):
         super().__init__(message, detail)
+
+
+# ── Quotas ────────────────────────────────────────────────────────────────────
+
+class QuotaExceededError(AntigravityError):
+    """El tenant ha superado su cuota de recursos (datasets, modelos, etc.)."""
+    status_code = 429
+    code = "QUOTA_EXCEEDED"
+
+    def __init__(self, resource: str = "recurso", current: int = 0, limit: int = 0, detail: Any = None):
+        msg = f"Cuota de {resource} excedida: {current}/{limit}."
+        super().__init__(msg, detail)

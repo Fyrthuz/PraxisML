@@ -13,9 +13,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import (
-    LabelEncoder,
     MinMaxScaler,
     OneHotEncoder,
     OrdinalEncoder,
@@ -200,28 +198,28 @@ def apply_pipeline(
 
 def save_pipeline(pipeline: ColumnTransformer, pipeline_name: str, tenant_id: str, config: Optional[Dict[str, Any]] = None) -> str:
     """
-    Serializa y guarda el pipeline como un modelo en MLFlow bajo 
+    Serializa y guarda el pipeline como un modelo en MLFlow bajo
     el experimento de preprocesamiento del tenant actual.
-    
+
     Returns:
         A MLFlow models URI, por ejemplo: `runs:/<run_id>/pipeline`
     """
     mlflow_svc = MLFlowService()
     mlflow.set_tracking_uri(mlflow_svc.tracking_uri)
-    
+
     experiment_name = f"tenant_{tenant_id}_preprocessing"
     mlflow.set_experiment(experiment_name)
-    
+
     with mlflow.start_run(run_name=pipeline_name) as run:
         mlflow.sklearn.log_model(pipeline, "pipeline")
-        
+
         # Log config steps as tags for easier visibility in the UI and retrieval
         if config:
             if "steps" in config:
                 mlflow.set_tag("pipeline_steps", json.dumps(config["steps"]))
             if "target_column" in config:
                 mlflow.set_tag("target_column", str(config["target_column"]))
-                
+
         uri = f"runs:/{run.info.run_id}/pipeline"
         logger.info("Pipeline guardado en MLFlow: %s", uri)
         return uri

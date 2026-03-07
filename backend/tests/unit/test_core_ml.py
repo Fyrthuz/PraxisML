@@ -122,8 +122,10 @@ class TestExceptions:
             AntigravityError, AuthenticationError, PermissionDeniedError,
             ModelNotFoundError, TrainingError, StorageError,
             InferenceError, DatasetNotFoundError, StorageObjectNotFoundError,
+            QuotaExceededError,
         )
         assert ModelNotFoundError is not None
+        assert QuotaExceededError is not None
 
     def test_model_not_found_error_attributes(self):
         from app.core.exceptions import ModelNotFoundError

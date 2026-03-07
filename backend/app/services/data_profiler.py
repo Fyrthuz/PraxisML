@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 def detect_column_types(df: pd.DataFrame) -> Dict[str, str]:
     """
@@ -10,7 +10,7 @@ def detect_column_types(df: pd.DataFrame) -> Dict[str, str]:
     types = {}
     for col in df.columns:
         dtype = df[col].dtype
-        
+
         if pd.api.types.is_datetime64_any_dtype(dtype):
             types[col] = "datetime"
         elif pd.api.types.is_numeric_dtype(dtype):
@@ -19,7 +19,7 @@ def detect_column_types(df: pd.DataFrame) -> Dict[str, str]:
             types[col] = "numeric"
         else:
             types[col] = "categorical"
-            
+
     return types
 
 def profile_dataset(df: pd.DataFrame) -> Dict[str, Any]:
@@ -28,22 +28,22 @@ def profile_dataset(df: pd.DataFrame) -> Dict[str, Any]:
     """
     col_types = detect_column_types(df)
     profile = {}
-    
+
     total_rows = len(df)
-    
+
     for col in df.columns:
         col_type = col_types[col]
         series = df[col]
         null_count = int(series.isna().sum())
         null_pct = round((null_count / total_rows) * 100, 2) if total_rows > 0 else 0
-        
+
         col_stats = {
             "type": col_type,
             "null_count": null_count,
             "null_pct": null_pct,
             "distinct_count": series.nunique(dropna=True),
         }
-        
+
         if col_type == "numeric":
             valid_data = series.dropna()
             if not valid_data.empty:
@@ -61,16 +61,16 @@ def profile_dataset(df: pd.DataFrame) -> Dict[str, Any]:
                     "counts": hist.tolist(),
                     "bins": bin_edges.tolist()
                 }
-        
+
         elif col_type == "categorical":
             valid_data = series.dropna()
             if not valid_data.empty:
                 val_counts = valid_data.value_counts().head(10)
                 col_stats["top_values"] = [
-                    {"value": str(k), "count": int(v)} 
+                    {"value": str(k), "count": int(v)}
                     for k, v in val_counts.items()
                 ]
-                
+
         elif col_type == "datetime":
             valid_data = series.dropna()
             if not valid_data.empty:
@@ -78,7 +78,7 @@ def profile_dataset(df: pd.DataFrame) -> Dict[str, Any]:
                     "min": str(valid_data.min()),
                     "max": str(valid_data.max()),
                 })
-                
+
         profile[col] = col_stats
-        
+
     return profile

@@ -1,14 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Form, File, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Form, File, UploadFile
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List
 
 from app.database import get_db
 from app.models.prediction import Prediction
 from app.models.dataset import Dataset
 from app.models.ml_model import MLModel
+from app.models.user import User
 from app.models.tenant import Tenant
 from app.schemas.prediction import PredictionResponse
-from app.api.deps import get_current_tenant
+from app.api.deps import (
+    get_current_tenant,
+    require_editor,
+    require_viewer,
+    check_prediction_quota,
+)
+from app.core.rate_limit import limiter
+from app.core.config import settings
 from pydantic import BaseModel
 import os
 import shutil
@@ -29,14 +37,20 @@ class PredictionRequest(BaseModel):
 
 
 @router.post("/predict", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit(settings.RATE_LIMIT_INFERENCE)
 def request_prediction(
+    request: Request,
     req: PredictionRequest,
-    tenant: Tenant = Depends(get_current_tenant),
-    db: Session = Depends(get_db)
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(check_prediction_quota),
+    db: Session = Depends(get_db),
 ):
     """
     Endpoint que no bloquea la petición web.
     Crea el registro Prediction en BD, lo encola en Celery y devuelve el ID para polling.
+
+    Requiere rol **editor** o superior. Rate limited a {RATE_LIMIT_INFERENCE}.
+    Valida cuota diaria de predicciones del tenant.
     """
     from app.worker.tasks.predict import run_heavy_inference
 
@@ -84,15 +98,20 @@ def request_prediction(
 
 
 @router.post("/predictions/predict/single", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit(settings.RATE_LIMIT_INFERENCE)
 def request_single_prediction(
+    request: Request,
     model_id: str = Form(...),
     uncertainty_method: str = Form("none"),
     features: str = Form(...),
-    tenant: Tenant = Depends(get_current_tenant),
-    db: Session = Depends(get_db)
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(check_prediction_quota),
+    db: Session = Depends(get_db),
 ):
     """
     Endpoint para inferencia de una sola muestra tabular vía JSON de características.
+
+    Requiere rol **editor** o superior. Rate limited a {RATE_LIMIT_INFERENCE}.
     """
     from app.worker.tasks.single_predict import run_single_tabular_inference
     import json
@@ -139,20 +158,22 @@ def request_single_prediction(
 
 
 @router.post("/predictions/predict/batch", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit(settings.RATE_LIMIT_INFERENCE)
 def request_batch_prediction(
+    request: Request,
     model_id: str = Form(...),
     uncertainty_method: str = Form("none"),
     file: UploadFile = File(...),
-    tenant: Tenant = Depends(get_current_tenant),
-    db: Session = Depends(get_db)
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(check_prediction_quota),
+    db: Session = Depends(get_db),
 ):
     """
     Endpoint para inferencia en batch subiendo directamente un archivo CSV/Excel.
+
+    Requiere rol **editor** o superior. Rate limited a {RATE_LIMIT_INFERENCE}.
     """
     from app.worker.tasks.predict import run_heavy_inference
-    from app.core.config import settings
-    import os
-    import shutil
 
     ml_model = db.query(MLModel).filter(MLModel.id == model_id).first()
     if not ml_model:
@@ -162,7 +183,7 @@ def request_batch_prediction(
     tenant_tmp_dir = os.path.join(settings.DATA_DIR, "tenants", tenant.id, "tmp")
     os.makedirs(tenant_tmp_dir, exist_ok=True)
     file_path = os.path.join(tenant_tmp_dir, file.filename)
-    
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
@@ -200,8 +221,14 @@ def request_batch_prediction(
 
 
 @router.get("/predictions/status/{task_id}")
-def get_prediction_status(task_id: str):
-    """Polling del estado en tiempo real vía Celery AsyncResult."""
+def get_prediction_status(
+    task_id: str,
+    _user: User = Depends(require_viewer),
+):
+    """
+    Polling del estado en tiempo real vía Celery AsyncResult.
+    Requiere rol **viewer** o superior.
+    """
     from celery.result import AsyncResult
     from app.worker.celery_app import celery_app
 
@@ -224,11 +251,13 @@ def get_prediction_status(task_id: str):
 
 @router.get("/predictions", response_model=List[PredictionResponse])
 def list_predictions(
+    _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Obtiene todas las predicciones del tenant.
+    Requiere rol **viewer** o superior.
     """
     predictions = db.query(Prediction).filter(
         Prediction.tenant_id == tenant.id
@@ -239,12 +268,13 @@ def list_predictions(
 @router.get("/predictions/{prediction_id}", response_model=PredictionResponse)
 def get_prediction_result(
     prediction_id: str,
+    _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Obtiene el resultado completo de una predicción almacenada en BD.
-    Incluye rutas a los archivos .npy de probabilidades e incertidumbre.
+    Requiere rol **viewer** o superior.
     """
     prediction = db.query(Prediction).filter(
         Prediction.id == prediction_id, Prediction.tenant_id == tenant.id
@@ -260,34 +290,35 @@ def get_prediction_result(
 @router.get("/predictions/{prediction_id}/data")
 def get_prediction_data(
     prediction_id: str,
+    _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Retorna el contenido crudo de los ficheros de predicción e incertidumbre (.npy) como JSON.
-    Ideal para modelos tabulares donde el resultado son pocos números.
+    Requiere rol **viewer** o superior.
     """
     prediction = db.query(Prediction).filter(
         Prediction.id == prediction_id, Prediction.tenant_id == tenant.id
     ).first()
-    
+
     if not prediction:
         raise HTTPException(status_code=404, detail="Prediction not found")
-    
+
     results = {}
-    
+
     try:
         if prediction.result_path and os.path.exists(prediction.result_path):
             arr = np.load(prediction.result_path)
             # Replace NaNs and Infinities with None for JSON compliance
             cleaned = np.where(np.logical_or(np.isnan(arr), np.isinf(arr)), None, arr)
             results["prediction"] = cleaned.tolist()
-            
+
         if prediction.uncertainty_path and os.path.exists(prediction.uncertainty_path):
             arr = np.load(prediction.uncertainty_path)
             cleaned = np.where(np.logical_or(np.isnan(arr), np.isinf(arr)), None, arr)
             results["uncertainty"] = cleaned.tolist()
-            
+
         if prediction.input_image_path and os.path.exists(prediction.input_image_path) and prediction.input_image_path.endswith('.npy'):
             arr = np.load(prediction.input_image_path)
             # For input data, we also sanitize just in case
@@ -296,11 +327,11 @@ def get_prediction_data(
                 results["input_data"] = cleaned.tolist()
             else:
                 results["input_data"] = arr.tolist()
-                
+
     except Exception as e:
         logger.error(f"Error loading prediction data for {prediction_id}: {e}")
         raise HTTPException(status_code=500, detail=f"Error reading result files: {str(e)}")
-        
+
     return results
 
 
@@ -308,31 +339,33 @@ def get_prediction_data(
 def get_prediction_visualization(
     prediction_id: str,
     img_type: str,
+    _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Convierte el resultado (.npy) al vuelo en un archivo PNG visualizable por el frontend.
     img_type: 'result' o 'uncertainty'
+    Requiere rol **viewer** o superior.
     """
     prediction = db.query(Prediction).filter(
         Prediction.id == prediction_id, Prediction.tenant_id == tenant.id
     ).first()
-    
+
     if not prediction:
         raise HTTPException(status_code=404, detail="Prediction not found")
-    
+
     # Serve the original uploaded image directly
     if img_type == "original":
         original_path = prediction.input_image_path
         if not original_path or not os.path.exists(original_path):
             raise HTTPException(status_code=404, detail="Original image not found")
-        
+
         # Determine media type from extension
         ext = os.path.splitext(original_path)[1].lower()
         media_types = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".bmp": "image/bmp"}
         media_type = media_types.get(ext, "image/png")
-        
+
         return StreamingResponse(open(original_path, "rb"), media_type=media_type)
 
     path_to_load = prediction.result_path if img_type == "result" else prediction.uncertainty_path
@@ -343,7 +376,7 @@ def get_prediction_visualization(
         arr = np.load(path_to_load)
         # Handle shape like (1, 1, H, W) or (B, C, H, W)
         arr = np.squeeze(arr)
-        
+
         # In case of multiple masks (e.g. multi-class), we take the argmax or just the first channel for now
         # Assuming typical (H, W) or (C, H, W). If (C, H, W), take first channel.
         if arr.ndim == 3:
@@ -355,13 +388,13 @@ def get_prediction_visualization(
             arr = (arr - arr_min) / (arr_max - arr_min) * 255.0
         else:
             arr = np.zeros_like(arr)
-            
+
         arr = arr.astype(np.uint8)
-        
+
         # Apply pseudo-color for uncertainty map if desired, or just grayscale via PIL
         from PIL import Image
         img = Image.fromarray(arr).convert("L")
-        
+
         # Si es uncertainty mapeamos a colormap viridis o similar (Opcional, pero para UI rápido sirve RGB)
         if img_type == "uncertainty":
             import matplotlib.pyplot as plt
@@ -374,7 +407,7 @@ def get_prediction_visualization(
         img_byte_arr = io.BytesIO()
         img.save(img_byte_arr, format='PNG')
         img_byte_arr.seek(0)
-        
+
         return StreamingResponse(img_byte_arr, media_type="image/png")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating visualization: {str(e)}")

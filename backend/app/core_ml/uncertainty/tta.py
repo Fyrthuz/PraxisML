@@ -2,7 +2,6 @@ import math
 import random
 import torch
 import torch.nn.functional as F
-import torchvision.transforms as T
 import torch.nn as nn
 from typing import Tuple
 
@@ -106,26 +105,26 @@ class RandomImageTransformer:
 
         if image.dim() == 3:
             transformed = transformed.squeeze(0)
-            
+
         return transformed, M_inv
 
     def invert(self, transformed_image, M_inv):
         device = transformed_image.device
         C, H, W = transformed_image.shape[-3:]
-        
+
         theta_inv = self._convert_affine_matrix_to_theta(M_inv, W, H, device)
 
         if transformed_image.dim() == 3:
             image_batch = transformed_image.unsqueeze(0)
         else:
             image_batch = transformed_image
-            
+
         grid_inv = F.affine_grid(theta_inv.unsqueeze(0).repeat(image_batch.size(0), 1, 1), image_batch.size(), align_corners=False)
         restored = F.grid_sample(image_batch, grid_inv, align_corners=False, padding_mode=self.padding_mode)
 
         if transformed_image.dim() == 3:
             restored = restored.squeeze(0)
-            
+
         return restored
 
 
@@ -144,13 +143,13 @@ class TTAEstimator(BaseUncertaintyEstimator):
             for _ in range(self.tta_samples):
                 # 1. Transform the image
                 transformed_x, m_inv = self.transformer.transform(x)
-                
+
                 # 2. Forward pass
                 logits = self.model(transformed_x)
                 if logits.shape[1] == 1: # Binary segmentation
                     logits = torch.cat([1-logits, logits], dim=1)
                 probs = F.softmax(logits, dim=1)
-                
+
                 # 3. Invert transformation on predictions
                 restored_probs = self.transformer.invert(probs, m_inv)
                 tta_probs.append(restored_probs)

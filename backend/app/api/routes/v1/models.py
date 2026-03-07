@@ -13,9 +13,16 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.ml_model import MLModel
+from app.models.user import User
 from app.models.tenant import Tenant
 from app.schemas.ml_model import MLModelCreate, MLModelResponse
-from app.api.deps import get_current_tenant
+from app.api.deps import (
+    get_current_tenant,
+    require_editor,
+    require_viewer,
+    require_admin,
+    check_model_quota,
+)
 from app.services.mlflow_service import MLFlowService
 from app.core.config import settings
 
@@ -29,12 +36,15 @@ router = APIRouter()
 @router.post("/", response_model=MLModelResponse, status_code=status.HTTP_201_CREATED)
 def register_model(
     model_in: MLModelCreate,
-    tenant: Tenant = Depends(get_current_tenant),
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(check_model_quota),
     db: Session = Depends(get_db),
 ):
     """
     Registra en la BD un modelo cuyo run_id de MLFlow ya existe.
     Útil si el modelo se entrenó externamente y se subió a MLFlow a mano.
+
+    Requiere rol **editor** o superior. Valida cuota de modelos del tenant.
     """
 
     existing = db.query(MLModel).filter(MLModel.mlflow_run_id == model_in.mlflow_run_id).first()
@@ -63,12 +73,15 @@ def upload_and_register_model(
     num_classes: int = Form(2),
     is_public: bool = Form(False),
     file: UploadFile = File(...),
-    tenant: Tenant = Depends(get_current_tenant),
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(check_model_quota),
     db: Session = Depends(get_db),
 ):
     """
     Sube un fichero .pth, lo registra en MLFlow automáticamente y crea el
     registro en la base de datos.  Todo en un único paso.
+
+    Requiere rol **editor** o superior. Valida cuota de modelos del tenant.
 
     Flujo:
       1. Guarda el .pth en DATA_DIR/tenants/<tenant_id>/models/
@@ -136,9 +149,14 @@ def upload_and_register_model(
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/", response_model=List[MLModelResponse])
-def get_models(tenant: Tenant = Depends(get_current_tenant), db: Session = Depends(get_db)):
+def get_models(
+    _user: User = Depends(require_viewer),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
     """
     Obtener modelos del tenant MÁS los modelos base disponibles globalmente.
+    Requiere rol **viewer** o superior.
     """
     models = db.query(MLModel).filter(
         (MLModel.tenant_id == tenant.id) | (MLModel.is_public is True)
@@ -153,11 +171,13 @@ def get_models(tenant: Tenant = Depends(get_current_tenant), db: Session = Depen
 @router.delete("/{model_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_model(
     model_id: str,
+    _user: User = Depends(require_admin),
     tenant: Tenant = Depends(get_current_tenant),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Elimina un modelo de la base de datos que pertenezca al tenant actual.
+    Requiere rol **admin**.
     (Opcionalmente también se podrían purgar sus artefactos en disco/MLFlow).
     """
     model = db.query(MLModel).filter(
@@ -174,7 +194,7 @@ def delete_model(
             os.remove(model.torchscript_path)
         except Exception as e:
             print(f"Warning: No se pudo borrar el archivo de torchscript {model.torchscript_path}: {e}")
-            
+
     # Intentar eliminar de MLFlow
     if model.mlflow_run_id:
         try:
@@ -192,13 +212,17 @@ def delete_model(
         if pred.result_path:
             full_result_path = os.path.join(settings.DATA_DIR, pred.result_path)
             if os.path.exists(full_result_path):
-                try: os.remove(full_result_path)
-                except: pass
+                try:
+                    os.remove(full_result_path)
+                except Exception:
+                    pass
         if pred.uncertainty_path:
             full_uncert_path = os.path.join(settings.DATA_DIR, pred.uncertainty_path)
             if os.path.exists(full_uncert_path):
-                try: os.remove(full_uncert_path)
-                except: pass
+                try:
+                    os.remove(full_uncert_path)
+                except Exception:
+                    pass
         db.delete(pred)
 
     db.delete(model)
@@ -214,12 +238,15 @@ def delete_model(
 def download_model(
     model_id: str,
     tenant_id: str,
-    db: Session = Depends(get_db)
+    _user: User = Depends(require_viewer),
+    db: Session = Depends(get_db),
 ):
     """
     Descarga el modelo en formato .zip.
     Incluye los artefactos almacenados en MLFlow y un CSV con la información
     y los hiperparámetros del modelo.
+
+    Requiere rol **viewer** o superior.
     """
     model = db.query(MLModel).filter(
         MLModel.id == model_id,
@@ -231,7 +258,7 @@ def download_model(
 
     # Crear directorio temporal para preparar el zip
     temp_dir = tempfile.mkdtemp(prefix="mlmodel_")
-    
+
     try:
         # 1. Crear el CSV con metadatos
         csv_path = os.path.join(temp_dir, "model_info.csv")
@@ -242,7 +269,7 @@ def download_model(
             writer.writerow(["Description", model.description or ""])
             writer.writerow(["MLFlow Run ID", model.mlflow_run_id or ""])
             writer.writerow(["Created At", str(model.created_at)])
-            
+
             # Agregar metadatos e hiperparámetros
             if model.metrics_metadata:
                 for k, v in model.metrics_metadata.items():
@@ -258,7 +285,7 @@ def download_model(
                 mlflow_svc = MLFlowService()
                 client = mlflow.tracking.MlflowClient(tracking_uri=mlflow_svc.get_tracking_uri())
                 artifact_path = client.download_artifacts(run_id=model.mlflow_run_id, path="")
-                
+
                 # Copiar contenidos del directorio de artefactos
                 dest_artifacts = os.path.join(temp_dir, "artifacts")
                 shutil.copytree(artifact_path, dest_artifacts, dirs_exist_ok=True)
@@ -280,7 +307,7 @@ def download_model(
                     zipf.write(file_path, arcname)
 
         return FileResponse(
-            path=zip_path, 
+            path=zip_path,
             filename=f"{model.name.replace(' ', '_')}.zip",
             media_type="application/zip",
             background=None
@@ -298,10 +325,11 @@ def download_model(
 # ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/mlflow-info")
-def mlflow_info():
+def mlflow_info(_user: User = Depends(require_viewer)):
     """
     Devuelve la URI de tracking activa y la lista de experimentos en MLFlow.
     Útil para el frontend/dashboard.
+    Requiere rol **viewer** o superior.
     """
     try:
         mlflow_svc = MLFlowService()

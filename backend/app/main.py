@@ -9,21 +9,18 @@ os.environ["GIT_PYTHON_REFRESH"] = "quiet"
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse, JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.config import settings
 from app.core.logging import setup_logging
 from app.core.exceptions import AntigravityError
+from app.core.rate_limit import limiter
 
 # ── Logging estructurado ───────────────────────────────────────────────────────
 setup_logging(level="DEBUG" if settings.ENVIRONMENT == "development" else "INFO")
 logger = logging.getLogger(__name__)
-
-# ── Rate Limiter (slowapi) ─────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address)
 
 # ── MLFlow UI subprocess (local dev only) ─────────────────────────────────────
 _mlflow_proc: subprocess.Popen | None = None
@@ -38,7 +35,6 @@ def _start_mlflow_ui() -> None:
     lo registra y sigue (no es crítico para la API).
     """
     global _mlflow_proc
-    from pathlib import Path
     from app.services.mlflow_service import MLFlowService
 
     try:

@@ -5,7 +5,7 @@ cross-validation, entrenamiento con MLFlow autologging, evaluación y persistenc
 """
 import importlib
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import joblib
 import mlflow
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 class SklearnTrainer:
     """
     Entrena modelos sklearn con MLFlow autologging completo.
-    
+
     Flujo:
         1. Cargar datos y separar features/target
         2. Train/test split
@@ -389,7 +389,6 @@ class PyTorchTrainer:
         Construye un MLP (Multi-Layer Perceptron) configurable.
         El usuario puede definir hidden_layers, dropout, y activación.
         """
-        import torch
         import torch.nn as nn
 
         hidden_layers = hyperparams.get("hidden_layers", [128, 64])
@@ -432,7 +431,6 @@ class PyTorchTrainer:
         - 'mlp': construye un MLP configurable
         - Cualquier nombre registrado en ModelFactory (e.g. 'unet')
         """
-        import torch.nn as nn
 
         if algorithm == "mlp":
             return self._build_mlp(input_dim, output_dim, task_type, hyperparams)

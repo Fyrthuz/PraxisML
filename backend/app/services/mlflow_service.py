@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 
 from app.core.config import settings
 
@@ -33,13 +33,13 @@ class MLFlowService:
         """
         # Asegurar que el tracking URI está configurado antes de cualquier operación
         mlflow.set_tracking_uri(self.tracking_uri)
-        
+
         # En el worker (dentro de Docker), 'mlflow' es el hostname del servidor
         model_uri = f"runs:/{run_id}/model"
-        
+
         import logging
         logger = logging.getLogger(__name__)
-        
+
         try:
             logger.info("Intentando cargar modelo pyfunc/sklearn/pytorch desde: %s", model_uri)
             try:
@@ -64,7 +64,7 @@ class MLFlowService:
                 client = MlflowClient(tracking_uri=self.tracking_uri)
                 run = client.get_run(run_id)
                 tags = run.data.tags
-                
+
                 architecture = tags.get("architecture")
                 num_classes = int(tags.get("num_classes", "2"))
                 in_channels = int(tags.get("in_channels", "3")) # Asumimos 3 por defecto o MRI
@@ -73,11 +73,11 @@ class MLFlowService:
                 mlflow.set_tracking_uri(self.tracking_uri)
                 local_path = client.download_artifacts(run_id=run_id, path="model")
                 logger.info("Artefactos descargados manualmente a: %s", local_path)
-                
+
                 # Buscar el fichero .pth, .pt, .joblib o .pkl
                 file_to_load = None
                 if os.path.isdir(local_path):
-                    pth_files = (list(Path(local_path).glob("*.pth")) + 
+                    pth_files = (list(Path(local_path).glob("*.pth")) +
                                list(Path(local_path).glob("*.pt")) +
                                list(Path(local_path).glob("*.joblib")) +
                                list(Path(local_path).glob("*.pkl")))
@@ -97,21 +97,21 @@ class MLFlowService:
 
                 # Cargar el objeto PyTorch (puede ser model o state_dict)
                 checkpoint = torch.load(file_to_load, map_location=device, weights_only=False)
-                
+
                 if isinstance(checkpoint, torch.nn.Module):
                     model = checkpoint
                 else:
                     # Es un state_dict o algo parecido, necesitamos instanciar la clase
                     if not architecture:
                         raise ValueError("El artefacto es un state_dict pero no hay tag 'architecture' para reconstruirlo.")
-                    
+
                     from app.core_ml.models.factory import ModelFactory
                     model = ModelFactory.get_model(
                         architecture=architecture,
                         in_channels=in_channels,
                         num_classes=num_classes
                     )
-                    
+
                     # Si es un dict anidado (común en checkpoints)
                     state_dict = checkpoint.get("state_dict", checkpoint) if isinstance(checkpoint, dict) else checkpoint
                     model.load_state_dict(state_dict)
@@ -120,7 +120,7 @@ class MLFlowService:
                 model.to(device)
                 model.eval()
                 return model
-                
+
             except Exception as e2:
                 logger.error("Fallo definitivo al cargar modelo: %s", e2)
                 raise e2

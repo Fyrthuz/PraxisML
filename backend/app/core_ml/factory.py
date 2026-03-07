@@ -1,12 +1,11 @@
 from enum import Enum
-from typing import Dict, Any, Type, Tuple, List, Optional
+from typing import Any, Tuple
 import torch
 import torch.nn as nn
 
 from app.core_ml.interfaces import IUncertaintyAlgorithm
 from app.core_ml.uncertainty import (
     MCDropoutEstimator,
-    CalibratedMCDropoutEstimator,
     TTAEstimator,
     NoisyInferenceEstimator,
     EnsembleUncertaintyEstimator,

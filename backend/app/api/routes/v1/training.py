@@ -1,16 +1,23 @@
 """
 API route para entrenamiento de modelos sklearn.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from pydantic import BaseModel
 import logging
 
 from app.database import get_db
+from app.models.user import User
 from app.models.tenant import Tenant
-from app.api.deps import get_current_tenant
+from app.api.deps import (
+    require_editor,
+    require_viewer,
+    check_training_quota,
+)
 from app.core_ml.hyperparams import get_all_algorithms, get_algorithm_info
+from app.core.rate_limit import limiter
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -47,10 +54,11 @@ class TrainResponse(BaseModel):
 # GET /training/algorithms — Listar algoritmos disponibles
 # ──────────────────────────────────────────────────────────────────────────────
 @router.get("/algorithms")
-def list_algorithms():
+def list_algorithms(_user: User = Depends(require_viewer)):
     """
     Devuelve la lista de algoritmos disponibles con sus hiperparámetros configurables.
     El frontend usa esto para renderizar formularios dinámicos.
+    Requiere rol **viewer** o superior.
     """
     return get_all_algorithms()
 
@@ -59,14 +67,20 @@ def list_algorithms():
 # POST /training/train — Lanzar entrenamiento
 # ──────────────────────────────────────────────────────────────────────────────
 @router.post("/train", response_model=TrainResponse)
+@limiter.limit(settings.RATE_LIMIT_TRAINING)
 def start_training(
+    request: Request,
     req: TrainRequest,
-    tenant: Tenant = Depends(get_current_tenant),
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(check_training_quota),
     db: Session = Depends(get_db),
 ):
     """
     Lanza una tarea Celery de entrenamiento para un dataset tabular.
     No bloquea — devuelve task_id para polling.
+
+    Requiere rol **editor** o superior. Rate limited a {RATE_LIMIT_TRAINING}.
+    Valida cuota diaria de entrenamientos del tenant.
     """
     # Validar que el algoritmo existe
     try:
@@ -138,8 +152,14 @@ def start_training(
 # GET /training/status/{task_id} — Polling de estado
 # ──────────────────────────────────────────────────────────────────────────────
 @router.get("/status/{task_id}")
-def get_training_status(task_id: str):
-    """Consulta el estado de una tarea de entrenamiento Celery."""
+def get_training_status(
+    task_id: str,
+    _user: User = Depends(require_viewer),
+):
+    """
+    Consulta el estado de una tarea de entrenamiento Celery.
+    Requiere rol **viewer** o superior.
+    """
     from celery.result import AsyncResult
     from app.worker.celery_app import celery_app
 

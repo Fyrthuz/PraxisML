@@ -26,7 +26,7 @@ class BaseUncertaintyEstimator(IUncertaintyAlgorithm):
             **kwargs: Additional parameters for specific implementations.
 
         Returns:
-            Tuple[torch.Tensor, torch.Tensor]: 
+            Tuple[torch.Tensor, torch.Tensor]:
                 - Average prediction probabilities: (B, NumClasses, H, W)
                 - Uncertainty mapping (e.g., entropy or variance): (B, H, W)
         """
@@ -43,10 +43,10 @@ class BaseUncertaintyEstimator(IUncertaintyAlgorithm):
 
         # Convert NumPy to Tensor and move to device
         tensor_x = torch.from_numpy(input_data).float().to(self.device)
-        
+
         # Execute the pytorch specific method
         pred_tensor, unc_tensor = self.compute_uncertainty(tensor_x, **kwargs)
-        
+
         # Convert back to contiguous NumPy arrays to send to backend services
         return {
             "prediction": pred_tensor.detach().cpu().numpy(),

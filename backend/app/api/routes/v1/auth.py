@@ -1,14 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr
 from app.database import get_db
 from app.core import security
-from app.core.config import settings
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.models.tenant import Tenant
-from app.api.deps import get_current_active_user, get_current_tenant
-import uuid
+from app.api.deps import get_current_active_user
 
 router = APIRouter()
 
@@ -28,16 +26,16 @@ class UserResponse(BaseModel):
     email: EmailStr
     full_name: str | None
     tenant_id: str
-    
-    class Config:
-        from_attributes = True
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
 
 @router.post("/register", response_model=UserResponse)
 def register(user_in: UserCreate, db: Session = Depends(get_db)):
     """
     Registra un usuario nuevo.
     Si se proporciona `tenant_name`, crea un nuevo tenant y lo asocia.
-    En una aplicación real habría invitaciones/códigos, pero para MVP lo simplificamos.
+    El primer usuario de un tenant obtiene rol 'admin' automáticamente.
     """
     user = db.query(User).filter(User.email == user_in.email).first()
     if user:
@@ -45,19 +43,21 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
             status_code=400,
             detail="The user with this email already exists in the system.",
         )
-        
+
     # Crear tenant si no existe nada (MVP Mode)
     tenant_title = user_in.tenant_name if user_in.tenant_name else f"Tenant of {user_in.email}"
     new_tenant = Tenant(name=tenant_title)
     db.add(new_tenant)
     db.commit()
     db.refresh(new_tenant)
-    
+
+    # El primer usuario de un tenant es admin
     user = User(
         email=user_in.email,
         hashed_password=security.get_password_hash(user_in.password),
         full_name=user_in.full_name,
         tenant_id=new_tenant.id,
+        role=UserRole.ADMIN,  # Primer usuario = admin del tenant
     )
     db.add(user)
     db.commit()
@@ -75,13 +75,13 @@ def login_access_token(
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
-    
+
     # Para passwords de Auth0/Clerk, su hashed_password en DB sería None y no pasarían por aquí,
     # el cliente pediría el Token de Auth0 y usaría dicho token. Esto es solo para Custom Auth.
     if not user.hashed_password or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
-        
-    # Generar Toke JWT (Payload solo con id de usuario de momento)
+
+    # Generar Token JWT (Payload solo con id de usuario de momento)
     access_token = security.create_access_token(subject=user.id)
     return {"access_token": access_token, "token_type": "bearer"}
 

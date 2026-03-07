@@ -3,8 +3,6 @@ Tarea Celery para entrenamiento de modelos sklearn y PyTorch.
 No bloquea la API — el frontend hace polling del estado.
 """
 import logging
-from datetime import datetime
-from pathlib import Path
 
 from celery import Task
 from sqlalchemy.orm import Session

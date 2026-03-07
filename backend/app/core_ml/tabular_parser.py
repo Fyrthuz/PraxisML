@@ -5,7 +5,7 @@ Extrae metadata (schema, filas, columnas) y ofrece preview.
 import os
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, Dict, Any, Tuple
 
 import pandas as pd
 

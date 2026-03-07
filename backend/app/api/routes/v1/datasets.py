@@ -7,16 +7,22 @@ import logging
 
 from app.database import get_db
 from app.models.dataset import Dataset
+from app.models.user import User
 from app.models.tenant import Tenant
 from app.schemas.dataset import DatasetResponse, DatasetPreviewResponse
-from app.api.deps import get_current_tenant
+from app.api.deps import (
+    get_current_tenant,
+    require_editor,
+    require_viewer,
+    require_admin,
+    check_dataset_quota,
+)
 from app.core.config import settings
 from app.core_ml.tabular_parser import (
     detect_file_type,
     is_tabular,
     extract_metadata,
     get_preview,
-    ALL_SUPPORTED,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,12 +41,16 @@ async def upload_dataset(
     description: str = Form(None),
     file: UploadFile = File(...),
     config_file: Optional[UploadFile] = File(None),
-    tenant: Tenant = Depends(get_current_tenant),
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(check_dataset_quota),
     db: Session = Depends(get_db),
 ):
     """
     Sube un dataset en formato .csv, .xlsx, .parquet o .zip (imágenes).
     Para archivos tabulares, se extrae metadata automáticamente (filas, columnas, schema).
+
+    Requiere rol **editor** o superior.
+    Se valida la cuota de datasets del tenant.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="El archivo debe tener un nombre.")
@@ -135,10 +145,11 @@ async def upload_dataset(
 # ──────────────────────────────────────────────────────────────────────────────
 @router.get("/", response_model=List[DatasetResponse])
 def get_datasets(
+    _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
-    """Obtiene todos los datasets del tenant (multi-tenant RLS)."""
+    """Obtiene todos los datasets del tenant (multi-tenant RLS). Requiere rol **viewer** o superior."""
     datasets = db.query(Dataset).filter(Dataset.tenant_id == tenant.id).all()
     return datasets
 
@@ -150,12 +161,14 @@ def get_datasets(
 def preview_dataset(
     dataset_id: str,
     max_rows: int = 20,
+    _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
     """
     Devuelve las primeras N filas de un dataset tabular como JSON.
     Solo funciona para archivos .csv, .xlsx, .parquet.
+    Requiere rol **viewer** o superior.
     """
     dataset = (
         db.query(Dataset)
@@ -197,12 +210,14 @@ def preview_dataset(
 @router.delete("/{dataset_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_dataset(
     dataset_id: str,
+    _user: User = Depends(require_admin),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
     """
     Elimina un dataset: borra el archivo de disco, el config file si existe,
     y el registro de la BD. No elimina predicciones asociadas (linaje).
+    Requiere rol **admin**.
     """
     dataset = (
         db.query(Dataset)

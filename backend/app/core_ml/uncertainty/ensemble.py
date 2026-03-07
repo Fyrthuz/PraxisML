@@ -13,7 +13,6 @@ Estrategia:
 """
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from typing import Tuple, Dict, List, Optional
 
 from app.core_ml.uncertainty.base import BaseUncertaintyEstimator
@@ -128,7 +127,6 @@ class EnsembleUncertaintyEstimator(BaseUncertaintyEstimator):
 
     def estimate_uncertainty(self, input_data, **kwargs) -> Dict[str, object]:
         """Override para devolver también las contribuciones individuales."""
-        import numpy as np
 
         tensor_x = torch.from_numpy(input_data).float().to(self.device)
         avg_probs, uncertainty = self.compute_uncertainty(tensor_x, **kwargs)

@@ -32,11 +32,11 @@ class NoisyInferenceEstimator(BaseUncertaintyEstimator):
         with torch.no_grad():
             for _ in range(self.n_samples):
                 noisy_x = self._add_noise(x)
-                
+
                 logits = self.model(noisy_x)
                 if logits.shape[1] == 1: # Binary segmentation support
                     logits = torch.cat([1-logits, logits], dim=1)
-                
+
                 probs = F.softmax(logits, dim=1)
                 noisy_probs.append(probs)
 

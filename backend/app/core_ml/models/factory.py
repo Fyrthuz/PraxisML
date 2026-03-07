@@ -1,5 +1,5 @@
 import torch.nn as nn
-from typing import Dict, Any, Type
+from typing import Dict, Type
 
 from app.core_ml.models.unet import UNet
 
@@ -22,7 +22,7 @@ class ModelFactory:
             # Fallback if architecture is not explicitly registered
             # but we might want to try to find it in the models directory?
             raise ValueError(f"Architecture '{architecture}' is not registered in ModelFactory.")
-        
+
         model_class = cls._REGISTRY[arch_lower]
         return model_class(**kwargs)
 

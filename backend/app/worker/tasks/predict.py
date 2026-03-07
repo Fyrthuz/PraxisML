@@ -3,15 +3,11 @@ Tarea Celery pesada: carga el modelo desde MLFlow, ejecuta la estimación de
 incertidumbre, trackea la inferencia en MLFlow y guarda el resultado en disco
 y en la base de datos.
 """
-import os
 import time
 import logging
 import numpy as np
 from datetime import datetime
-from pathlib import Path
 
-import torch
-import mlflow
 from celery import Task
 from sqlalchemy.orm import Session
 
@@ -59,7 +55,7 @@ def run_heavy_inference(
 
         # ── 2. Cargar Dataset ───────────────────────────────────────────────
         self.update_state(state="PROGRESS", meta={"status": "Cargando dataset/archivo..."})
-        
+
         file_path = input_file_path
         if not file_path:
             dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
@@ -70,9 +66,9 @@ def run_heavy_inference(
         from pathlib import Path
         ext = Path(file_path).suffix.lower()
         file_type_str = ext.lstrip(".")
-        
+
         from app.core_ml.tabular_parser import is_tabular, read_tabular
-        
+
         if is_tabular(file_type_str):
             input_data = read_tabular(file_path, file_type_str)
         else:
@@ -87,7 +83,7 @@ def run_heavy_inference(
         import torch
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
+
         if ml_model.is_torchscript and ml_model.torchscript_path:
             model = torch.jit.load(ml_model.torchscript_path, map_location=device)
         else:
@@ -162,14 +158,14 @@ def run_heavy_inference(
                     import mlflow
                     mlflow.log_params(estimator_params)
                     mlflow.log_metric("inference_time_s", inference_time_s)
-                    
+
                     mlflow.log_metrics({
                         "mean_uncertainty": float(np.mean(unc_array)),
                         "max_uncertainty": float(np.max(unc_array)),
                     })
                     mlflow.log_artifact(result_path, artifact_path="results")
                     mlflow.log_artifact(uncertainty_path, artifact_path="results")
-                    
+
                     mlflow_inference_run_id = run.info.run_id
                     print(f"[{method}] Inferencia en MLFlow registrada, Run ID: {mlflow_inference_run_id}")
             except Exception as mlflow_exc:
