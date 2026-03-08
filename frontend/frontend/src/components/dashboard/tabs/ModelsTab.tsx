@@ -8,9 +8,10 @@ interface ModelsTabProps {
     models: MLModel[];
     setIsModelModalOpen: (val: boolean) => void;
     handleDeleteModel: (modelId: string) => Promise<boolean>;
+    token?: string | null;
 }
 
-export default function ModelsTab({ models, setIsModelModalOpen, handleDeleteModel }: ModelsTabProps) {
+export default function ModelsTab({ models, setIsModelModalOpen, handleDeleteModel, token }: ModelsTabProps) {
     const [selectedModel, setSelectedModel] = useState<MLModel | null>(null);
 
     return (
@@ -62,6 +63,7 @@ export default function ModelsTab({ models, setIsModelModalOpen, handleDeleteMod
                 model={selectedModel}
                 onClose={() => setSelectedModel(null)}
                 handleDeleteModel={handleDeleteModel}
+                token={token}
             />
         </div>
     );

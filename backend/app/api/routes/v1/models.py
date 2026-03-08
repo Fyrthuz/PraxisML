@@ -297,7 +297,24 @@ def download_model(
         if model.is_torchscript and model.torchscript_path and os.path.exists(model.torchscript_path):
              shutil.copy2(model.torchscript_path, temp_dir)
 
-        # 3. Crear archivo Zip
+        # 3. Descargar pipeline de preprocesamiento (si existe)
+        if model.preprocessing_pipeline_path and model.preprocessing_pipeline_path.startswith("runs:/"):
+            try:
+                pipeline_run_id = model.preprocessing_pipeline_path.split("/")[1]
+                pipeline_file_path = "/".join(model.preprocessing_pipeline_path.split("/")[2:])
+                
+                mlflow_svc = MLFlowService()
+                client = mlflow.tracking.MlflowClient(tracking_uri=mlflow_svc.get_tracking_uri())
+                downloaded_pipe_path = client.download_artifacts(run_id=pipeline_run_id, path=pipeline_file_path)
+                
+                if os.path.isfile(downloaded_pipe_path):
+                    shutil.copy2(downloaded_pipe_path, os.path.join(temp_dir, "preprocessing_pipeline.joblib"))
+                elif os.path.isdir(downloaded_pipe_path):
+                    shutil.copytree(downloaded_pipe_path, os.path.join(temp_dir, "preprocessing_pipeline"), dirs_exist_ok=True)
+            except Exception as e:
+                print(f"Warning: No se pudo descargar el pipeline de preprocesamiento: {e}")
+
+        # 4. Crear archivo Zip
         zip_path = tempfile.mktemp(suffix=".zip", prefix=f"{model.name.replace(' ', '_')}_")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             for root, dirs, files in os.walk(temp_dir):

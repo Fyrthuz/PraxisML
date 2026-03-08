@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
-        description="API MVP para PraxisML",
+        description="PraxisML — Plataforma de ML Engineering & AI",
         version="0.1.0",
         lifespan=lifespan,
     )

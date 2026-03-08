@@ -1,25 +1,39 @@
-# PraxisML — Medical Image Segmentation & Uncertainty Estimation
+# PraxisML — ML Engineering & AI Platform
 
 > **TFM Productivo** — Fernando González Salas  
-> Productivization of research in Bayesian uncertainty estimation for medical image segmentation.
+> Plataforma integral para el desarrollo, entrenamiento, despliegue y monitorización de modelos de Machine Learning e Inteligencia Artificial.
 
 ---
 
 ## Overview
 
-This project provides a production-ready API backend for running uncertainty-aware deep learning inference on medical images (MRI segmentation). It wraps research algorithms (MC Dropout, TTA, Noisy Inference and their **Ensemble**) in a secure, multi-tenant SaaS architecture featuring:
+**PraxisML** es una plataforma SaaS multi-tenant para el ciclo completo de ML Engineering: desde la ingesta y preprocesamiento de datos, pasando por el entrenamiento y evaluación de modelos (Scikit-learn, PyTorch), hasta la inferencia en producción con estimación de incertidumbre. Diseñada para equipos que necesitan trazabilidad, seguridad y escalabilidad desde el día uno.
 
-- **JWT Hybrid Authentication & Multi-Tenancy**: Secure REST API isolated by organizational tenants, supporting both local secure JWT minting (bcrypt + python-jose) and external providers.
-- **Role-Based Access Control (RBAC)**: Three-tier role hierarchy (`admin` → `editor` → `viewer`) enforced per endpoint.
-- **Quota & Rate Limiting**: Configurable per-tenant resource quotas and per-IP rate limiting via `slowapi`.
-- **Continuous Safe Model execution**: Dynamic ingestion of PyTorch `TorchScript (.pt)` files ensuring secure server-side execution without arbitrary Python injections.
-- **FastAPI** REST API with structured logging and Prometheus metrics.
-- **Celery + Redis** for async heavy inference workloads.
-- **Declarative Datasets & Single Image uploads**: Bypass heavy datasets for quick inferences or leverage robust JSON configuration-driven dataset uploads.
-- **MLFlow** for full model and inference lifecycle tracking.
-- **PostgreSQL** for data persistence with **MinIO** (S3-compatible) object storage.
-- **Next.js Frontend (React)**: Incorporating real-time Celery task polling, reactive error propagation (`react-hot-toast`), and drag-and-drop file inference.
-- **Observability**: Prometheus + Grafana dashboards for monitoring.
+### Características principales
+
+- **Multi-Tenancy & Autenticación JWT**: API REST aislada por organizaciones, con soporte para JWT local (bcrypt + python-jose) y proveedores externos (Auth0, Clerk).
+- **RBAC (Control de Acceso por Roles)**: Jerarquía de tres niveles (`admin` → `editor` → `viewer`) con enforcement por endpoint.
+- **Quotas & Rate Limiting**: Límites de recursos configurables por tenant y rate limiting por IP vía `slowapi`.
+- **Entrenamiento de modelos**: Pipelines completos para Scikit-learn y PyTorch con holdout y cross-validation, hiperparámetros configurables y autologging en MLflow.
+- **Preprocesamiento configurable**: Pipeline declarativo (JSON) soportando escalado, imputación, encoding, feature engineering y selección de columnas.
+- **Inferencia con incertidumbre**: MC Dropout, TTA, Noisy Inference y Ensemble — aplicables a cualquier modelo PyTorch.
+- **Ejecución segura de modelos**: Ingesta dinámica de TorchScript (`.pt`) sin ejecución arbitraria de Python.
+- **Procesamiento asíncrono**: Celery + Redis para tareas pesadas (entrenamiento, inferencia batch).
+- **Experiment Tracking**: MLflow para trazabilidad completa de experimentos, métricas, artefactos y pipelines.
+- **Almacenamiento flexible**: Local, MinIO (S3-compatible) o AWS S3.
+- **Observabilidad**: Prometheus + Grafana para monitorización en tiempo real.
+- **Frontend React (Next.js)**: Dashboard con polling en tiempo real, drag & drop y gestión visual de recursos.
+
+---
+
+## 📚 Documentación Técnica Detallada
+
+Para comprender a fondo la arquitectura, el diseño de la API y las decisiones técnicas de infraestructura, hemos preparado una extensa documentación técnica en la carpeta `/docs`. **Asegúrate de revisar estos documentos si eres desarrollador o arquitecto de este sistema**:
+
+- 🏗️ [**Arquitectura Global (`docs/architecture.md`)**](docs/architecture.md): Diagrama estandarizado del flujo de vida, componentes y diseño del aislamiento *Multi-Tenant*.
+- ⚙️ [**Backend & Motor de ML (`docs/backend.md`)**](docs/backend.md): Estructura detallada del proyecto FastAPI, inyección de dependencias (RBAC), flujos críticos de la API para modelado (TorchScript / Scikit-learn), y cómo opera el control de procesamiento de Celery.
+- 🎨 [**Frontend (`docs/frontend.md`)**](docs/frontend.md): Guía de la SPA en React + Next.js. Cómo gestionamos eventos asíncronos (Polling) para evitar congelaciones UI y unificar notificaciones de error.
+- 🚀 [**Despliegue y DevOps (`docs/deployment.md`)**](docs/deployment.md): Qué hace cada contenedor en el *Docker compose*, precedencia de las variables de entorno, y cómo inspeccionar logs y telemetría en vivo vía **Grafana** + **Prometheus**.
 
 ---
 
@@ -30,190 +44,186 @@ TFM_productivo/
 ├── backend/                    # FastAPI + Celery backend
 │   ├── app/
 │   │   ├── api/routes/v1/      # REST endpoints
-│   │   │   ├── auth.py         # JWT Login / Register (first user = admin)
-│   │   │   ├── tenants.py      # Tenant CRUD + quota management
-│   │   │   ├── datasets.py     # Configurable Zip + JSON handling
-│   │   │   ├── models.py       # TorchScript upload + MLFlow auto-registration
-│   │   │   ├── predictions.py  # Async prediction & single-image inference
-│   │   │   ├── training.py     # Sklearn/PyTorch training pipelines
-│   │   │   ├── preprocessing.py # Data preprocessing pipelines
-│   │   │   └── profiling.py    # Dataset profiling
-│   │   ├── core/               # Security / Config / JWT / Rate Limiting
-│   │   │   ├── config.py       # Centralized config with validators
-│   │   │   ├── exceptions.py   # Custom exception hierarchy
-│   │   │   ├── rate_limit.py   # slowapi Limiter instance
+│   │   │   ├── auth.py         # JWT Login / Register (primer usuario = admin)
+│   │   │   ├── tenants.py      # CRUD de tenants + gestión de quotas
+│   │   │   ├── datasets.py     # Upload de datasets (ZIP + config.json)
+│   │   │   ├── models.py       # Upload de modelos + registro en MLflow
+│   │   │   ├── predictions.py  # Inferencia async y single-image
+│   │   │   ├── training.py     # Entrenamiento Sklearn / PyTorch
+│   │   │   ├── preprocessing.py # Pipelines de preprocesamiento
+│   │   │   └── profiling.py    # Profiling de datasets
+│   │   ├── core/               # Seguridad / Config / JWT / Rate Limiting
+│   │   │   ├── config.py       # Configuración centralizada con validadores
+│   │   │   ├── exceptions.py   # Jerarquía de excepciones de dominio
+│   │   │   ├── rate_limit.py   # Instancia slowapi Limiter
 │   │   │   └── security.py     # JWT + bcrypt + JWKS
-│   │   ├── core_ml/            # ML inference engine
-│   │   │   ├── factory.py      # PredictionFactory — selects estimator by name
-│   │   │   ├── hyperparams.py  # Algorithm registry & defaults
-│   │   │   ├── preprocessing.py # sklearn ColumnTransformer pipelines
-│   │   │   └── uncertainty/
-│   │   │       ├── mc_dropout.py
-│   │   │       ├── tta.py
-│   │   │       ├── noise_inference.py
-│   │   │       ├── ensemble.py
-│   │   │       └── sklearn_uncertainty.py
-│   │   ├── models/             # SQLAlchemy ORM models
-│   │   ├── schemas/            # Pydantic request/response schemas
-│   │   ├── services/           # Business logic (MLFlow, storage, training)
-│   │   ├── worker/
-│   │   │   ├── celery_app.py
-│   │   │   └── tasks/
-│   │   │       ├── predict.py
-│   │   │       ├── single_predict.py
-│   │   │       └── train.py
+│   │   ├── core_ml/            # Motor de ML e inferencia
+│   │   │   ├── factory.py      # PredictionFactory — selecciona estimador
+│   │   │   ├── hyperparams.py  # Registro de algoritmos y defaults
+│   │   │   ├── preprocessing.py # Pipelines sklearn ColumnTransformer
+│   │   │   └── uncertainty/    # Estimadores de incertidumbre
+│   │   ├── models/             # Modelos SQLAlchemy ORM
+│   │   ├── schemas/            # Schemas Pydantic (request/response)
+│   │   ├── services/           # Lógica de negocio (MLflow, storage, training)
+│   │   ├── worker/             # Workers Celery
+│   │   │   └── tasks/          # Tareas async (predict, train)
 │   │   ├── database.py
 │   │   └── main.py
 │   ├── tests/
-│   │   ├── unit/               # Unit tests (RBAC, quota, ML core)
-│   │   └── integration/        # Integration tests (API endpoints)
-│   ├── migrate.py              # Database migrations
+│   │   ├── unit/               # Tests unitarios (RBAC, quota, config, ML)
+│   │   └── integration/        # Tests de integración (API endpoints)
+│   ├── migrate.py              # Migraciones de base de datos
 │   └── pyproject.toml
 ├── frontend/                   # Next.js frontend
 │   └── frontend/
 │       ├── src/app/            # App Router (Login, Dashboards)
-│       └── src/components/     # AuthProvider, Modals, Drag&Drop Zones
-├── infra/                      # Infrastructure configs
-│   ├── prometheus/
-│   └── grafana/
-├── .env.example                # Template for environment variables
-└── docker-compose.yml          # Unified container manifest
+│       └── src/components/     # AuthProvider, Modals, Drag&Drop
+├── infra/                      # Configuración de infraestructura
+│   ├── prometheus/             # Scraping de métricas
+│   └── grafana/                # Dashboards y provisioning
+├── .env.example                # Template de variables de entorno
+└── docker-compose.yml          # Manifiesto de contenedores
 ```
 
 ---
 
 ## Configuration
 
-All settings are managed through environment variables. The configuration file at `backend/app/core/config.py` uses **Pydantic Settings** with built-in validation.
+Toda la configuración se gestiona mediante variables de entorno. El archivo `backend/app/core/config.py` usa **Pydantic Settings** con validación integrada.
 
-### Precedence Order (highest → lowest)
+### Orden de precedencia (mayor → menor)
 
-1. **System environment variables** (Docker, CI, shell export)
-2. **`.env` file** (project root or CWD)
-3. **Defaults in `config.py`** (only suitable for local development)
+1. **Variables de entorno del sistema** (Docker, CI, shell export)
+2. **Archivo `.env`** (raíz del proyecto o CWD)
+3. **Defaults en `config.py`** (solo válidos para desarrollo local)
 
-### Key Variables
+### Variables principales
 
-| Variable | Default | Validates | Description |
+| Variable | Default | Valida | Descripción |
 |---|---|---|---|
-| `ENVIRONMENT` | `development` | `{development, staging, production, testing}` | App environment — controls security, logging |
-| `DATABASE_URL` | `postgresql://...localhost...` | Must start with `postgresql://` | PostgreSQL connection string |
-| `SECRET_KEY` | *(insecure default)* | **Blocked in production** if unchanged | JWT signing key — generate with `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
-| `CORS_ORIGINS` | `http://localhost:3000,...` | Comma-separated URLs | Allowed CORS origins |
-| `STORAGE_BACKEND` | `local` | `{local, minio, s3}` | File storage backend |
-| `RATE_LIMIT_TRAINING` | `10/minute` | `N/{second,minute,hour,day}` | Rate limit for training endpoints |
-| `RATE_LIMIT_INFERENCE` | `30/minute` | `N/{second,minute,hour,day}` | Rate limit for prediction endpoints |
+| `ENVIRONMENT` | `development` | `{development, staging, production, testing}` | Entorno — controla seguridad y logging |
+| `DATABASE_URL` | `postgresql://...localhost...` | Debe empezar con `postgresql://` | Conexión PostgreSQL |
+| `SECRET_KEY` | *(default inseguro)* | **Bloqueado en production** si no se cambia | Clave JWT — generar con `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `STORAGE_BACKEND` | `local` | `{local, minio, s3}` | Backend de almacenamiento |
+| `RATE_LIMIT_TRAINING` | `10/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de entrenamiento |
+| `RATE_LIMIT_INFERENCE` | `30/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de inferencia |
 
-> **⚠️ Production Safety**: Setting `ENVIRONMENT=production` or `staging` with the default `SECRET_KEY` will **crash on startup** with a clear error message — preventing accidental deployment with insecure credentials.
+> **⚠️ Seguridad en producción**: Con `ENVIRONMENT=production` o `staging`, la app **no arrancará** si la `SECRET_KEY` mantiene el valor por defecto.
 
-See [`.env.example`](.env.example) for the full list of configurable variables.
+Ver [`.env.example`](.env.example) para la lista completa.
 
 ---
 
-## Security: RBAC & Quotas
+## Seguridad: RBAC & Quotas
 
-### Role-Based Access Control
+### Control de Acceso por Roles (RBAC)
 
-| Role | Level | Capabilities |
-|------|-------|-------------|
-| `admin` | 3 | Full access: create tenants, delete resources, manage quotas |
-| `editor` | 2 | Create/upload datasets & models, run training & predictions |
-| `viewer` | 1 | Read-only: list, preview, download, view status |
+| Rol | Nivel | Permisos |
+|-----|-------|----------|
+| `admin` | 3 | Acceso total: crear tenants, eliminar recursos, gestionar quotas |
+| `editor` | 2 | Crear/subir datasets y modelos, lanzar entrenamiento e inferencia |
+| `viewer` | 1 | Solo lectura: listar, previsualizar, descargar, consultar estado |
 
-The first user registered in a tenant is automatically assigned the `admin` role.
+El primer usuario registrado en un tenant recibe automáticamente el rol `admin`.
 
-### Tenant Quotas
+### Quotas por Tenant
 
-| Quota | Default | Description |
+| Quota | Default | Descripción |
 |-------|---------|-------------|
-| `max_datasets` | 50 | Maximum datasets per tenant |
-| `max_models` | 20 | Maximum models per tenant |
-| `max_predictions_per_day` | 500 | Daily prediction limit |
-| `max_training_jobs_per_day` | 10 | Daily training job limit |
+| `max_datasets` | 50 | Máximo de datasets por tenant |
+| `max_models` | 20 | Máximo de modelos por tenant |
+| `max_predictions_per_day` | 500 | Límite diario de predicciones |
+| `max_training_jobs_per_day` | 10 | Límite diario de trabajos de entrenamiento |
 
-Quotas are configurable per tenant via the `PATCH /api/v1/tenants/{id}/quotas` endpoint (admin only). Setting a quota to `null` means unlimited.
+Configurables vía `PATCH /api/v1/tenants/{id}/quotas` (solo admin). Valor `null` = sin límite.
 
 ---
 
-## Uncertainty Methods
+## Algoritmos de ML soportados
 
-| Method | API value | Description |
-|---|---|---|
-| MC Dropout | `mc_dropout` | Stochastic dropout at inference time. Entropy of averaged predictions. |
-| TTA | `tta` | Random affine augmentations, inverted back to original space. Entropy of mean. |
-| Noisy Inference | `noisy_inference` | Gaussian noise perturbations on input. Entropy of mean probabilities. |
-| **Ensemble** | `ensemble` | **Combines all three** (weighted avg. probs + epistemic variance). |
-| None | `none` | Standard inference without uncertainty. Returns zero entropy map. |
+### Scikit-learn
 
-### Ensemble Strategy
+| Algoritmo | API value | Clasificación | Regresión |
+|-----------|-----------|:---:|:---:|
+| Random Forest | `random_forest` | ✅ | ✅ |
+| Gradient Boosting | `gradient_boosting` | ✅ | ✅ |
+| SVM | `svm` | ✅ | ✅ |
+| KNN | `knn` | ✅ | ✅ |
+| Logistic / Linear Regression | `logistic_regression` | ✅ | ✅ |
+| Decision Tree | `decision_tree` | ✅ | ✅ |
+| AdaBoost | `adaboost` | ✅ | ✅ |
 
-The `EnsembleUncertaintyEstimator` runs all three methods in parallel on the same model and fuses their outputs:
+### PyTorch
 
-```
-Prediction  = w_mc · P_mc + w_tta · P_tta + w_noise · P_noise
-Aleatoric   = w_mc · H_mc + w_tta · H_tta + w_noise · H_noise
-Epistemic   = Var([P_mc, P_tta, P_noise]).mean(classes)
-Uncertainty = (1 - α) · Aleatoric + α · Epistemic
-```
+| Arquitectura | API value | Descripción |
+|-------------|-----------|-------------|
+| MLP | `mlp` | Perceptrón multicapa configurable (capas, dropout, activación) |
+| Custom | *(registrado)* | Cualquier `nn.Module` registrado en `ModelFactory` |
 
-Default weights are equal (`[1,1,1]`) and `α = 0.5`. Can be overridden via API.
+### Métodos de incertidumbre
+
+| Método | API value | Descripción |
+|--------|-----------|-------------|
+| MC Dropout | `mc_dropout` | Dropout estocástico en inferencia |
+| TTA | `tta` | Augmentaciones aleatorias invertidas |
+| Noisy Inference | `noisy_inference` | Perturbaciones gaussianas en la entrada |
+| **Ensemble** | `ensemble` | Combina los tres métodos anteriores |
+| Ninguno | `none` | Inferencia estándar sin incertidumbre |
 
 ---
 
 ## ⚡ Quick Start (Docker)
 
-The easiest way to run the entire stack is using **Docker Compose**.
-
-### Prerequisites
+### Prerrequisitos
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- Node.js ≥ 18 (for frontend development)
+- Node.js ≥ 18 (para desarrollo del frontend)
 
-### 1. Configure environment
+### 1. Configurar entorno
 ```bash
 cp .env.example .env
-# Edit .env with your values (SECRET_KEY is critical for production)
+# Editar .env con tus valores (SECRET_KEY es crítico para producción)
 ```
 
-### 2. Launch all services
+### 2. Levantar todos los servicios
 ```bash
 docker-compose up --build
 ```
 
-### 3. Launch Next.js Frontend (development)
+### 3. Levantar frontend (desarrollo)
 ```bash
 cd frontend/frontend
 npm i
 npm run dev
 ```
 
-### 4. Available Services
-| Service | URL |
-|---|---|
+### 4. Servicios disponibles
+| Servicio | URL |
+|----------|-----|
 | **Frontend** | `http://localhost:3000` |
-| **API (FastAPI)** | `http://localhost:8000/docs` |
-| **MLFlow UI** | `http://localhost:5000` |
+| **API (Swagger)** | `http://localhost:8000/docs` |
+| **MLflow UI** | `http://localhost:5000` |
 | **MinIO Console** | `http://localhost:9001` |
 | **Prometheus** | `http://localhost:9090` |
 | **Grafana** | `http://localhost:3001` (admin/admin) |
 
 ---
 
-## 🛠️ Manual Development Setup
+## 🛠️ Desarrollo local
 
-If you prefer to run services individually for faster code iterations:
+Para iterar más rápido sin reconstruir contenedores:
 
-### 1. Configure environment
+### 1. Configurar entorno
 ```bash
 cp .env.example .env
-# Edit values for local development (localhost URLs instead of Docker hostnames)
+# Editar con URLs localhost en vez de hostnames Docker
 ```
 
-### 2. Start backing services (Docker)
+### 2. Levantar servicios de soporte
 ```bash
 docker-compose up -d db redis mlflow minio minio-init
 ```
 
-### 3. Run migrations & start backend API
+### 3. Arrancar backend
 ```bash
 cd backend
 uv sync
@@ -221,13 +231,13 @@ uv run python migrate.py
 uv run uvicorn app.main:app --reload
 ```
 
-### 4. Start Celery worker
+### 4. Arrancar worker Celery
 ```bash
 cd backend
 uv run celery -A app.worker.celery_app worker --loglevel=info --pool=solo
 ```
 
-### 5. Run tests
+### 5. Ejecutar tests
 ```bash
 cd backend
 uv run pytest tests/ -v --cov=app --cov-fail-under=30
@@ -235,88 +245,90 @@ uv run pytest tests/ -v --cov=app --cov-fail-under=30
 
 ---
 
-## Core API Endpoints
+## API Endpoints
 
-Interactive docs available at **`http://localhost:8000/docs`**
+Documentación interactiva en **`http://localhost:8000/docs`**
 
-### Authentication & Tenants
-| Method | Path | Role | Description |
-|---|---|---|---|
-| POST | `/api/v1/auth/register` | — | Register user and create root Tenant scope |
-| POST | `/api/v1/auth/login` | — | Obtain OAuth2 JWT Bearer Token |
-| GET | `/api/v1/auth/me` | any | Decode token for active profile |
-| POST | `/api/v1/tenants/` | admin | Create new tenant |
-| PATCH | `/api/v1/tenants/{id}/quotas` | admin | Update tenant quotas |
+### Autenticación
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/auth/register` | — | Registrar usuario + crear tenant |
+| POST | `/api/v1/auth/login` | — | Obtener JWT Bearer Token |
+| GET | `/api/v1/auth/me` | any | Perfil del usuario autenticado |
+
+### Tenants
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/tenants/` | admin | Crear nuevo tenant |
+| GET | `/api/v1/tenants/` | viewer | Listar tenants |
+| PATCH | `/api/v1/tenants/{id}/quotas` | admin | Actualizar quotas del tenant |
 
 ### Datasets
-| Method | Path | Role | Description |
-|---|---|---|---|
-| POST | `/api/v1/datasets/` | editor | Upload `.zip` datasets with a declarative `config.json` |
-| GET | `/api/v1/datasets/` | viewer | List JWT-scoped datasets |
-| DELETE | `/api/v1/datasets/{id}` | admin | Delete a dataset |
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/datasets/` | editor | Subir dataset (`.zip` + `config.json`) |
+| GET | `/api/v1/datasets/` | viewer | Listar datasets del tenant |
+| DELETE | `/api/v1/datasets/{id}` | admin | Eliminar dataset |
 
-### Models
-| Method | Path | Role | Description |
-|---|---|---|---|
-| POST | `/api/v1/models/upload` | editor | **Upload Safe `.pt` (TorchScript)** |
-| POST | `/api/v1/models/` | editor | Register model from MLFlow run |
-| GET | `/api/v1/models/` | viewer | List models (tenant + public) |
-| DELETE | `/api/v1/models/{id}` | admin | Delete model and associated data |
+### Modelos
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/models/upload` | editor | Subir modelo TorchScript (`.pt`) |
+| POST | `/api/v1/models/` | editor | Registrar modelo desde MLflow run |
+| GET | `/api/v1/models/` | viewer | Listar modelos (tenant + públicos) |
+| DELETE | `/api/v1/models/{id}` | admin | Eliminar modelo y datos asociados |
 
-### Training
-| Method | Path | Role | Description |
-|---|---|---|---|
-| POST | `/api/v1/training/train` | editor | Launch sklearn/PyTorch training (rate-limited) |
-| GET | `/api/v1/training/algorithms` | viewer | List available algorithms |
-| GET | `/api/v1/training/status/{task_id}` | viewer | Poll training task state |
+### Entrenamiento
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/training/train` | editor | Lanzar entrenamiento (rate-limited) |
+| GET | `/api/v1/training/algorithms` | viewer | Listar algoritmos disponibles |
+| GET | `/api/v1/training/status/{task_id}` | viewer | Consultar estado del entrenamiento |
 
-### Predictions
-| Method | Path | Role | Description |
-|---|---|---|---|
-| POST | `/api/v1/predictions/predict` | editor | Dispatch inference to Celery queue (rate-limited) |
-| POST | `/api/v1/predictions/predict/single` | editor | Direct image injection for on-the-fly inference |
-| GET | `/api/v1/predictions/status/{id}` | viewer | Poll task state with JSON error propagation |
-| GET | `/api/v1/predictions` | viewer | List inference history |
+### Predicciones
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/predictions/predict` | editor | Despachar inferencia async (rate-limited) |
+| POST | `/api/v1/predictions/predict/single` | editor | Inferencia directa sobre una imagen |
+| GET | `/api/v1/predictions/status/{id}` | viewer | Consultar estado de la predicción |
+| GET | `/api/v1/predictions` | viewer | Historial de predicciones |
 
----
-
-## MLFlow Tracking & Dynamic Loading
-
-With security as a core architectural principle, `.py` class inference has been abstracted away:
-
-1. **Model registration**: Developers utilize `torch.jit.trace` locally to produce robust static artifacts. `POST /api/v1/models/upload` registers these within MLFlow while flipping `is_torchscript=True`.
-2. **Dynamic Spawning**: The Celery engine dynamically invokes `torch.jit.load(map_location=device)` natively within isolated threads.
-3. Every inference traces down hyper-parameters, metric benchmarks (like `inference_time_s` and `max_uncertainty`), and exports `.npy` variance mappings cleanly.
+### Preprocesamiento
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/preprocessing/preview` | editor | Previsualizar transformaciones |
+| POST | `/api/v1/preprocessing/apply` | editor | Aplicar pipeline y guardar en MLflow |
+| GET | `/api/v1/preprocessing/pipelines` | viewer | Consultar pipelines guardados |
 
 ---
 
 ## CI Pipeline
 
-Automated via GitHub Actions (`.github/workflows/ci.yml`):
+Automatizado con GitHub Actions (`.github/workflows/ci.yml`):
 
-| Step | Command |
-|---|---|
+| Paso | Comando |
+|------|---------|
 | **Lint** | `ruff check app/ --select=E,F,W --ignore=E501` |
-| **Unit tests** | `pytest tests/unit/ -v` |
-| **Integration tests** | `pytest tests/integration/ -v` |
-| **Coverage** | `pytest tests/ --cov=app --cov-fail-under=30` |
+| **Tests unitarios** | `pytest tests/unit/ -v` |
+| **Tests de integración** | `pytest tests/integration/ -v` |
+| **Cobertura** | `pytest tests/ --cov=app --cov-fail-under=30` |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Application Framework | FastAPI |
-| Async Queue | Celery + Redis |
-| Deep Learning backend | PyTorch & TorchScript, Scikit-learn |
-| Authentication | OAuth2 JWT & bcrypt hashing |
-| Authorization | RBAC (admin/editor/viewer) + quota limiting |
-| Rate Limiting | slowapi (per-IP) |
-| Experiment tracking | MLFlow |
-| Object storage | MinIO (S3-compatible) |
-| Relational Schema | PostgreSQL + SQLAlchemy |
-| Monitoring | Prometheus + Grafana |
-| Package management | uv + pyproject.toml |
+| Capa | Tecnología |
+|------|-----------|
+| Framework API | FastAPI |
+| Cola asíncrona | Celery + Redis |
+| ML & Deep Learning | Scikit-learn, PyTorch, TorchScript |
+| Autenticación | OAuth2 JWT + bcrypt |
+| Autorización | RBAC (admin/editor/viewer) + quotas |
+| Rate Limiting | slowapi (por IP) |
+| Experiment Tracking | MLflow |
+| Almacenamiento objetos | MinIO (S3-compatible) / AWS S3 |
+| Base de datos | PostgreSQL + SQLAlchemy |
+| Monitorización | Prometheus + Grafana |
+| Gestión de paquetes | uv + pyproject.toml |
 | Frontend | React (Next.js) + Tailwind + react-hot-toast |
 | CI/CD | GitHub Actions |

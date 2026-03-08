@@ -2,14 +2,16 @@ import React, { useState } from 'react';
 import { X, Cpu, Tag, Calendar, Database, Target, Activity, Copy, Check, Download, Trash2, Loader2, ArrowRightCircle } from 'lucide-react';
 import { MLModel, api, PreprocessingStep } from '../../lib/api';
 import { Button } from '@/components/ui/button';
+import toast from 'react-hot-toast';
 
 interface ModelDetailsModalProps {
     model: MLModel | null;
     onClose: () => void;
     handleDeleteModel: (modelId: string) => Promise<boolean>;
+    token?: string | null;
 }
 
-export default function ModelDetailsModal({ model, onClose, handleDeleteModel }: ModelDetailsModalProps) {
+export default function ModelDetailsModal({ model, onClose, handleDeleteModel, token }: ModelDetailsModalProps) {
     if (!model) return null;
 
     const metrics = model.metrics_metadata?.metrics || {};
@@ -19,6 +21,7 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel }:
 
     const [copiedStates, setCopiedStates] = useState<Record<string, boolean>>({});
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
     const [pipelineSteps, setPipelineSteps] = useState<PreprocessingStep[] | null>(null);
     const [targetCol, setTargetCol] = useState<string | null>(null);
     const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
@@ -52,8 +55,35 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel }:
         }, 2000);
     };
 
-    const handleDownload = () => {
-        window.open(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"}/models/${model.id}/download?tenant_id=${model.tenant_id}`, '_blank');
+    const handleDownload = async () => {
+        if (!token) {
+            toast.error('Not authenticated');
+            return;
+        }
+        setIsDownloading(true);
+        try {
+            const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/models/${model.id}/download?tenant_id=${model.tenant_id}`;
+            const res = await fetch(url, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || `Error ${res.status}`);
+            }
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = `${model.name.replace(/\s+/g, '_')}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(blobUrl);
+        } catch (err: any) {
+            toast.error(err.message || 'Download failed');
+        } finally {
+            setIsDownloading(false);
+        }
     };
 
     const onDeleteClick = async () => {
@@ -106,9 +136,12 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel }:
                             size="sm"
                             className="bg-neutral-800 border-neutral-700 hover:bg-neutral-700 hover:text-white"
                             onClick={handleDownload}
+                            disabled={isDownloading}
                         >
-                            <Download className="w-4 h-4 mr-2" />
-                            Download Model
+                            {isDownloading
+                                ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                : <Download className="w-4 h-4 mr-2" />}
+                            {isDownloading ? 'Downloading...' : 'Download Model'}
                         </Button>
                         <button onClick={onClose} className="p-2 hover:bg-neutral-800 rounded-full text-neutral-400 transition-colors" disabled={isDeleting}>
                             <X className="w-6 h-6" />
