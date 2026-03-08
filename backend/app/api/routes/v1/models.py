@@ -302,11 +302,11 @@ def download_model(
             try:
                 pipeline_run_id = model.preprocessing_pipeline_path.split("/")[1]
                 pipeline_file_path = "/".join(model.preprocessing_pipeline_path.split("/")[2:])
-                
+
                 mlflow_svc = MLFlowService()
                 client = mlflow.tracking.MlflowClient(tracking_uri=mlflow_svc.get_tracking_uri())
                 downloaded_pipe_path = client.download_artifacts(run_id=pipeline_run_id, path=pipeline_file_path)
-                
+
                 if os.path.isfile(downloaded_pipe_path):
                     shutil.copy2(downloaded_pipe_path, os.path.join(temp_dir, "preprocessing_pipeline.joblib"))
                 elif os.path.isdir(downloaded_pipe_path):
