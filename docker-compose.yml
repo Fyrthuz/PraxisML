@@ -2,11 +2,11 @@ services:
   # 1. Database
   db:
     image: postgres:15
-    container_name: antigravity_db
+    container_name: praxisml_db
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: antigravity_db
+      POSTGRES_DB: praxisml_db
     ports:
       - "5432:5432"
     volumes:
@@ -22,7 +22,7 @@ services:
   # 2. Cache & Message Broker
   redis:
     image: redis:7
-    container_name: antigravity_redis
+    container_name: praxisml_redis
     ports:
       - "6379:6379"
     restart: always
@@ -47,7 +47,7 @@ services:
     command: >
       sh -c "pip install psycopg2-binary boto3 && mlflow server
       --backend-store-uri postgresql://mlflow:mlflow@db:5432/mlflow_db
-      --default-artifact-root s3://antigravity/mlruns
+      --default-artifact-root s3://praxisml/mlruns
       --serve-artifacts
       --host 0.0.0.0
       --port 5000"
@@ -55,7 +55,7 @@ services:
   # 4. Object Storage — MinIO (self-hosted S3-compatible)
   minio:
     image: minio/minio:latest
-    container_name: antigravity_minio
+    container_name: praxisml_minio
     ports:
       - "9000:9000"   # S3 API
       - "9001:9001"   # MinIO Console UI
@@ -75,14 +75,14 @@ services:
   # 4b. MinIO Initialization (creates the default bucket)
   minio-init:
     image: minio/mc:latest
-    container_name: antigravity_minio_init
+    container_name: praxisml_minio_init
     depends_on:
       minio:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
       /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb myminio/antigravity || true;
+      /usr/bin/mc mb myminio/praxisml || true;
       exit 0;
       "
   # 5. FastAPI Backend
@@ -90,7 +90,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: antigravity_api
+    container_name: praxisml_api
     depends_on:
       db:
         condition: service_healthy
@@ -103,7 +103,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/antigravity_db
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/praxisml_db
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -127,7 +127,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: antigravity_worker
+    container_name: praxisml_worker
     depends_on:
       db:
         condition: service_healthy
@@ -138,7 +138,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgresql://postgres:postgres@db:5432/antigravity_db
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/praxisml_db
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
@@ -161,7 +161,7 @@ services:
     build:
       context: ./frontend/frontend
       dockerfile: Dockerfile
-    container_name: antigravity_frontend
+    container_name: praxisml_frontend
     depends_on:
       - api
     ports:
@@ -173,7 +173,7 @@ services:
   # 8. Prometheus — scraping de métricas
   prometheus:
     image: prom/prometheus:latest
-    container_name: antigravity_prometheus
+    container_name: praxisml_prometheus
     ports:
       - "9090:9090"
     volumes:
@@ -188,7 +188,7 @@ services:
   # 9. Grafana — dashboards
   grafana:
     image: grafana/grafana:latest
-    container_name: antigravity_grafana
+    container_name: praxisml_grafana
     ports:
       - "3001:3000"
     environment:

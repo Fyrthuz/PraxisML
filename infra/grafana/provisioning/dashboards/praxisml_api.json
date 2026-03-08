@@ -28,7 +28,7 @@
     "annotations": {
         "list": []
     },
-    "description": "M\u00e9tricas de la API Antigravity SaaS (FastAPI + Prometheus)",
+    "description": "M\u00e9tricas de la API PraxisML (FastAPI + Prometheus)",
     "editable": true,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 1,
@@ -71,7 +71,7 @@
             },
             "targets": [
                 {
-                    "expr": "rate(http_requests_total{job=\"antigravity_api\"}[1m])",
+                    "expr": "rate(http_requests_total{job=\"praxisml_api\"}[1m])",
                     "legendFormat": "{{method}} {{handler}} {{status_code}}",
                     "refId": "A"
                 }
@@ -106,12 +106,12 @@
             "id": 2,
             "targets": [
                 {
-                    "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"antigravity_api\"}[5m]))",
+                    "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"praxisml_api\"}[5m]))",
                     "legendFormat": "p95 {{handler}}",
                     "refId": "A"
                 },
                 {
-                    "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"antigravity_api\"}[5m]))",
+                    "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"praxisml_api\"}[5m]))",
                     "legendFormat": "p50 {{handler}}",
                     "refId": "B"
                 }
@@ -146,7 +146,7 @@
             "id": 3,
             "targets": [
                 {
-                    "expr": "rate(http_requests_total{job=\"antigravity_api\", status_code=~\"4..|5..\"}[1m])",
+                    "expr": "rate(http_requests_total{job=\"praxisml_api\", status_code=~\"4..|5..\"}[1m])",
                     "legendFormat": "{{status_code}} {{handler}}",
                     "refId": "A"
                 }
@@ -196,7 +196,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(increase(http_requests_total{job=\"antigravity_api\", status_code=~\"5..\"}[5m]))",
+                    "expr": "sum(increase(http_requests_total{job=\"praxisml_api\", status_code=~\"5..\"}[5m]))",
                     "legendFormat": "Errores 5xx (5m)",
                     "refId": "A"
                 }
@@ -233,7 +233,7 @@
             },
             "targets": [
                 {
-                    "expr": "sum(increase(http_requests_total{job=\"antigravity_api\"}[5m]))",
+                    "expr": "sum(increase(http_requests_total{job=\"praxisml_api\"}[5m]))",
                     "legendFormat": "Total requests (5m)",
                     "refId": "A"
                 }
@@ -245,7 +245,7 @@
     "refresh": "10s",
     "schemaVersion": 38,
     "tags": [
-        "antigravity",
+        "praxisml",
         "fastapi",
         "api"
     ],
@@ -258,7 +258,7 @@
     },
     "timepicker": {},
     "timezone": "browser",
-    "title": "Antigravity API \u2014 Overview",
-    "uid": "antigravity-api-overview",
+    "title": "PraxisML API \u2014 Overview",
+    "uid": "praxisml-api-overview",
     "version": 1
 }

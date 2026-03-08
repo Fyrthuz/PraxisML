@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Crea la bbdd de mlflow además de la de antigravity_db que se crea por defecto.
+# Crea la bbdd de mlflow además de la de praxisml_db que se crea por defecto.
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
 	CREATE USER mlflow WITH PASSWORD 'mlflow';
 	CREATE DATABASE mlflow_db;
