@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Antigravity SaaS — Backend FastAPI"
+description = "PraxisML — Backend FastAPI"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

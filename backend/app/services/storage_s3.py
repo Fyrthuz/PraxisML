@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 class S3StorageService(StorageService):
 
     def __init__(self):
-        self.bucket = os.getenv("S3_BUCKET", "antigravity-prod")
+        self.bucket = os.getenv("S3_BUCKET", "praxisml-prod")
         region = os.getenv("AWS_DEFAULT_REGION", "eu-west-1")
 
         # boto3 lee AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY automáticamente

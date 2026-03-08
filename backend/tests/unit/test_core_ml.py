@@ -119,7 +119,7 @@ class TestExceptions:
 
     def test_all_exceptions_importable(self):
         from app.core.exceptions import (
-            AntigravityError, AuthenticationError, PermissionDeniedError,
+            PraxisMLError, AuthenticationError, PermissionDeniedError,
             ModelNotFoundError, TrainingError, StorageError,
             InferenceError, DatasetNotFoundError, StorageObjectNotFoundError,
             QuotaExceededError,

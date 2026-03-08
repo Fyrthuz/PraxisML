@@ -15,7 +15,7 @@ from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.config import settings
 from app.core.logging import setup_logging
-from app.core.exceptions import AntigravityError
+from app.core.exceptions import PraxisMLError
 from app.core.rate_limit import limiter
 
 # ── Logging estructurado ───────────────────────────────────────────────────────
@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
         openapi_url=f"{settings.API_V1_STR}/openapi.json",
-        description="API MVP para Antigravity SaaS",
+        description="API MVP para PraxisML",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -102,10 +102,10 @@ def create_app() -> FastAPI:
 
     # ── Global exception handlers ─────────────────────────────────────────────
 
-    @app.exception_handler(AntigravityError)
-    async def antigravity_error_handler(request: Request, exc: AntigravityError):
+    @app.exception_handler(PraxisMLError)
+    async def praxisml_error_handler(request: Request, exc: PraxisMLError):
         logger.warning(
-            "AntigravityError [%s]: %s",
+            "PraxisMLError [%s]: %s",
             exc.code,
             exc.message,
             extra={"detail": str(exc.detail) if exc.detail else None},

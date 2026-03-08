@@ -9,7 +9,7 @@ Variables de entorno requeridas:
     MINIO_ENDPOINT      — p.ej. http://minio:9000
     MINIO_ACCESS_KEY    — Access key de MinIO
     MINIO_SECRET_KEY    — Secret key de MinIO
-    MINIO_BUCKET        — Nombre del bucket (default: antigravity)
+    MINIO_BUCKET        — Nombre del bucket (default: praxisml)
     MINIO_REGION        — Región (default: us-east-1, requerido por boto3)
 """
 
@@ -34,7 +34,7 @@ class MinIOStorageService(StorageService):
         endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
         access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
         secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-        self.bucket = os.getenv("MINIO_BUCKET", "antigravity")
+        self.bucket = os.getenv("MINIO_BUCKET", "praxisml")
         region = os.getenv("MINIO_REGION", "us-east-1")
 
         self._client = boto3.client(

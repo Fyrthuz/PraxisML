@@ -1,5 +1,5 @@
 """
-env.py — Configuración de Alembic para Antigravity SaaS.
+env.py — Configuración de Alembic para PraxisML.
 
 Lee DATABASE_URL de la configuración de la app (app.core.config.settings)
 para que no haya duplicación de credenciales.

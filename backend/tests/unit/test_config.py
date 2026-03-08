@@ -18,7 +18,7 @@ class TestSettingsValidators:
     def test_default_settings_load(self):
         """Los settings por defecto deben cargarse sin error en development."""
         from app.core.config import settings
-        assert settings.PROJECT_NAME == "Antigravity SaaS"
+        assert settings.PROJECT_NAME == "PraxisML"
         assert settings.ENVIRONMENT == "development"
 
     def test_rate_limit_format_valid(self):

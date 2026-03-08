@@ -1,5 +1,5 @@
 """
-Migración inicial — Estado completo del schema de Antigravity SaaS.
+Migración inicial — Estado completo del schema de PraxisML.
 
 Crea todas las tablas desde cero. Si la BD ya tiene las tablas,
 esta migración falla con un error "ya existe" — en ese caso usa:

@@ -1,5 +1,5 @@
 """
-Jerarquía de excepciones de dominio de Antigravity SaaS.
+Jerarquía de excepciones de dominio de PraxisML.
 
 Uso:
     raise ModelNotFoundError(model_id="abc-123")
@@ -14,7 +14,7 @@ from typing import Any
 
 # ── Base ──────────────────────────────────────────────────────────────────────
 
-class AntigravityError(Exception):
+class PraxisMLError(Exception):
     """Excepción base del proyecto. Heredar para todos los errores de dominio."""
 
     status_code: int = 500
@@ -28,7 +28,7 @@ class AntigravityError(Exception):
 
 # ── Auth / RBAC ───────────────────────────────────────────────────────────────
 
-class AuthenticationError(AntigravityError):
+class AuthenticationError(PraxisMLError):
     status_code = 401
     code = "AUTHENTICATION_ERROR"
 
@@ -36,7 +36,7 @@ class AuthenticationError(AntigravityError):
         super().__init__(message, detail)
 
 
-class PermissionDeniedError(AntigravityError):
+class PermissionDeniedError(PraxisMLError):
     """El usuario no tiene el rol necesario para esta operación."""
     status_code = 403
     code = "PERMISSION_DENIED"
@@ -45,7 +45,7 @@ class PermissionDeniedError(AntigravityError):
         super().__init__(message, detail)
 
 
-class TenantNotFoundError(AntigravityError):
+class TenantNotFoundError(PraxisMLError):
     status_code = 404
     code = "TENANT_NOT_FOUND"
 
@@ -56,7 +56,7 @@ class TenantNotFoundError(AntigravityError):
 
 # ── Modelos ML ────────────────────────────────────────────────────────────────
 
-class ModelNotFoundError(AntigravityError):
+class ModelNotFoundError(PraxisMLError):
     status_code = 404
     code = "MODEL_NOT_FOUND"
 
@@ -65,7 +65,7 @@ class ModelNotFoundError(AntigravityError):
         super().__init__(msg, detail)
 
 
-class ModelLoadError(AntigravityError):
+class ModelLoadError(PraxisMLError):
     status_code = 500
     code = "MODEL_LOAD_ERROR"
 
@@ -73,7 +73,7 @@ class ModelLoadError(AntigravityError):
         super().__init__(message, detail)
 
 
-class TrainingError(AntigravityError):
+class TrainingError(PraxisMLError):
     status_code = 500
     code = "TRAINING_ERROR"
 
@@ -81,7 +81,7 @@ class TrainingError(AntigravityError):
         super().__init__(message, detail)
 
 
-class TrainingJobNotFoundError(AntigravityError):
+class TrainingJobNotFoundError(PraxisMLError):
     status_code = 404
     code = "TRAINING_JOB_NOT_FOUND"
 
@@ -92,7 +92,7 @@ class TrainingJobNotFoundError(AntigravityError):
 
 # ── Inferencia ────────────────────────────────────────────────────────────────
 
-class PredictionNotFoundError(AntigravityError):
+class PredictionNotFoundError(PraxisMLError):
     status_code = 404
     code = "PREDICTION_NOT_FOUND"
 
@@ -101,7 +101,7 @@ class PredictionNotFoundError(AntigravityError):
         super().__init__(msg, detail)
 
 
-class InferenceError(AntigravityError):
+class InferenceError(PraxisMLError):
     status_code = 500
     code = "INFERENCE_ERROR"
 
@@ -111,7 +111,7 @@ class InferenceError(AntigravityError):
 
 # ── Datasets ──────────────────────────────────────────────────────────────────
 
-class DatasetNotFoundError(AntigravityError):
+class DatasetNotFoundError(PraxisMLError):
     status_code = 404
     code = "DATASET_NOT_FOUND"
 
@@ -120,7 +120,7 @@ class DatasetNotFoundError(AntigravityError):
         super().__init__(msg, detail)
 
 
-class DatasetValidationError(AntigravityError):
+class DatasetValidationError(PraxisMLError):
     status_code = 422
     code = "DATASET_VALIDATION_ERROR"
 
@@ -130,7 +130,7 @@ class DatasetValidationError(AntigravityError):
 
 # ── Almacenamiento ────────────────────────────────────────────────────────────
 
-class StorageError(AntigravityError):
+class StorageError(PraxisMLError):
     status_code = 500
     code = "STORAGE_ERROR"
 
@@ -138,7 +138,7 @@ class StorageError(AntigravityError):
         super().__init__(message, detail)
 
 
-class StorageObjectNotFoundError(AntigravityError):
+class StorageObjectNotFoundError(PraxisMLError):
     status_code = 404
     code = "STORAGE_OBJECT_NOT_FOUND"
 
@@ -149,7 +149,7 @@ class StorageObjectNotFoundError(AntigravityError):
 
 # ── Preprocesamiento ──────────────────────────────────────────────────────────
 
-class PreprocessingError(AntigravityError):
+class PreprocessingError(PraxisMLError):
     status_code = 500
     code = "PREPROCESSING_ERROR"
 
@@ -159,7 +159,7 @@ class PreprocessingError(AntigravityError):
 
 # ── Rate limiting (para usar desde el middleware) ─────────────────────────────
 
-class RateLimitExceededError(AntigravityError):
+class RateLimitExceededError(PraxisMLError):
     status_code = 429
     code = "RATE_LIMIT_EXCEEDED"
 
@@ -169,7 +169,7 @@ class RateLimitExceededError(AntigravityError):
 
 # ── Quotas ────────────────────────────────────────────────────────────────────
 
-class QuotaExceededError(AntigravityError):
+class QuotaExceededError(PraxisMLError):
     """El tenant ha superado su cuota de recursos (datasets, modelos, etc.)."""
     status_code = 429
     code = "QUOTA_EXCEEDED"

@@ -30,12 +30,12 @@ class Settings(BaseSettings):
     """Configuración principal de la aplicación — leída desde variables de entorno."""
 
     # ── General ────────────────────────────────────────────────────────────────
-    PROJECT_NAME: str = "Antigravity SaaS"
+    PROJECT_NAME: str = "PraxisML"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"  # development | staging | production
 
     # ── Base de datos ──────────────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/antigravity_db"
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/praxisml_db"
 
     # ── Almacenamiento local ───────────────────────────────────────────────────
     # Ruta base para ficheros en disco (datasets, modelos, predicciones).
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
 
     # ── CORS ───────────────────────────────────────────────────────────────────
     # Orígenes permitidos, separados por coma.
-    # Ejemplo producción: "https://app.antigravity.ai,https://www.antigravity.ai"
+    # Ejemplo producción: "https://app.praxisml.ai,https://www.praxisml.ai"
     CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     @property
@@ -80,11 +80,11 @@ class Settings(BaseSettings):
     MINIO_ENDPOINT: str = "http://minio:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
-    MINIO_BUCKET: str = "antigravity"
+    MINIO_BUCKET: str = "praxisml"
     MINIO_REGION: str = "us-east-1"
 
     # AWS S3 (producción cloud)
-    S3_BUCKET: str = "antigravity-prod"
+    S3_BUCKET: str = "praxisml-prod"
     AWS_DEFAULT_REGION: str = "eu-west-1"
     # AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY los lee boto3 automáticamente
 

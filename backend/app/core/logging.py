@@ -1,5 +1,5 @@
 """
-Logging estructurado JSON para Antigravity SaaS.
+Logging estructurado JSON para PraxisML.
 
 Configuración:
     from app.core.logging import setup_logging
@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 
-ANTIGRAVITY_FIELDS = ("tenant_id", "model_id", "task_id", "request_id", "user_id")
+PRAXISML_FIELDS = ("tenant_id", "model_id", "task_id", "request_id", "user_id")
 
 
 class JsonFormatter(logging.Formatter):
@@ -37,7 +37,7 @@ class JsonFormatter(logging.Formatter):
         }
 
         # Añadir campos de contexto si están presentes en el `extra`
-        for field in ANTIGRAVITY_FIELDS:
+        for field in PRAXISML_FIELDS:
             value = getattr(record, field, None)
             if value is not None:
                 log_entry[field] = value
