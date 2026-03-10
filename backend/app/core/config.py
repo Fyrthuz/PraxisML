@@ -93,9 +93,10 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
-        if not v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+        allowed_prefixes = ("postgresql://", "postgresql+asyncpg://", "sqlite://", "sqlite+aiosqlite://")
+        if not any(v.startswith(p) for p in allowed_prefixes):
             raise ValueError(
-                f"DATABASE_URL debe comenzar con 'postgresql://' — recibido: '{v[:30]}...'"
+                f"DATABASE_URL debe comenzar con un prefijo válido (postgresql:// o sqlite://) — recibido: '{v[:30]}...'"
             )
         return v
 

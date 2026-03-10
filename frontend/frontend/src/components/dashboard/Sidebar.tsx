@@ -1,8 +1,8 @@
 "use client";
-import { BarChart3, Database, Filter, Cpu, Clock, FlaskConical, Settings, Plus } from "lucide-react";
+import { BarChart3, Database, Filter, Cpu, Clock, FlaskConical, Settings, Plus, BookMarked, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type View = "datasets" | "preprocessing" | "models" | "predictions" | "training";
+type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry";
 
 interface NavItem {
     id: View;
@@ -12,8 +12,10 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
     { id: "datasets", label: "Datasets", icon: <Database className="w-5 h-5" /> },
+    { id: "data_registry", label: "Data Registry", icon: <GitBranch className="w-5 h-5" /> },
     { id: "preprocessing", label: "Preprocessing", icon: <Filter className="w-5 h-5" /> },
     { id: "models", label: "Models", icon: <Cpu className="w-5 h-5" /> },
+    { id: "registry", label: "Model Registry", icon: <BookMarked className="w-5 h-5" /> },
     { id: "predictions", label: "Predictions", icon: <Clock className="w-5 h-5" /> },
     { id: "training", label: "Training", icon: <FlaskConical className="w-5 h-5" /> },
 ];

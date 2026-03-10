@@ -10,6 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from datetime import datetime
 
 from app.database import get_db
 from app.models.ml_model import MLModel
@@ -33,6 +34,7 @@ router = APIRouter()
 # Register model (manual — provide an existing MLFlow run_id)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @router.post("/", response_model=MLModelResponse, status_code=status.HTTP_201_CREATED)
 def register_model(
     model_in: MLModelCreate,
@@ -47,14 +49,42 @@ def register_model(
     Requiere rol **editor** o superior. Valida cuota de modelos del tenant.
     """
 
-    existing = db.query(MLModel).filter(MLModel.mlflow_run_id == model_in.mlflow_run_id).first()
+    existing = (
+        db.query(MLModel)
+        .filter(MLModel.mlflow_run_id == model_in.mlflow_run_id)
+        .first()
+    )
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Este run_id de MLFlow ya está registrado en la base de datos.",
         )
 
-    new_model = MLModel(**model_in.model_dump(), tenant_id=tenant.id)
+    # Try to register in MLflow Model Registry (only if we have a run_id)
+    mlflow_registry_name = None
+    mlflow_version = None
+    if model_in.mlflow_run_id:
+        try:
+            mlflow_svc = MLFlowService()
+            model_name_for_registry = (
+                f"tenant_{tenant.id}_{model_in.name.replace(' ', '_')}"
+            )
+            registry_result = mlflow_svc.register_model_to_registry(
+                model_name=model_name_for_registry,
+                run_id=model_in.mlflow_run_id,
+                description=model_in.description or "",
+            )
+            mlflow_registry_name = registry_result["name"]
+            mlflow_version = str(registry_result["version"])
+        except Exception as e:
+            print(f"Warning: Failed to register in MLflow Registry: {e}")
+
+    new_model = MLModel(
+        **model_in.model_dump(),
+        tenant_id=tenant.id,
+        mlflow_registry_name=mlflow_registry_name,
+        mlflow_version=mlflow_version,
+    )
     db.add(new_model)
     db.commit()
     db.refresh(new_model)
@@ -65,13 +95,17 @@ def register_model(
 # Upload .pth → register in MLFlow → save to DB  (el flujo integrado)
 # ──────────────────────────────────────────────────────────────────────────────
 
-@router.post("/upload", response_model=MLModelResponse, status_code=status.HTTP_201_CREATED)
+
+@router.post(
+    "/upload", response_model=MLModelResponse, status_code=status.HTTP_201_CREATED
+)
 def upload_and_register_model(
     name: str = Form(...),
     description: Optional[str] = Form(None),
     architecture: str = Form("unknown"),
     num_classes: int = Form(2),
     is_public: bool = Form(False),
+    registry_name: Optional[str] = Form(default=None),
     file: UploadFile = File(...),
     _user: User = Depends(require_editor),
     tenant: Tenant = Depends(check_model_quota),
@@ -83,10 +117,8 @@ def upload_and_register_model(
 
     Requiere rol **editor** o superior. Valida cuota de modelos del tenant.
 
-    Flujo:
-      1. Guarda el .pth en DATA_DIR/tenants/<tenant_id>/models/
-      2. Llama a MLFlowService.register_pth_model() → devuelve un run_id
-      3. Crea MLModel en BD con ese run_id
+    Si se proporciona registry_name, el modelo se registrará en ese modelo del
+    MLflow Model Registry. Si no, se creará uno nuevo con el nombre del modelo.
     """
 
     if not file.filename or not file.filename.endswith((".pth", ".pt", ".ts")):
@@ -106,6 +138,8 @@ def upload_and_register_model(
 
     # ── Registrar en MLFlow (Si NO es TorchScript) ──────────────────────────
     run_id = None
+    mlflow_registry_name = None
+    mlflow_version = None
     if not is_torchscript:
         try:
             mlflow_svc = MLFlowService()
@@ -116,6 +150,37 @@ def upload_and_register_model(
                 architecture=architecture,
                 num_classes=num_classes,
             )
+
+            # Register to MLflow Model Registry
+            try:
+                # Use provided registry name (ensuring prefix) or create one based on model name
+                if registry_name:
+                    model_name_for_registry = registry_name
+                    if not model_name_for_registry.startswith(f"tenant_{tenant.id}_"):
+                        model_name_for_registry = f"tenant_{tenant.id}_{model_name_for_registry}"
+                else:
+                    model_name_for_registry = f"tenant_{tenant.id}_{name.replace(' ', '_')}"
+
+                # Create registry if it doesn't exist
+                try:
+                    mlflow_svc.create_registered_model(
+                        name=model_name_for_registry,
+                        description=description or f"Model: {name}",
+                    )
+                except Exception:
+                    pass  # Already exists
+
+                # Register model version to registry
+                registry_result = mlflow_svc.register_model_to_registry(
+                    model_name=model_name_for_registry,
+                    run_id=run_id,
+                    description=description or "",
+                )
+                mlflow_registry_name = registry_result["name"]
+                mlflow_version = str(registry_result["version"])
+            except Exception as e:
+                print(f"Warning: Failed to register in MLflow Registry: {e}")
+
         except Exception as exc:
             pth_path.unlink(missing_ok=True)
             raise HTTPException(
@@ -127,7 +192,9 @@ def upload_and_register_model(
     new_model = MLModel(
         name=name,
         description=description,
-        mlflow_run_id=run_id, # Será None si es TorchScript
+        mlflow_run_id=run_id,
+        mlflow_registry_name=mlflow_registry_name,
+        mlflow_version=mlflow_version,
         metrics_metadata={
             "architecture": architecture,
             "num_classes": num_classes,
@@ -148,6 +215,7 @@ def upload_and_register_model(
 # List models for a tenant (own + public)
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/", response_model=List[MLModelResponse])
 def get_models(
     _user: User = Depends(require_viewer),
@@ -158,15 +226,18 @@ def get_models(
     Obtener modelos del tenant MÁS los modelos base disponibles globalmente.
     Requiere rol **viewer** o superior.
     """
-    models = db.query(MLModel).filter(
-        (MLModel.tenant_id == tenant.id) | (MLModel.is_public is True)
-    ).all()
+    models = (
+        db.query(MLModel)
+        .filter((MLModel.tenant_id == tenant.id) | (MLModel.is_public is True))
+        .all()
+    )
     return models
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Delete model
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.delete("/{model_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_model(
@@ -180,32 +251,42 @@ def delete_model(
     Requiere rol **admin**.
     (Opcionalmente también se podrían purgar sus artefactos en disco/MLFlow).
     """
-    model = db.query(MLModel).filter(
-        MLModel.id == model_id,
-        MLModel.tenant_id == tenant.id
-    ).first()
+    model = (
+        db.query(MLModel)
+        .filter(MLModel.id == model_id, MLModel.tenant_id == tenant.id)
+        .first()
+    )
 
     if not model:
-        raise HTTPException(status_code=404, detail="Model no encontrado o sin permisos.")
+        raise HTTPException(
+            status_code=404, detail="Model no encontrado o sin permisos."
+        )
 
     # Opcional: Eliminar archivos .pth/.pt de disco si existen
     if model.torchscript_path and os.path.exists(model.torchscript_path):
         try:
             os.remove(model.torchscript_path)
         except Exception as e:
-            print(f"Warning: No se pudo borrar el archivo de torchscript {model.torchscript_path}: {e}")
+            print(
+                f"Warning: No se pudo borrar el archivo de torchscript {model.torchscript_path}: {e}"
+            )
 
     # Intentar eliminar de MLFlow
     if model.mlflow_run_id:
         try:
             mlflow_svc = MLFlowService()
-            client = mlflow.tracking.MlflowClient(tracking_uri=mlflow_svc.get_tracking_uri())
+            client = mlflow.tracking.MlflowClient(
+                tracking_uri=mlflow_svc.get_tracking_uri()
+            )
             client.delete_run(model.mlflow_run_id)
         except Exception as e:
-            print(f"Warning: No se pudo borrar el run {model.mlflow_run_id} de MLFlow: {e}")
+            print(
+                f"Warning: No se pudo borrar el run {model.mlflow_run_id} de MLFlow: {e}"
+            )
 
     # Eliminar predicciones asociadas para evitar ForeignKeyViolation
     from app.models.prediction import Prediction
+
     predictions = db.query(Prediction).filter(Prediction.model_id == model_id).all()
     for pred in predictions:
         # Borrar archivos .npy asociados si existen
@@ -233,6 +314,116 @@ def delete_model(
 # ──────────────────────────────────────────────────────────────────────────────
 # Download Model (.zip with CSV info and MLFlow artifacts)
 # ──────────────────────────────────────────────────────────────────────────────
+# Model Download Helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _create_model_zip_response(
+    run_id: str,
+    name: str,
+    description: str = "",
+    metrics_metadata: Optional[dict] = None,
+    preprocessing_pipeline_path: Optional[str] = None,
+    torchscript_path: Optional[str] = None,
+):
+    """
+    Helper para crear un zip con los artefactos de un run de MLflow y metadatos.
+    """
+    # Crear directorio temporal para preparar el zip
+    temp_dir = tempfile.mkdtemp(prefix="mlmodel_")
+
+    try:
+        # 1. Crear el CSV con metadatos
+        csv_path = os.path.join(temp_dir, "model_info.csv")
+        with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Key", "Value"])
+            writer.writerow(["Model Name", name])
+            writer.writerow(["Description", description or ""])
+            writer.writerow(["MLFlow Run ID", run_id or ""])
+            writer.writerow(["Created At", str(datetime.now())])
+
+            # Agregar metadatos e hiperparámetros
+            if metrics_metadata:
+                for k, v in metrics_metadata.items():
+                    if isinstance(v, (list, dict)):
+                        import json
+                        v = json.dumps(v)
+                    writer.writerow([f"metadata_{k}", str(v)])
+
+        # 2. Descargar artefactos de MLflow
+        if run_id:
+            try:
+                mlflow_svc = MLFlowService()
+                client = mlflow.tracking.MlflowClient(
+                    tracking_uri=mlflow_svc.get_tracking_uri()
+                )
+                artifact_path = client.download_artifacts(
+                    run_id=run_id, path=""
+                )
+
+                # Copiar contenidos del directorio de artefactos
+                dest_artifacts = os.path.join(temp_dir, "artifacts")
+                shutil.copytree(artifact_path, dest_artifacts, dirs_exist_ok=True)
+            except Exception as e:
+                print(f"Warning: Podría no haberse descargado artefactos para {run_id}: {e}")
+
+        # 3. TorchScript/Pth manual
+        if torchscript_path and os.path.exists(torchscript_path):
+            shutil.copy2(torchscript_path, temp_dir)
+
+        # 4. Descargar pipeline de preprocesamiento (si existe)
+        if preprocessing_pipeline_path and preprocessing_pipeline_path.startswith("runs:/"):
+            try:
+                pipeline_parts = preprocessing_pipeline_path.split("/")
+                pipeline_run_id = pipeline_parts[1]
+                pipeline_file_path = "/".join(pipeline_parts[2:])
+
+                mlflow_svc = MLFlowService()
+                client = mlflow.tracking.MlflowClient(
+                    tracking_uri=mlflow_svc.get_tracking_uri()
+                )
+                downloaded_pipe_path = client.download_artifacts(
+                    run_id=pipeline_run_id, path=pipeline_file_path
+                )
+
+                if os.path.isfile(downloaded_pipe_path):
+                    shutil.copy2(
+                        downloaded_pipe_path,
+                        os.path.join(temp_dir, "preprocessing_pipeline.joblib"),
+                    )
+                elif os.path.isdir(downloaded_pipe_path):
+                    shutil.copytree(
+                        downloaded_pipe_path,
+                        os.path.join(temp_dir, "preprocessing_pipeline"),
+                        dirs_exist_ok=True,
+                    )
+            except Exception as e:
+                print(f"Warning: No se pudo descargar el pipeline de preprocesamiento: {e}")
+
+        # 5. Crear archivo Zip
+        # Nota: Usamos zip_path en temp_dir para evitar conflictos
+        zip_path = tempfile.mktemp(
+            suffix=".zip", prefix=f"{name.replace(' ', '_')}_"
+        )
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(temp_dir):
+                for file in files:
+                    full_path = os.path.join(root, file)
+                    arcname = os.path.relpath(full_path, temp_dir)
+                    zipf.write(full_path, arcname)
+
+        return FileResponse(
+            path=zip_path,
+            filename=f"{name.replace(' ', '_')}.zip",
+            media_type="application/zip",
+        )
+
+    finally:
+        # No podemos borrar el temp_dir aquí porque FileResponse lo necesita
+        # FastAPI se encarga de servir el zip_path.
+        # Idealmente usaríamos background tasks para limpieza posterior.
+        pass
+
 
 @router.get("/{model_id}/download", response_class=FileResponse)
 def download_model(
@@ -248,98 +439,74 @@ def download_model(
 
     Requiere rol **viewer** o superior.
     """
-    model = db.query(MLModel).filter(
-        MLModel.id == model_id,
-        (MLModel.tenant_id == tenant_id) | (MLModel.is_public is True)
-    ).first()
+    model = (
+        db.query(MLModel)
+        .filter(
+            MLModel.id == model_id,
+            (MLModel.tenant_id == tenant_id) | (MLModel.is_public is True),
+        )
+        .first()
+    )
 
     if not model:
         raise HTTPException(status_code=404, detail="Model no encontrado.")
 
-    # Crear directorio temporal para preparar el zip
-    temp_dir = tempfile.mkdtemp(prefix="mlmodel_")
+    return _create_model_zip_response(
+        run_id=model.mlflow_run_id,
+        name=model.name,
+        description=model.description,
+        metrics_metadata=model.metrics_metadata,
+        preprocessing_pipeline_path=model.preprocessing_pipeline_path,
+        torchscript_path=model.torchscript_path if hasattr(model, 'is_torchscript') and model.is_torchscript else None
+    )
 
-    try:
-        # 1. Crear el CSV con metadatos
-        csv_path = os.path.join(temp_dir, "model_info.csv")
-        with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Key", "Value"])
-            writer.writerow(["Model Name", model.name])
-            writer.writerow(["Description", model.description or ""])
-            writer.writerow(["MLFlow Run ID", model.mlflow_run_id or ""])
-            writer.writerow(["Created At", str(model.created_at)])
 
-            # Agregar metadatos e hiperparámetros
-            if model.metrics_metadata:
-                for k, v in model.metrics_metadata.items():
-                    # Evitar listas largas como las features, se pueden serializar a json
-                    if isinstance(v, (list, dict)):
-                        import json
-                        v = json.dumps(v)
-                    writer.writerow([f"metadata_{k}", str(v)])
+@router.get("/runs/{run_id}/download", response_class=FileResponse)
+def download_model_by_run(
+    run_id: str,
+    _user: User = Depends(require_viewer),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
+    """
+    Descarga un modelo basándose en su run_id de MLflow.
+    Intenta enriquecerlo con datos si existe en nuestra BD.
+    """
+    model = db.query(MLModel).filter(MLModel.mlflow_run_id == run_id, MLModel.tenant_id == tenant.id).first()
 
-        # 2. Descargar artefactos de MLflow
-        if model.mlflow_run_id:
-            try:
-                mlflow_svc = MLFlowService()
-                client = mlflow.tracking.MlflowClient(tracking_uri=mlflow_svc.get_tracking_uri())
-                artifact_path = client.download_artifacts(run_id=model.mlflow_run_id, path="")
-
-                # Copiar contenidos del directorio de artefactos
-                dest_artifacts = os.path.join(temp_dir, "artifacts")
-                shutil.copytree(artifact_path, dest_artifacts, dirs_exist_ok=True)
-            except Exception as e:
-                # Si falla, loguear pero continuar con el zip (puede que no haya artefactos)
-                print(f"Warning: Podría no haberse descargado artefactos para {model.mlflow_run_id}: {e}")
-
-        # Si el modelo original era TorchScript/Pth subido manual y tenemos path
-        if model.is_torchscript and model.torchscript_path and os.path.exists(model.torchscript_path):
-             shutil.copy2(model.torchscript_path, temp_dir)
-
-        # 3. Descargar pipeline de preprocesamiento (si existe)
-        if model.preprocessing_pipeline_path and model.preprocessing_pipeline_path.startswith("runs:/"):
-            try:
-                pipeline_run_id = model.preprocessing_pipeline_path.split("/")[1]
-                pipeline_file_path = "/".join(model.preprocessing_pipeline_path.split("/")[2:])
-
-                mlflow_svc = MLFlowService()
-                client = mlflow.tracking.MlflowClient(tracking_uri=mlflow_svc.get_tracking_uri())
-                downloaded_pipe_path = client.download_artifacts(run_id=pipeline_run_id, path=pipeline_file_path)
-
-                if os.path.isfile(downloaded_pipe_path):
-                    shutil.copy2(downloaded_pipe_path, os.path.join(temp_dir, "preprocessing_pipeline.joblib"))
-                elif os.path.isdir(downloaded_pipe_path):
-                    shutil.copytree(downloaded_pipe_path, os.path.join(temp_dir, "preprocessing_pipeline"), dirs_exist_ok=True)
-            except Exception as e:
-                print(f"Warning: No se pudo descargar el pipeline de preprocesamiento: {e}")
-
-        # 4. Crear archivo Zip
-        zip_path = tempfile.mktemp(suffix=".zip", prefix=f"{model.name.replace(' ', '_')}_")
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(temp_dir):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, temp_dir)
-                    zipf.write(file_path, arcname)
-
-        return FileResponse(
-            path=zip_path,
-            filename=f"{model.name.replace(' ', '_')}.zip",
-            media_type="application/zip",
-            background=None
+    if model:
+        return _create_model_zip_response(
+            run_id=model.mlflow_run_id,
+            name=model.name,
+            description=model.description,
+            metrics_metadata=model.metrics_metadata,
+            preprocessing_pipeline_path=model.preprocessing_pipeline_path,
         )
+    else:
+        # Si no existe en BD, descargamos lo básico de MLflow
+        try:
+            mlflow_svc = MLFlowService()
+            run_details = mlflow_svc.get_run_details(run_id)
+            name = run_details.get("tags", {}).get("mlflow.runName", f"run_{run_id[:8]}")
 
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error creando el paquete del modelo: {exc}"
-        )
+            return _create_model_zip_response(
+                run_id=run_id,
+                name=name,
+                description="Downloaded from MLflow Registry",
+                metrics_metadata={
+                    "metrics": run_details.get("metrics"),
+                    "params": run_details.get("params"),
+                    "tags": run_details.get("tags")
+                }
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error downloading run artifacts: {e}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MLFlow info (tracking URI + experiment list)
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.get("/mlflow-info")
 def mlflow_info(_user: User = Depends(require_viewer)):
@@ -370,3 +537,254 @@ def mlflow_info(_user: User = Depends(require_viewer)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error al conectar con MLFlow: {exc}",
         )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Model Registry Management (MLflow Registered Models)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@router.post("/registry", status_code=status.HTTP_201_CREATED)
+def create_registered_model(
+    name: str = Form(...),
+    description: str = Form(default=""),
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    """
+    Crea un nuevo modelo registrado en MLflow Model Registry.
+    Este es el "contenedor" donde se almacenarán las versiones del modelo.
+    Requiere rol editor o superior.
+    """
+    try:
+        mlflow_svc = MLFlowService()
+        model_name = f"tenant_{tenant.id}_{name.replace(' ', '_')}"
+        result = mlflow_svc.create_registered_model(
+            name=model_name,
+            description=description,
+        )
+        return {
+            "message": "Registered model created successfully",
+            "name": result["name"],
+            "description": result.get("description", ""),
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error creating registered model: {exc}",
+        )
+
+
+@router.get("/registry", response_model=dict)
+def list_registered_models(
+    _user: User = Depends(require_viewer),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    """
+    Lista todos los modelos registrados en MLflow Model Registry para este tenant.
+    """
+    try:
+        mlflow_svc = MLFlowService()
+        all_models = mlflow_svc.get_registered_models()
+        # Filter to only tenant's models
+        tenant_prefix = f"tenant_{tenant.id}_"
+        tenant_models = []
+        for m in all_models["models"]:
+            if m["name"].startswith(tenant_prefix):
+                # Add display_name and keep original name for API calls
+                m["display_name"] = m["name"][len(tenant_prefix):]
+                tenant_models.append(m)
+            elif m["name"].startswith("global_"):
+                m["display_name"] = m["name"]
+                tenant_models.append(m)
+
+        return {"models": tenant_models}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error listing registered models: {exc}",
+        )
+
+
+@router.delete("/registry/{registry_name}")
+def delete_registered_model(
+    registry_name: str,
+    _user: User = Depends(require_admin),
+    tenant: Tenant = Depends(get_current_tenant),
+):
+    """
+    Elimina un modelo registrado de MLflow Model Registry.
+    Requiere rol admin.
+    """
+    try:
+        mlflow_svc = MLFlowService()
+        mlflow_svc.delete_registered_model(registry_name)
+        return {"message": f"Registered model {registry_name} deleted"}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error deleting registered model: {exc}",
+        )
+
+
+@router.get("/registry/{model_name}/versions")
+def get_registry_model_versions(
+    model_name: str,
+    _user: User = Depends(require_viewer),
+):
+    """
+    Lista todas las versiones de un modelo registrado en MLflow.
+    """
+    try:
+        mlflow_svc = MLFlowService()
+        versions = mlflow_svc.get_model_versions(model_name)
+        return {"versions": versions}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching versions: {exc}",
+        )
+
+
+@router.get("/runs/{run_id}/details")
+def get_run_details(
+    run_id: str,
+    _user: User = Depends(require_viewer),
+):
+    """
+    Obtiene los detalles de un run (métricas, parámetros) de MLflow.
+    """
+    try:
+        mlflow_svc = MLFlowService()
+        details = mlflow_svc.get_run_details(run_id)
+        return details
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching run details: {exc}",
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Model Registry - Versioning and Stage Management
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@router.post("/{model_id}/promote", response_model=MLModelResponse)
+def promote_model(
+    model_id: str,
+    target_stage: str = Form(default="Production"),
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
+    """
+    Promote a model to Production or archive it.
+    Requires editor role or higher.
+    """
+    model = (
+        db.query(MLModel)
+        .filter(MLModel.id == model_id, MLModel.tenant_id == tenant.id)
+        .first()
+    )
+
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    if target_stage not in ["Staging", "Production", "Archived"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid stage. Must be 'Staging', 'Production', or 'Archived'",
+        )
+
+    if model.mlflow_run_id and model.mlflow_registry_name:
+        try:
+            mlflow_svc = MLFlowService()
+            version = int(model.mlflow_version) if model.mlflow_version else 1
+            mlflow_svc.transition_model_stage(
+                model_name=model.mlflow_registry_name,
+                version=version,
+                stage=target_stage,
+            )
+        except Exception as e:
+            print(f"MLflow registry transition failed: {e}")
+
+    model.stage = target_stage
+    model.promoted_at = datetime.utcnow()
+    model.promoted_by = str(_user.id)
+
+    db.commit()
+    db.refresh(model)
+    return model
+
+
+@router.post("/{model_id}/archive", response_model=MLModelResponse)
+def archive_model(
+    model_id: str,
+    _user: User = Depends(require_editor),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
+    """Archive a model (move to Archived stage)."""
+    model = (
+        db.query(MLModel)
+        .filter(MLModel.id == model_id, MLModel.tenant_id == tenant.id)
+        .first()
+    )
+
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    if model.mlflow_run_id and model.mlflow_registry_name:
+        try:
+            mlflow_svc = MLFlowService()
+            version = int(model.mlflow_version) if model.mlflow_version else 1
+            mlflow_svc.transition_model_stage(
+                model_name=model.mlflow_registry_name,
+                version=version,
+                stage="Archived",
+            )
+        except Exception as e:
+            print(f"MLflow registry transition failed: {e}")
+
+    model.stage = "Archived"
+    model.promoted_at = datetime.utcnow()
+    model.promoted_by = str(_user.id)
+
+    db.commit()
+    db.refresh(model)
+    return model
+
+
+@router.get("/{model_id}/versions")
+def get_model_versions(
+    model_id: str,
+    _user: User = Depends(require_viewer),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
+    """Get version history for a model."""
+    model = (
+        db.query(MLModel)
+        .filter(MLModel.id == model_id, MLModel.tenant_id == tenant.id)
+        .first()
+    )
+
+    if not model:
+        raise HTTPException(status_code=404, detail="Model not found")
+
+    versions = []
+    if model.mlflow_registry_name:
+        try:
+            mlflow_svc = MLFlowService()
+            versions = mlflow_svc.get_model_versions(model.mlflow_registry_name)
+        except Exception as e:
+            print(f"Failed to get MLflow versions: {e}")
+
+    return {
+        "current_version": model.version,
+        "stage": model.stage,
+        "promoted_at": model.promoted_at,
+        "promoted_by": model.promoted_by,
+        "mlflow_versions": versions,
+    }

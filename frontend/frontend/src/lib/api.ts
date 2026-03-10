@@ -38,6 +38,14 @@ export interface Dataset {
     column_names?: string[];
     version?: number;
     mlflow_artifact_uri?: string;
+    pipeline_path?: string;
+    // ── DVC Versioning ──
+    dvc_remote?: string;
+    dvc_hash?: string;
+    is_dvc_tracked?: boolean;
+    dvc_registry_name?: string;
+    dvc_version?: number;
+    parent_dataset_id?: string;
 }
 
 export interface MLModel {
@@ -49,6 +57,13 @@ export interface MLModel {
     is_public: boolean;
     tenant_id: string;
     created_at: string;
+    // Phase 1: Model Registry
+    version?: string;
+    stage?: "Staging" | "Production" | "Archived";
+    promoted_at?: string;
+    promoted_by?: string;
+    mlflow_registry_name?: string;
+    mlflow_version?: string;
 }
 
 export interface Prediction {
@@ -211,11 +226,13 @@ export const api = {
         return res.json();
     },
 
-    async uploadDataset(tenantId: string, file: File, name: string, description?: string): Promise<Dataset> {
+    async uploadDataset(tenantId: string, file: File, name: string, description?: string, is_dvc_tracked?: boolean, dvc_registry_name?: string): Promise<Dataset> {
         const formData = new FormData();
         formData.append("tenant_id", tenantId);
         formData.append("name", name);
         if (description) formData.append("description", description);
+        if (is_dvc_tracked) formData.append("is_dvc_tracked", String(is_dvc_tracked));
+        if (dvc_registry_name) formData.append("dvc_registry_name", dvc_registry_name);
         formData.append("file", file);
 
         const res = await fetchAuth(`${API_BASE_URL}/datasets/`, {
@@ -244,6 +261,43 @@ export const api = {
     async getDatasetProfile(datasetId: string, tenantId: string): Promise<DatasetProfile> {
         const res = await fetchAuth(`${API_BASE_URL}/profiling/${datasetId}/profile?tenant_id=${tenantId}`);
         if (!res.ok) throw new Error("Failed to profile dataset");
+        return res.json();
+    },
+
+    // ── DVC Dataset Registry ─────────────────────────────────────────────────
+    async getDatasetRegistries(tenantId: string): Promise<{ name: string; versions: number; datasets: any[] }[]> {
+        const res = await fetchAuth(`${API_BASE_URL}/datasets/registry?tenant_id=${tenantId}`);
+        if (!res.ok) throw new Error("Failed to fetch dataset registries");
+        return res.json();
+    },
+
+    async getDatasetVersions(registryName: string, tenantId: string): Promise<{ registry_name: string; versions: any[] }> {
+        const res = await fetchAuth(`${API_BASE_URL}/datasets/registry/${encodeURIComponent(registryName)}/versions?tenant_id=${tenantId}`);
+        if (!res.ok) throw new Error("Failed to fetch dataset versions");
+        return res.json();
+    },
+
+    async promoteDataset(datasetId: string, tenantId: string): Promise<{ message: string; dataset_id: string; is_active: boolean }> {
+        const res = await fetchAuth(`${API_BASE_URL}/datasets/${datasetId}/promote?tenant_id=${tenantId}`, {
+            method: "POST",
+        });
+        if (!res.ok) throw new Error("Failed to promote dataset");
+        return res.json();
+    },
+
+    async pushDatasetToRemote(datasetId: string, tenantId: string): Promise<{ message: string }> {
+        const res = await fetchAuth(`${API_BASE_URL}/datasets/${datasetId}/dvc/push?tenant_id=${tenantId}`, {
+            method: "POST",
+        });
+        if (!res.ok) throw new Error("Failed to push dataset to DVC remote");
+        return res.json();
+    },
+
+    async pullDatasetFromRemote(datasetId: string, tenantId: string): Promise<{ message: string }> {
+        const res = await fetchAuth(`${API_BASE_URL}/datasets/${datasetId}/dvc/pull?tenant_id=${tenantId}`, {
+            method: "POST",
+        });
+        if (!res.ok) throw new Error("Failed to pull dataset from DVC remote");
         return res.json();
     },
 
@@ -369,6 +423,105 @@ export const api = {
         const res = await fetchAuth(`${API_BASE_URL}/training/status/${taskId}`);
         if (!res.ok) throw new Error("Failed to fetch training status");
         return res.json();
+    },
+
+    // ── Model Registry (Phase 1) ─────────────────────────────────────────────────
+    async createRegisteredModel(name: string, description: string = ""): Promise<{ name: string; description: string }> {
+        const formData = new FormData();
+        formData.append("name", name);
+        formData.append("description", description);
+
+        const res = await fetchAuth(`${API_BASE_URL}/models/registry`, {
+            method: "POST",
+            body: formData,
+        });
+        if (!res.ok) throw new Error("Failed to create registered model");
+        return res.json();
+    },
+
+    async getRegisteredModels(): Promise<{ models: any[] }> {
+        const res = await fetchAuth(`${API_BASE_URL}/models/registry`);
+        if (!res.ok) throw new Error("Failed to fetch registered models");
+        return res.json();
+    },
+
+    async deleteRegisteredModel(name: string): Promise<void> {
+        const res = await fetchAuth(`${API_BASE_URL}/models/registry/${encodeURIComponent(name)}`, {
+            method: "DELETE",
+        });
+        if (!res.ok) throw new Error("Failed to delete registered model");
+    },
+
+    async promoteModel(modelId: string, targetStage: string): Promise<MLModel> {
+        const res = await fetchAuth(`${API_BASE_URL}/models/${modelId}/promote`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ target_stage: targetStage }),
+        });
+        if (!res.ok) throw new Error("Failed to promote model");
+        return res.json();
+    },
+
+    async archiveModel(modelId: string): Promise<MLModel> {
+        const res = await fetchAuth(`${API_BASE_URL}/models/${modelId}/archive`, {
+            method: "POST",
+        });
+        if (!res.ok) throw new Error("Failed to archive model");
+        return res.json();
+    },
+
+    async getModelVersions(modelId: string): Promise<{
+        current_version: string;
+        stage: string;
+        promoted_at?: string;
+        promoted_by?: string;
+        mlflow_versions: any[];
+    }> {
+        const res = await fetchAuth(`${API_BASE_URL}/models/${modelId}/versions`);
+        if (!res.ok) throw new Error("Failed to fetch model versions");
+        return res.json();
+    },
+
+    async getRegistryVersions(modelName: string): Promise<{ versions: any[] }> {
+        const res = await fetchAuth(`${API_BASE_URL}/models/registry/${encodeURIComponent(modelName)}/versions`);
+        if (!res.ok) throw new Error("Failed to fetch registry versions");
+        return res.json();
+    },
+
+    async getRunDetails(runId: string): Promise<any> {
+        const res = await fetchAuth(`${API_BASE_URL}/models/runs/${runId}/details`);
+        if (!res.ok) throw new Error("Failed to fetch run details");
+        return res.json();
+    },
+
+    async downloadModelByRunId(runId: string, modelName: string): Promise<void> {
+        const res = await fetchAuth(`${API_BASE_URL}/models/runs/${runId}/download`);
+        if (!res.ok) throw new Error("Failed to download model version");
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${modelName.replace(/\s+/g, "_")}_${runId.substring(0, 8)}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    },
+
+    async downloadDataset(datasetId: string, filename: string): Promise<void> {
+        const res = await fetchAuth(`${API_BASE_URL}/datasets/${datasetId}/download`);
+        if (!res.ok) throw new Error("Failed to download dataset");
+        
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
     },
 };
 

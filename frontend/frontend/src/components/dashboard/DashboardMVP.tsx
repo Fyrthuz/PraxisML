@@ -8,6 +8,8 @@ import Sidebar from "./Sidebar";
 import UploadModal from "./UploadModal";
 import DatasetsTab from "./tabs/DatasetsTab";
 import ModelsTab from "./tabs/ModelsTab";
+import RegistryTab from "./tabs/RegistryTab";
+import DataRegistryTab from "./tabs/DataRegistryTab";
 import PredictionsTab from "./tabs/PredictionsTab";
 import TrainingTab from "./tabs/TrainingTab";
 import PreprocessingTab from "./tabs/PreprocessingTab";
@@ -20,7 +22,7 @@ import { useTraining } from "@/hooks/useTraining";
 
 import { Prediction } from "@/lib/api";
 
-type View = "datasets" | "preprocessing" | "models" | "predictions" | "training";
+type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -208,6 +210,7 @@ export default function DashboardMVP() {
                                 modelHook.deleteModel(id, tenant?.id || "")
                             }
                             token={token}
+                            onRefresh={() => modelHook.fetchModels()}
                         />
                     )}
 
@@ -246,6 +249,8 @@ export default function DashboardMVP() {
                             setTrainHyperparams={trainingHook.setTrainHyperparams}
                             trainModelName={trainingHook.trainModelName}
                             setTrainModelName={trainingHook.setTrainModelName}
+                            trainRegistryName={trainingHook.trainRegistryName}
+                            setTrainRegistryName={trainingHook.setTrainRegistryName}
                             validationStrategy={trainingHook.validationStrategy}
                             setValidationStrategy={trainingHook.setValidationStrategy}
                             testSize={trainingHook.testSize}
@@ -255,6 +260,21 @@ export default function DashboardMVP() {
                             isTraining={trainingHook.isTraining}
                             trainingStatus={trainingHook.trainingStatus}
                             handleStartTraining={trainingHook.startTraining}
+                        />
+                    )}
+
+                    {activeView === "registry" && (
+                        <RegistryTab
+                            token={token}
+                            onRefresh={() => modelHook.fetchModels()}
+                        />
+                    )}
+
+                    {activeView === "data_registry" && (
+                        <DataRegistryTab
+                            tenantId={tenant?.id}
+                            token={token}
+                            onRefresh={() => datasetHook.fetchDatasets()}
                         />
                     )}
                 </div>
@@ -281,6 +301,18 @@ export default function DashboardMVP() {
                         label: "Description",
                         type: "textarea",
                         placeholder: "Describe the contents of the dataset",
+                    },
+                    {
+                        name: "is_dvc_tracked",
+                        label: "Track using DVC?",
+                        type: "checkbox",
+                        defaultValue: false,
+                    },
+                    {
+                        name: "dvc_registry_name",
+                        label: "DVC Registry Name",
+                        type: "text",
+                        placeholder: "e.g. medical_images_v1",
                     },
                 ]}
             />

@@ -15,11 +15,11 @@ interface UploadModalProps {
     fields?: {
         name: string;
         label: string;
-        type: 'text' | 'textarea' | 'number' | 'select';
+        type: 'text' | 'textarea' | 'number' | 'select' | 'checkbox';
         placeholder?: string;
         options?: { label: string; value: string | number }[];
         required?: boolean;
-        defaultValue?: string | number;
+        defaultValue?: string | number | boolean;
     }[];
 }
 
@@ -36,7 +36,7 @@ export default function UploadModal({
 }: UploadModalProps) {
     const [file, setFile] = useState<File | null>(null);
     const [formValues, setFormValues] = useState<Record<string, any>>(
-        fields.reduce((acc, field) => ({ ...acc, [field.name]: field.defaultValue || '' }), {})
+        fields.reduce((acc, field) => ({ ...acc, [field.name]: field.defaultValue !== undefined ? field.defaultValue : '' }), {})
     );
     const [isUploading, setIsUploading] = useState(false);
 
@@ -59,8 +59,13 @@ export default function UploadModal({
                 formData.append('file', file);
             }
             Object.entries(formValues).forEach(([key, value]) => {
-                formData.append(key, value.toString());
+                if (typeof value === "boolean") {
+                    if (value) formData.append(key, "true");
+                } else if (value !== "" && value !== null && value !== undefined) {
+                    formData.append(key, value.toString());
+                }
             });
+            console.log("Submitting formData:", Object.fromEntries(formData.entries()));
             await onUpload(formData);
             if (!hideCloseButton) {
                 onClose();
@@ -150,6 +155,19 @@ export default function UploadModal({
                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                                         ))}
                                     </select>
+                                ) : field.type === 'checkbox' ? (
+                                    <div className="flex items-center space-x-2 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3">
+                                        <input
+                                            type="checkbox"
+                                            required={field.required}
+                                            checked={!!formValues[field.name]}
+                                            onChange={e => setFormValues({ ...formValues, [field.name]: e.target.checked })}
+                                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500/50 rounded border-neutral-700 bg-neutral-900"
+                                        />
+                                        <label className="text-sm font-medium text-neutral-300">
+                                            {field.label}
+                                        </label>
+                                    </div>
                                 ) : (
                                     <input
                                         type={field.type}

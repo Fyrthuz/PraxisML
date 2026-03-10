@@ -18,6 +18,8 @@ interface TrainingTabProps {
     setTrainHyperparams: React.Dispatch<React.SetStateAction<Record<string, any>>>;
     trainModelName: string;
     setTrainModelName: (val: string) => void;
+    trainRegistryName: string;
+    setTrainRegistryName: (val: string) => void;
     validationStrategy: 'holdout' | 'cross_validation';
     setValidationStrategy: (val: 'holdout' | 'cross_validation') => void;
     testSize: number;
@@ -44,6 +46,8 @@ export default function TrainingTab({
     setTrainHyperparams,
     trainModelName,
     setTrainModelName,
+    trainRegistryName,
+    setTrainRegistryName,
     validationStrategy,
     setValidationStrategy,
     testSize,
@@ -162,6 +166,16 @@ export default function TrainingTab({
                                 placeholder="e.g. My Classifier v1"
                                 value={trainModelName}
                                 onChange={e => setTrainModelName(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-neutral-500 ml-1">Registry Name (optional)</label>
+                            <input
+                                type="text"
+                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500/50"
+                                placeholder="e.g. best_classifier_model"
+                                value={trainRegistryName}
+                                onChange={e => setTrainRegistryName(e.target.value)}
                             />
                         </div>
                     </div>

@@ -46,6 +46,7 @@ dependencies = [
     # ── MLFlow ────────────────────────────────────────────────────────
     "mlflow==3.10.0",
     "setuptools",
+    "dvc[s3]",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,298 @@
+{
+    "__requires": [
+        {
+            "type": "grafana",
+            "id": "grafana",
+            "name": "Grafana",
+            "version": "10.0.0"
+        },
+        {
+            "type": "datasource",
+            "id": "prometheus",
+            "name": "Prometheus",
+            "version": "1.0.0"
+        },
+        {
+            "type": "panel",
+            "id": "timeseries",
+            "name": "Time series",
+            "version": ""
+        },
+        {
+            "type": "panel",
+            "id": "stat",
+            "name": "Stat",
+            "version": ""
+        }
+    ],
+    "annotations": {
+        "list": []
+    },
+    "description": "M\u00e9tricas de la API PraxisML (FastAPI + Prometheus)",
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "id": null,
+    "links": [],
+    "panels": [
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10
+                    },
+                    "unit": "reqps"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "options": {
+                "legend": {
+                    "displayMode": "list",
+                    "placement": "bottom"
+                },
+                "tooltip": {
+                    "mode": "multi"
+                }
+            },
+            "targets": [
+                {
+                    "expr": "rate(http_requests_total{handler=~\".*/auth/.*\", job=\"praxisml_api\"}[1m])",
+                    "legendFormat": "{{method}} {{handler}} {{status_code}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Requests / segundo",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10
+                    },
+                    "unit": "s"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
+            "id": 2,
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{handler=~\".*/auth/.*\", job=\"praxisml_api\"}[5m]))",
+                    "legendFormat": "p95 {{handler}}",
+                    "refId": "A"
+                },
+                {
+                    "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{handler=~\".*/auth/.*\", job=\"praxisml_api\"}[5m]))",
+                    "legendFormat": "p50 {{handler}}",
+                    "refId": "B"
+                }
+            ],
+            "title": "Latencia (p50 / p95)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10
+                    },
+                    "unit": "reqps"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 8
+            },
+            "id": 3,
+            "targets": [
+                {
+                    "expr": "rate(http_requests_total{handler=~\".*/auth/.*\", job=\"praxisml_api\", status_code=~\"4..|5..\"}[1m])",
+                    "legendFormat": "{{status_code}} {{handler}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Errores 4xx / 5xx por segundo",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 12,
+                "y": 8
+            },
+            "id": 4,
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "orientation": "auto",
+                "colorMode": "background"
+            },
+            "targets": [
+                {
+                    "expr": "sum(increase(http_requests_total{handler=~\".*/auth/.*\", job=\"praxisml_api\", status_code=~\"5..\"}[5m]))",
+                    "legendFormat": "Errores 5xx (5m)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Errores 5xx (\u00faltimos 5 min)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 6,
+                "x": 18,
+                "y": 8
+            },
+            "id": 5,
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "orientation": "auto",
+                "colorMode": "value"
+            },
+            "targets": [
+                {
+                    "expr": "sum(increase(http_requests_total{handler=~\".*/auth/.*\", job=\"praxisml_api\"}[5m]))",
+                    "legendFormat": "Total requests (5m)",
+                    "refId": "A"
+                }
+            ],
+            "title": "Total Requests (\u00faltimos 5 min)",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 10
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 24,
+                "x": 0,
+                "y": 16
+            },
+            "id": 101,
+            "targets": [
+                {
+                    "expr": "sum(rate(api_errors_total{handler=~\".*/auth/.*\"}[1m])) by (error_type, handler, status_code)",
+                    "legendFormat": "{{error_type}} - {{handler}} ({{status_code}})",
+                    "refId": "A"
+                }
+            ],
+            "title": "Errores Detallados (api_errors_total)",
+            "type": "timeseries"
+        }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 38,
+    "tags": [
+        "praxisml",
+        "fastapi",
+        "api"
+    ],
+    "templating": {
+        "list": []
+    },
+    "time": {
+        "from": "now-30m",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "browser",
+    "title": "PraxisML \u2014 Auth Routes",
+    "uid": "praxisml-auth",
+    "version": 1
+}

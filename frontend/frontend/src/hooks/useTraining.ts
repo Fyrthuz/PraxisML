@@ -15,6 +15,7 @@ export function useTraining(token: string | null, onComplete?: () => void) {
     const [trainAlgorithm, setTrainAlgorithm] = useState<string>("");
     const [trainHyperparams, setTrainHyperparams] = useState<Record<string, any>>({});
     const [trainModelName, setTrainModelName] = useState<string>("");
+    const [trainRegistryName, setTrainRegistryName] = useState<string>("");
 
     // Validation
     const [validationStrategy, setValidationStrategy] = useState<
@@ -97,6 +98,7 @@ export function useTraining(token: string | null, onComplete?: () => void) {
                         random_state: 42,
                     },
                     model_name: trainModelName || undefined,
+                    registry_name: trainRegistryName || undefined,
                 }),
             });
 
@@ -120,6 +122,7 @@ export function useTraining(token: string | null, onComplete?: () => void) {
         trainTaskType,
         trainHyperparams,
         trainModelName,
+        trainRegistryName,
         validationStrategy,
         testSize,
         nFolds,
@@ -139,6 +142,8 @@ export function useTraining(token: string | null, onComplete?: () => void) {
         setTrainHyperparams,
         trainModelName,
         setTrainModelName,
+        trainRegistryName,
+        setTrainRegistryName,
         validationStrategy,
         setValidationStrategy,
         testSize,

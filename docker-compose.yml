@@ -83,6 +83,7 @@ services:
       /bin/sh -c "
       /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb myminio/praxisml || true;
+      /usr/bin/mc mb myminio/praxisml-dvc || true;
       exit 0;
       "
   # 5. FastAPI Backend

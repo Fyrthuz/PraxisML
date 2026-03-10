@@ -1,6 +1,7 @@
 """
 API route para entrenamiento de modelos sklearn.
 """
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import Any, Dict, Optional
@@ -25,10 +26,11 @@ router = APIRouter()
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
+
 class ValidationConfig(BaseModel):
-    strategy: str = "holdout"        # "holdout" or "cross_validation"
-    test_size: float = 0.2           # holdout: proportion for test set
-    n_folds: int = 5                 # cross_validation: number of folds
+    strategy: str = "holdout"  # "holdout" or "cross_validation"
+    test_size: float = 0.2  # holdout: proportion for test set
+    n_folds: int = 5  # cross_validation: number of folds
     shuffle: bool = True
     random_state: int = 42
 
@@ -42,6 +44,7 @@ class TrainRequest(BaseModel):
     validation: ValidationConfig = ValidationConfig()
     model_name: Optional[str] = None
     model_description: Optional[str] = None
+    registry_name: Optional[str] = None  # MLflow registered model name
 
 
 class TrainResponse(BaseModel):
@@ -98,14 +101,18 @@ def start_training(
 
     # Validar que el dataset existe
     from app.models.dataset import Dataset
-    dataset = db.query(Dataset).filter(
-        Dataset.id == req.dataset_id, Dataset.tenant_id == tenant.id
-    ).first()
+
+    dataset = (
+        db.query(Dataset)
+        .filter(Dataset.id == req.dataset_id, Dataset.tenant_id == tenant.id)
+        .first()
+    )
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset no encontrado.")
 
     # Validar que es tabular
     from app.core_ml.tabular_parser import is_tabular
+
     if not dataset.file_type or not is_tabular(dataset.file_type):
         raise HTTPException(
             status_code=400,
@@ -129,6 +136,12 @@ def start_training(
 
     # Lanzar tarea Celery
     from app.worker.tasks.train import run_training
+
+    # Ensure registry_name has tenant prefix for visibility in UI
+    registry_name = req.registry_name
+    if registry_name and not registry_name.startswith(f"tenant_{tenant.id}_"):
+        registry_name = f"tenant_{tenant.id}_{registry_name}"
+
     task = run_training.delay(
         tenant_id=tenant.id,
         dataset_id=req.dataset_id,
@@ -139,6 +152,7 @@ def start_training(
         validation_config=req.validation.model_dump(),
         model_name=req.model_name or f"{algo_info['display_name']} — {dataset.name}",
         model_description=req.model_description or "",
+        registry_name=registry_name,
     )
 
     return TrainResponse(

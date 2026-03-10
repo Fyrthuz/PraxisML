@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Cpu, Tag, Calendar, Database, Target, Activity, Copy, Check, Download, Trash2, Loader2, ArrowRightCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Cpu, Tag, Calendar, Database, Target, Activity, Copy, Check, Download, Trash2, Loader2, ArrowRightCircle, ArrowUpCircle, Archive } from 'lucide-react';
 import { MLModel, api, PreprocessingStep } from '../../lib/api';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
@@ -9,9 +9,19 @@ interface ModelDetailsModalProps {
     onClose: () => void;
     handleDeleteModel: (modelId: string) => Promise<boolean>;
     token?: string | null;
+    onPromote?: () => void;
 }
 
-export default function ModelDetailsModal({ model, onClose, handleDeleteModel, token }: ModelDetailsModalProps) {
+const getStageBadge = (stage?: string) => {
+    const colors: Record<string, string> = {
+        Staging: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+        Production: 'bg-green-500/20 text-green-400 border-green-500/30',
+        Archived: 'bg-neutral-500/20 text-neutral-400 border-neutral-500/30',
+    };
+    return colors[stage || 'Staging'] || colors.Staging;
+};
+
+export default function ModelDetailsModal({ model, onClose, handleDeleteModel, token, onPromote }: ModelDetailsModalProps) {
     if (!model) return null;
 
     const metrics = model.metrics_metadata?.metrics || {};
@@ -25,6 +35,9 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
     const [pipelineSteps, setPipelineSteps] = useState<PreprocessingStep[] | null>(null);
     const [targetCol, setTargetCol] = useState<string | null>(null);
     const [isLoadingPipeline, setIsLoadingPipeline] = useState(false);
+    const [targetStage, setTargetStage] = useState('Production');
+    const [isPromoting, setIsPromoting] = useState(false);
+    const [isArchiving, setIsArchiving] = useState(false);
 
     React.useEffect(() => {
         const fetchPipeline = async () => {
@@ -94,6 +107,40 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
                 onClose();
             }
             setIsDeleting(false);
+        }
+    };
+
+    const handlePromote = async () => {
+        if (!token) {
+            toast.error('Not authenticated');
+            return;
+        }
+        setIsPromoting(true);
+        try {
+            await api.promoteModel(model.id, targetStage);
+            toast.success('Model promoted successfully');
+            if (onPromote) onPromote();
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to promote model');
+        } finally {
+            setIsPromoting(false);
+        }
+    };
+
+    const handleArchive = async () => {
+        if (!token) {
+            toast.error('Not authenticated');
+            return;
+        }
+        setIsArchiving(true);
+        try {
+            await api.archiveModel(model.id);
+            toast.success('Model archived successfully');
+            if (onPromote) onPromote();
+        } catch (err: any) {
+            toast.error(err.message || 'Failed to archive model');
+        } finally {
+            setIsArchiving(false);
         }
     };
 
@@ -206,7 +253,75 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
                             </div>
                             <CopyButton text={model.mlflow_run_id} id="mlflow_run_id" />
                         </div>
+                        <div className="bg-neutral-950 p-4 rounded-2xl border border-neutral-800/50 flex justify-between items-start">
+                            <div className="flex-1 min-w-0">
+                                <div className="text-neutral-500 text-xs font-bold uppercase mb-1 flex items-center gap-2">
+                                    <Tag className="w-3 h-3 flex-shrink-0" /> Version
+                                </div>
+                                <div className="text-white text-sm font-mono">v{model.version || '1.0.0'}</div>
+                            </div>
+                        </div>
+                        <div className="bg-neutral-950 p-4 rounded-2xl border border-neutral-800/50 flex justify-between items-start">
+                            <div className="flex-1 min-w-0">
+                                <div className="text-neutral-500 text-xs font-bold uppercase mb-1 flex items-center gap-2">
+                                    <Activity className="w-3 h-3 flex-shrink-0" /> Stage
+                                </div>
+                                <span className={`inline-block px-2 py-0.5 rounded text-xs font-medium border ${getStageBadge(model.stage)}`}>
+                                    {model.stage || 'Staging'}
+                                </span>
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Stage Management Section */}
+                    {model.stage !== 'Production' && model.stage !== 'Archived' && (
+                        <div>
+                            <h4 className="text-sm font-bold text-neutral-300 uppercase tracking-wider mb-4 pb-2 border-b border-neutral-800">
+                                Stage Management
+                            </h4>
+                            <div className="bg-neutral-950 p-4 rounded-2xl border border-neutral-800">
+                                <div className="flex flex-wrap items-center gap-4">
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="text-xs text-neutral-400 mb-2 block">Target Stage</label>
+                                        <select
+                                            value={targetStage}
+                                            onChange={(e) => setTargetStage(e.target.value)}
+                                            className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-white text-sm"
+                                        >
+                                            <option value="Production">Production</option>
+                                            <option value="Staging">Staging</option>
+                                            <option value="Archived">Archived</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex gap-2 pt-5">
+                                        <Button
+                                            onClick={handlePromote}
+                                            disabled={isPromoting}
+                                            className="bg-green-600 hover:bg-green-700"
+                                        >
+                                            {isPromoting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ArrowUpCircle className="w-4 h-4 mr-2" />}
+                                            Promote
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleArchive}
+                                            disabled={isArchiving}
+                                            className="border-neutral-700 hover:bg-neutral-800"
+                                        >
+                                            {isArchiving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Archive className="w-4 h-4 mr-2" />}
+                                            Archive
+                                        </Button>
+                                    </div>
+                                </div>
+                                {model.promoted_at && (
+                                    <div className="mt-3 text-xs text-neutral-500">
+                                        Last promoted: {new Date(model.promoted_at).toLocaleString()}
+                                        {model.promoted_by && ` by ${model.promoted_by}`}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Metrics Section */}
                     {Object.keys(metrics).length > 0 && (

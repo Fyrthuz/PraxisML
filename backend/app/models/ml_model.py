@@ -2,10 +2,19 @@ from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.base import Base
+from enum import Enum as PyEnum
 import uuid
+
+
+class ModelStage(str, PyEnum):
+    STAGING = "Staging"
+    PRODUCTION = "Production"
+    ARCHIVED = "Archived"
+
 
 def generate_uuid():
     return str(uuid.uuid4())
+
 
 class MLModel(Base):
     """
@@ -15,6 +24,7 @@ class MLModel(Base):
     (e.g. "{tenant_id}/models/{id}/pipeline.joblib"), NO rutas de disco.
     Usa get_storage().download(key) para obtener el contenido.
     """
+
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
@@ -23,6 +33,10 @@ class MLModel(Base):
     # ID del run en MLFlow para cargarlo vía mlflow.pytorch.load_model(f"runs:/{run_id}/model")
     mlflow_run_id = Column(String, nullable=False, unique=True, index=True)
 
+    # MLflow Model Registry integration
+    mlflow_registry_name = Column(String, nullable=True)
+    mlflow_version = Column(String, nullable=True)
+
     # Metadatos como: {"framework": "pytorch", "architecture": "unet", "num_classes": 2}
     metrics_metadata = Column(JSON, nullable=True)
 
@@ -30,7 +44,17 @@ class MLModel(Base):
     preprocessing_pipeline_path = Column(String, nullable=True)
 
     is_active = Column(Boolean, default=True)
-    is_public = Column(Boolean, default=False)  # Si es público todos pueden usarlo, si no, solo el tenant.
+    is_public = Column(Boolean, default=False)
+
+    # Versioning (semantic versioning)
+    version = Column(String, nullable=False, default="1.0.0")
+
+    # Stage in MLflow Registry (Staging, Production, Archived)
+    stage = Column(String, nullable=False, default=ModelStage.STAGING.value)
+
+    # Promotion tracking
+    promoted_at = Column(DateTime, nullable=True)
+    promoted_by = Column(String, nullable=True)
 
     # Soporte para TorchScript
     is_torchscript = Column(Boolean, default=False)

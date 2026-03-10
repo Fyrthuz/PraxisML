@@ -20,7 +20,9 @@
 - **Ejecución segura de modelos**: Ingesta dinámica de TorchScript (`.pt`) sin ejecución arbitraria de Python.
 - **Procesamiento asíncrono**: Celery + Redis para tareas pesadas (entrenamiento, inferencia batch).
 - **Experiment Tracking**: MLflow para trazabilidad completa de experimentos, métricas, artefactos y pipelines.
-- **Almacenamiento flexible**: Local, MinIO (S3-compatible) o AWS S3.
+- **Model Registry (MLflow)**: Registro y versionado de modelos con stages (Staging → Production → Archived). Gestión de versiones y promoción de modelos.
+- **Data Registry (DVC)**: Versionado de datasets con DVC. Sincronización automática con MinIO remoto (bucket `praxisml-dvc`). Historial de versiones, descarga de datasets y promoción a producción.
+- **Almacenamiento global con MinIO**: Tanto MLflow (artefactos) como DVC (datasets) están configurados para usar **MinIO** como backend de objetos S3-compatible por defecto, facilitando el despliegue en la nube.
 - **Observabilidad**: Prometheus + Grafana para monitorización en tiempo real.
 - **Frontend React (Next.js)**: Dashboard con polling en tiempo real, drag & drop y gestión visual de recursos.
 
@@ -46,8 +48,8 @@ TFM_productivo/
 │   │   ├── api/routes/v1/      # REST endpoints
 │   │   │   ├── auth.py         # JWT Login / Register (primer usuario = admin)
 │   │   │   ├── tenants.py      # CRUD de tenants + gestión de quotas
-│   │   │   ├── datasets.py     # Upload de datasets (ZIP + config.json)
-│   │   │   ├── models.py       # Upload de modelos + registro en MLflow
+│   │   │   ├── datasets.py     # Upload de datasets (ZIP + config.json) + DVC
+│   │   │   ├── models.py       # Upload de modelos + MLflow Registry
 │   │   │   ├── predictions.py  # Inferencia async y single-image
 │   │   │   ├── training.py     # Entrenamiento Sklearn / PyTorch
 │   │   │   ├── preprocessing.py # Pipelines de preprocesamiento
@@ -64,15 +66,23 @@ TFM_productivo/
 │   │   │   └── uncertainty/    # Estimadores de incertidumbre
 │   │   ├── models/             # Modelos SQLAlchemy ORM
 │   │   ├── schemas/            # Schemas Pydantic (request/response)
-│   │   ├── services/           # Lógica de negocio (MLflow, storage, training)
+│   │   ├── services/           # Lógica de negocio (MLflow, storage, training, DVC)
+│   │   │   ├── mlflow_service.py      # MLflow + Model Registry
+│   │   │   ├── dvc_service.py         # DVC data versioning
+│   │   │   └── training_service.py    # Entrenamiento de modelos
 │   │   ├── worker/             # Workers Celery
 │   │   │   └── tasks/          # Tareas async (predict, train)
+│   │   ├── utils/              # Utilidades
+│   │   │   └── dvc_helper.py   # Helper DVC para CLI
 │   │   ├── database.py
 │   │   └── main.py
+│   ├── migrations/             # Alembic migrations
+│   │   └── versions/           # Versiones de schema
 │   ├── tests/
-│   │   ├── unit/               # Tests unitarios (RBAC, quota, config, ML)
+│   │   ├── unit/               # Tests unitarios (RBAC, quota, config, ML, registry)
 │   │   └── integration/        # Tests de integración (API endpoints)
-│   ├── migrate.py              # Migraciones de base de datos
+│   ├── scripts/                # Scripts utilitarios
+│   │   └── validate_model.py   # Validación de modelos para CI/CD
 │   └── pyproject.toml
 ├── frontend/                   # Next.js frontend
 │   └── frontend/
@@ -81,6 +91,12 @@ TFM_productivo/
 ├── infra/                      # Configuración de infraestructura
 │   ├── prometheus/             # Scraping de métricas
 │   └── grafana/                # Dashboards y provisioning
+├── .dvc/                       # Configuración DVC
+│   ├── config                  # Config DVC (MinIO/S3)
+│   └── config.local           # Overrides locales
+├── .github/workflows/          # CI/CD pipelines
+│   ├── ci.yml                 # CI principal
+│   └── model_ci.yml           # Validación y promoción de modelos
 ├── .env.example                # Template de variables de entorno
 └── docker-compose.yml          # Manifiesto de contenedores
 ```
@@ -172,6 +188,65 @@ Configurables vía `PATCH /api/v1/tenants/{id}/quotas` (solo admin). Valor `null
 
 ---
 
+## Model Registry (MLflow)
+
+Sistema de gestión de versiones de modelos con stages:
+
+| Stage | Descripción |
+|-------|-------------|
+| **Staging** | Modelo en pruebas/validación (default) |
+| **Production** | Modelo en producción activo |
+| **Archived** | Modelo archivado (no disponible para inferencia) |
+
+### Flujo de uso
+
+3. **Gestionar versiones**: Inspeccionar cada versión para ver métricas, parámetros y tags asociados. Promover a Production o archivar.
+4. **Descargar modelos**: Botón de descarga directa en cada versión del registry para obtener un ZIP con el modelo, pipeline y metadatos.
+5. **CI/CD**: Workflow automático (`model_ci.yml`) para validar métricas antes de promoción.
+6. **Multi-tenant isolation**: Los nombres en el Registry se prefijan automáticamente con `tenant_{id}_` para garantizar aislamiento y visibilidad correcta en la UI.
+
+### Campos del modelo
+
+| Campo | Descripción |
+|-------|-------------|
+| `version` | Versión semántica (1.0.0, 1.0.1, etc.) |
+| `stage` | Stage actual en MLflow Registry |
+| `promoted_at` | Fecha de última promoción |
+| `promoted_by` | Usuario que promovió el modelo |
+| `mlflow_registry_name` | Nombre en MLflow Registry |
+| `mlflow_version` | Versión en MLflow |
+
+---
+
+## Data Registry (DVC)
+
+Sistema de versionado de datasets con sincronización a MinIO/S3:
+
+### Características
+
+- **Versionado automático**: Cada upload crea una nueva versión
+- **Sincronización remote**: Push/pull automático a MinIO/S3
+- **Hashing**: MD5 hash para integridad de datos
+- **Promoción**: Marcar datasets como "Production"
+
+### Flujo de uso
+
+1. **Subir con DVC**: Al subir un dataset, activar "Track with DVC"
+2. **Ver versiones**: Ir al tab "Data Registry" para ver el historial
+3. **Gestionar**: Promover a producción, push/pull desde remote
+
+### Campos del dataset
+
+| Campo | Descripción |
+|-------|-------------|
+| `dvc_hash` | Hash MD5 del archivo |
+| `is_dvc_tracked` | Si está trackeado con DVC |
+| `dvc_registry_name` | Nombre del registry |
+| `dvc_version` | Versión en DVC |
+| `dvc_remote` | Remote configurado (minio/s3) |
+
+---
+
 ## ⚡ Quick Start (Docker)
 
 ### Prerrequisitos
@@ -227,7 +302,7 @@ docker-compose up -d db redis mlflow minio minio-init
 ```bash
 cd backend
 uv sync
-uv run python migrate.py
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
@@ -266,9 +341,14 @@ Documentación interactiva en **`http://localhost:8000/docs`**
 ### Datasets
 | Método | Path | Rol | Descripción |
 |--------|------|-----|-------------|
-| POST | `/api/v1/datasets/` | editor | Subir dataset (`.zip` + `config.json`) |
+| POST | `/api/v1/datasets/` | editor | Subir dataset (`.zip` + `config.json`) + opcional DVC |
 | GET | `/api/v1/datasets/` | viewer | Listar datasets del tenant |
 | DELETE | `/api/v1/datasets/{id}` | admin | Eliminar dataset |
+| GET | `/api/v1/datasets/registry` | viewer | Listar registries DVC |
+| GET | `/api/v1/datasets/registry/{name}/versions` | viewer | Ver versiones de un dataset |
+| POST | `/api/v1/datasets/{id}/promote` | editor | Promover dataset a producción |
+| POST | `/api/v1/datasets/{id}/dvc/push` | editor | Subir a remote DVC |
+| POST | `/api/v1/datasets/{id}/dvc/pull` | editor | Descargar de remote DVC |
 
 ### Modelos
 | Método | Path | Rol | Descripción |
@@ -277,6 +357,16 @@ Documentación interactiva en **`http://localhost:8000/docs`**
 | POST | `/api/v1/models/` | editor | Registrar modelo desde MLflow run |
 | GET | `/api/v1/models/` | viewer | Listar modelos (tenant + públicos) |
 | DELETE | `/api/v1/models/{id}` | admin | Eliminar modelo y datos asociados |
+| POST | `/api/v1/models/{id}/promote` | editor | Promover modelo a Production/Archived |
+| POST | `/api/v1/models/{id}/archive` | editor | Archivar modelo |
+| GET | `/api/v1/models/{id}/versions` | viewer | Ver historial de versiones |
+
+### Model Registry (MLflow)
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/models/registry` | editor | Crear registered model |
+| GET | `/api/v1/models/registry` | viewer | Listar registered models |
+| DELETE | `/api/v1/models/registry/{name}` | admin | Eliminar registered model |
 
 ### Entrenamiento
 | Método | Path | Rol | Descripción |
@@ -304,7 +394,9 @@ Documentación interactiva en **`http://localhost:8000/docs`**
 
 ## CI Pipeline
 
-Automatizado con GitHub Actions (`.github/workflows/ci.yml`):
+Automatizado con GitHub Actions (`.github/workflows/`):
+
+### CI Principal (`ci.yml`)
 
 | Paso | Comando |
 |------|---------|
@@ -312,6 +404,21 @@ Automatizado con GitHub Actions (`.github/workflows/ci.yml`):
 | **Tests unitarios** | `pytest tests/unit/ -v` |
 | **Tests de integración** | `pytest tests/integration/ -v` |
 | **Cobertura** | `pytest tests/ --cov=app --cov-fail-under=30` |
+
+### Model CI (`model_ci.yml`)
+
+Workflow para validación y promoción automática de modelos:
+
+| Paso | Descripción |
+|------|-------------|
+| **Validación** | Compara métricas del modelo con thresholds definidos |
+| **Promoción** | Si pasa validación, promueve automáticamente a Production |
+| **Notificación** | Comenta en el PR/Issue con el resultado |
+
+Se ejecuta manualmente con:
+```bash
+gh workflow run model_ci.yml -f run_id=<MLFLOW_RUN_ID> -f target_stage=Production
+```
 
 ---
 
@@ -326,8 +433,11 @@ Automatizado con GitHub Actions (`.github/workflows/ci.yml`):
 | Autorización | RBAC (admin/editor/viewer) + quotas |
 | Rate Limiting | slowapi (por IP) |
 | Experiment Tracking | MLflow |
+| Model Registry | MLflow Registry |
+| Data Versioning | DVC |
 | Almacenamiento objetos | MinIO (S3-compatible) / AWS S3 |
-| Base de datos | PostgreSQL + SQLAlchemy |
+| Base de datos | PostgreSQL + SQLAlchemy + Alembic |
+| Migraciones | Alembic |
 | Monitorización | Prometheus + Grafana |
 | Gestión de paquetes | uv + pyproject.toml |
 | Frontend | React (Next.js) + Tailwind + react-hot-toast |

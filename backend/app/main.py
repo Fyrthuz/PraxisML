@@ -12,6 +12,7 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from prometheus_fastapi_instrumentator import Instrumentator
+from prometheus_client import Counter
 
 from app.core.config import settings
 from app.core.logging import setup_logging
@@ -21,6 +22,13 @@ from app.core.rate_limit import limiter
 # ── Logging estructurado ───────────────────────────────────────────────────────
 setup_logging(level="DEBUG" if settings.ENVIRONMENT == "development" else "INFO")
 logger = logging.getLogger(__name__)
+
+# ── Métricas Custom ────────────────────────────────────────────────────────────
+api_errors_total = Counter(
+    "api_errors_total",
+    "Total de errores capturados por la API",
+    ["error_type", "handler", "status_code"]
+)
 
 # ── MLFlow UI subprocess (local dev only) ─────────────────────────────────────
 _mlflow_proc: subprocess.Popen | None = None
@@ -110,6 +118,11 @@ def create_app() -> FastAPI:
             exc.message,
             extra={"detail": str(exc.detail) if exc.detail else None},
         )
+        api_errors_total.labels(
+            error_type="PraxisMLError",
+            handler=request.url.path,
+            status_code=exc.status_code
+        ).inc()
         return JSONResponse(
             status_code=exc.status_code,
             content={
@@ -122,6 +135,11 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
         logger.exception("Error no controlado en %s %s", request.method, request.url.path)
+        api_errors_total.labels(
+            error_type="UnhandledException",
+            handler=request.url.path,
+            status_code=500
+        ).inc()
         return JSONResponse(
             status_code=500,
             content={

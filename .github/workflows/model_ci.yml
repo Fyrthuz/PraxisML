@@ -1,0 +1,75 @@
+name: Model CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_name:
+        description: 'Model name to validate'
+        required: true
+        type: string
+      run_id:
+        description: 'MLflow run ID'
+        required: true
+        type: string
+      target_stage:
+        description: 'Target stage (Production/Archived)'
+        required: true
+        type: string
+        default: 'Production'
+      thresholds:
+        description: 'JSON metrics thresholds (e.g. {"accuracy": 0.85, "f1": 0.80})'
+        required: false
+        type: string
+        default: '{"accuracy": 0.80, "f1": 0.75}'
+
+jobs:
+  validate-model:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install mlflow
+
+      - name: Validate model metrics
+        id: validation
+        env:
+          MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+        run: |
+          python scripts/validate_model.py \
+            --run-id "${{ github.event.inputs.run_id }}" \
+            --thresholds '${{ github.event.inputs.thresholds }}'
+
+      - name: Promote model on success
+        if: steps.validation.outputs.passed == 'true'
+        env:
+          API_URL: ${{ vars.API_URL }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+        run: |
+          curl -X POST "$API_URL/api/v1/models/${{ github.event.inputs.model_name }}/promote" \
+            -H "Authorization: Bearer $API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"target_stage": "${{ github.event.inputs.target_stage }}"}'
+
+      - name: Comment on PR/Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const passed = '${{ steps.validation.outputs.passed }}' === 'true';
+            const body = passed 
+              ? 'Model validation passed. Promoting to ${{ github.event.inputs.target_stage }}.'
+              : 'Model validation failed. Please check the metrics.';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue?.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

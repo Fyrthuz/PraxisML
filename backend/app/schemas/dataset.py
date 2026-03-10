@@ -27,12 +27,22 @@ class DatasetResponse(DatasetBase):
     column_names: Optional[List[str]] = None
     version: int = 1
     mlflow_artifact_uri: Optional[str] = None
+    pipeline_path: Optional[str] = None
+
+    # ── DVC Versioning ─────────────────────────────────────────────────────────
+    dvc_remote: Optional[str] = None
+    dvc_hash: Optional[str] = None
+    is_dvc_tracked: bool = False
+    dvc_registry_name: Optional[str] = None
+    dvc_version: Optional[int] = None
+    parent_dataset_id: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class DatasetPreviewResponse(BaseModel):
     """Respuesta para el endpoint de preview de datasets tabulares."""
+
     dataset_id: str
     file_type: str
     num_rows: int

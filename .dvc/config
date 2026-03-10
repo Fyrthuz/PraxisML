@@ -1,0 +1,13 @@
+[core]
+    remote = myminio
+    autostage = true
+
+[remote "myminio"]
+    url = s3://praxisml-dvc/
+    endpointurl = ${DVC_ENDPOINT_URL:-http://minio:9000}
+    access_key_id = ${DVC_ACCESS_KEY:-minioadmin}
+    secret_access_key = ${DVC_SECRET_KEY:-minioadmin}
+
+[remote "awss3"]
+    url = s3://${DVC_S3_BUCKET:-praxisml-dvc}
+    region = ${DVC_AWS_REGION:-us-east-1}

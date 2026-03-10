@@ -85,6 +85,11 @@ export default function DatasetsTab({
                                             v{ds.version}
                                         </span>
                                     )}
+                                    {ds.is_dvc_tracked && (
+                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30" title={`DVC Hash: ${ds.dvc_hash?.substring(0, 12)}...`}>
+                                            DVC
+                                        </span>
+                                    )}
                                 </div>
                                 <p className="text-sm text-neutral-400 mt-1 line-clamp-2">{ds.description || "No description provided."}</p>
                                 <div className="mt-3 flex items-center gap-3 text-xs text-neutral-500">
