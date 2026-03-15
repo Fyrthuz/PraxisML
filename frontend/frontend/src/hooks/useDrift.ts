@@ -29,8 +29,8 @@ export function useDrift(token: string | null) {
 
     try {
       const endpoint = datasetId
-        ? config.getFullApiUrl(`/drift/report/${datasetId}`)
-        : config.getFullApiUrl(`/drift/report/${modelId}`);
+        ? config.getFullApiUrl(`/drift/report/dataset/${datasetId}`)
+        : config.getFullApiUrl(`/drift/report/model/${modelId}`);
 
       const res = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token}` },

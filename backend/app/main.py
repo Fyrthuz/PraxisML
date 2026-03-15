@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 api_errors_total = Counter(
     "api_errors_total",
     "Total de errores capturados por la API",
-    ["error_type", "handler", "status_code"]
+    ["error_type", "handler", "status_code"],
 )
 
 # ── MLFlow UI subprocess (local dev only) ─────────────────────────────────────
@@ -49,22 +49,32 @@ def _start_mlflow_ui() -> None:
         tracking_uri = MLFlowService().get_tracking_uri()
         # Si el tracking URI es remoto (http), no iniciamos el proceso local
         if tracking_uri.startswith("http"):
-            logger.info("MLFlow tracking URI es remoto (%s), saltando MLFlow UI local.", tracking_uri)
+            logger.info(
+                "MLFlow tracking URI es remoto (%s), saltando MLFlow UI local.",
+                tracking_uri,
+            )
             return
 
         _mlflow_proc = subprocess.Popen(
             [
-                sys.executable, "-m", "mlflow", "ui",
-                "--backend-store-uri", tracking_uri,
-                "--port", str(MLFLOW_UI_PORT),
-                "--host", "0.0.0.0",
+                sys.executable,
+                "-m",
+                "mlflow",
+                "ui",
+                "--backend-store-uri",
+                tracking_uri,
+                "--port",
+                str(MLFLOW_UI_PORT),
+                "--host",
+                "0.0.0.0",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         logger.info(
             "MLFlow UI iniciado en http://localhost:%s (PID %s)",
-            MLFLOW_UI_PORT, _mlflow_proc.pid,
+            MLFLOW_UI_PORT,
+            _mlflow_proc.pid,
         )
     except Exception as exc:
         logger.warning("No se pudo iniciar MLFlow UI: %s", exc)
@@ -78,6 +88,7 @@ def _stop_mlflow_ui() -> None:
 
 
 # ── App lifecycle ─────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -121,7 +132,7 @@ def create_app() -> FastAPI:
         api_errors_total.labels(
             error_type="PraxisMLError",
             handler=request.url.path,
-            status_code=exc.status_code
+            status_code=exc.status_code,
         ).inc()
         return JSONResponse(
             status_code=exc.status_code,
@@ -134,11 +145,11 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
-        logger.exception("Error no controlado en %s %s", request.method, request.url.path)
+        logger.exception(
+            "Error no controlado en %s %s", request.method, request.url.path
+        )
         api_errors_total.labels(
-            error_type="UnhandledException",
-            handler=request.url.path,
-            status_code=500
+            error_type="UnhandledException", handler=request.url.path, status_code=500
         ).inc()
         return JSONResponse(
             status_code=500,
@@ -155,7 +166,11 @@ def create_app() -> FastAPI:
     # ── Health ────────────────────────────────────────────────────────────────
     @app.get("/health", tags=["System"])
     def health_check():
-        return {"status": "ok", "project": settings.PROJECT_NAME, "env": settings.ENVIRONMENT}
+        return {
+            "status": "ok",
+            "project": settings.PROJECT_NAME,
+            "env": settings.ENVIRONMENT,
+        }
 
     # ── MLFlow UI redirect ────────────────────────────────────────────────────
     @app.get("/mlflow", tags=["System"], include_in_schema=False)
@@ -167,15 +182,47 @@ def create_app() -> FastAPI:
         return RedirectResponse(url=f"http://localhost:{MLFLOW_UI_PORT}")
 
     # ── Routers ───────────────────────────────────────────────────────────────
-    from app.api.routes.v1 import auth, tenants, datasets, models, predictions, preprocessing, training, profiling
+    from app.api.routes.v1 import (
+        auth,
+        tenants,
+        datasets,
+        models,
+        predictions,
+        preprocessing,
+        training,
+        profiling,
+        streaming,
+        drift,
+    )
+
     app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
-    app.include_router(tenants.router, prefix=f"{settings.API_V1_STR}/tenants", tags=["Tenants"])
-    app.include_router(datasets.router, prefix=f"{settings.API_V1_STR}/datasets", tags=["Datasets"])
-    app.include_router(profiling.router, prefix=f"{settings.API_V1_STR}/profiling", tags=["Profiling"])
-    app.include_router(models.router, prefix=f"{settings.API_V1_STR}/models", tags=["Models"])
-    app.include_router(predictions.router, prefix=f"{settings.API_V1_STR}", tags=["Predictions"])
-    app.include_router(preprocessing.router, prefix=f"{settings.API_V1_STR}/preprocessing", tags=["Preprocessing"])
-    app.include_router(training.router, prefix=f"{settings.API_V1_STR}/training", tags=["Training"])
+    app.include_router(
+        tenants.router, prefix=f"{settings.API_V1_STR}/tenants", tags=["Tenants"]
+    )
+    app.include_router(
+        datasets.router, prefix=f"{settings.API_V1_STR}/datasets", tags=["Datasets"]
+    )
+    app.include_router(
+        profiling.router, prefix=f"{settings.API_V1_STR}/profiling", tags=["Profiling"]
+    )
+    app.include_router(
+        models.router, prefix=f"{settings.API_V1_STR}/models", tags=["Models"]
+    )
+    app.include_router(
+        predictions.router, prefix=f"{settings.API_V1_STR}", tags=["Predictions"]
+    )
+    app.include_router(
+        preprocessing.router,
+        prefix=f"{settings.API_V1_STR}/preprocessing",
+        tags=["Preprocessing"],
+    )
+    app.include_router(
+        training.router, prefix=f"{settings.API_V1_STR}/training", tags=["Training"]
+    )
+    app.include_router(
+        streaming.router, prefix=f"{settings.API_V1_STR}", tags=["Streaming"]
+    )
+    app.include_router(drift.router, prefix=f"{settings.API_V1_STR}", tags=["Drift"])
 
     return app
 
