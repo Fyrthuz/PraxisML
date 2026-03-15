@@ -6,7 +6,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from sqlalchemy.orm import Session
 import json
 import logging
-from typing import Dict
+from typing import Dict, Any
 
 from app.database import get_db
 from app.models.ml_model import MLModel
@@ -39,6 +39,7 @@ async def websocket_predict(
     Endpoint WebSocket para predicciones en tiempo real.
     Autenticación JWT via query parameter ?token=...
     """
+    logger.info(f"WebSocket connection attempt for model {model_id}")
     # Validar JWT
     payload = decode_token(token)
     if not payload:

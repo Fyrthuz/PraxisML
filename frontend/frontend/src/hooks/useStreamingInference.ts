@@ -26,7 +26,14 @@ export function useStreamingInference(
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const connect = useCallback(() => {
-        if (!token || !modelId) return;
+        if (!token) {
+            setError('Usuario no autenticado. Por favor, inicie sesión.');
+            return;
+        }
+        if (!modelId) {
+            setError('Por favor, seleccione un modelo.');
+            return;
+        }
 
         setIsConnecting(true);
         setError(null);

@@ -15,6 +15,7 @@ from app.models.ml_model import MLModel
 from app.models.user import User
 from app.api.deps import get_current_tenant, require_viewer
 from app.core.config import settings
+import logging
 
 # Evidently imports
 try:
@@ -29,14 +30,15 @@ except ImportError:
 
 router = APIRouter()
 
-logger = settings.logger
+logger = logging.getLogger(__name__)
 
 
-@router.get("/drift/report/dataset/{dataset_id}", dependencies=[require_viewer])
+@router.get("/drift/report/dataset/{dataset_id}")
 def get_dataset_drift_report(
     dataset_id: str,
     db: Session = Depends(get_db),
     current_tenant: dict = Depends(get_current_tenant),
+    _: User = Depends(require_viewer),
 ):
     """
     Genera un reporte de drift para un dataset específico.
@@ -93,11 +95,12 @@ def get_dataset_drift_report(
         )
 
 
-@router.get("/drift/report/{model_id}", dependencies=[require_viewer])
+@router.get("/drift/report/model/{model_id}")
 def get_model_drift_report(
     model_id: str,
     db: Session = Depends(get_db),
     current_tenant: dict = Depends(get_current_tenant),
+    _: User = Depends(require_viewer),
 ):
     """
     Genera un reporte de drift para un modelo específico.
@@ -138,13 +141,14 @@ def get_model_drift_report(
         )
 
 
-@router.patch("/datasets/{dataset_id}/drift-thresholds", dependencies=[require_viewer])
+@router.patch("/datasets/{dataset_id}/drift-thresholds")
 def update_dataset_drift_thresholds(
     dataset_id: str,
     psi_threshold: Optional[float] = None,
     ks_threshold: Optional[float] = None,
     db: Session = Depends(get_db),
     current_tenant: dict = Depends(get_current_tenant),
+    _: User = Depends(require_viewer),
 ):
     """
     Actualiza los umbrales de drift para un dataset específico.
@@ -187,13 +191,14 @@ def update_dataset_drift_thresholds(
         )
 
 
-@router.patch("/models/{model_id}/drift-thresholds", dependencies=[require_viewer])
+@router.patch("/models/{model_id}/drift-thresholds")
 def update_model_drift_thresholds(
     model_id: str,
     psi_threshold: Optional[float] = None,
     ks_threshold: Optional[float] = None,
     db: Session = Depends(get_db),
     current_tenant: dict = Depends(get_current_tenant),
+    _: User = Depends(require_viewer),
 ):
     """
     Actualiza los umbrales de drift para un modelo específico.
