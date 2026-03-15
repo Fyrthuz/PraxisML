@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.dataset import Dataset
 from app.models.ml_model import MLModel
 from app.models.user import User
+from app.models.tenant import Tenant
 from app.api.deps import get_current_tenant, require_viewer
 from app.core.config import settings
 import logging
@@ -64,14 +65,12 @@ def get_dataset_drift_report(
     # Obtener dataset
     dataset = (
         db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.tenant_id == current_tenant["id"])
+        .filter(Dataset.id == dataset_id, Dataset.tenant_id == current_tenant.id)
         .first()
     )
 
     if not dataset:
-        logger.error(
-            f"Dataset {dataset_id} not found for tenant {current_tenant['id']}"
-        )
+        logger.error(f"Dataset {dataset_id} not found for tenant {current_tenant.id}")
         raise HTTPException(status_code=404, detail="Dataset no encontrado")
 
     # Simulación: comparar con versión anterior o datos de referencia
@@ -129,7 +128,7 @@ def get_model_drift_report(
     # Obtener modelo
     model = (
         db.query(MLModel)
-        .filter(MLModel.id == model_id, MLModel.tenant_id == current_tenant["id"])
+        .filter(MLModel.id == model_id, MLModel.tenant_id == current_tenant.id)
         .first()
     )
 
@@ -164,7 +163,7 @@ def update_dataset_drift_thresholds(
     psi_threshold: Optional[float] = None,
     ks_threshold: Optional[float] = None,
     db: Session = Depends(get_db),
-    current_tenant: dict = Depends(get_current_tenant),
+    current_tenant: Tenant = Depends(get_current_tenant),
     _: User = Depends(require_viewer),
 ):
     """
@@ -172,7 +171,7 @@ def update_dataset_drift_thresholds(
     """
     dataset = (
         db.query(Dataset)
-        .filter(Dataset.id == dataset_id, Dataset.tenant_id == current_tenant["id"])
+        .filter(Dataset.id == dataset_id, Dataset.tenant_id == current_tenant.id)
         .first()
     )
 
@@ -214,7 +213,7 @@ def update_model_drift_thresholds(
     psi_threshold: Optional[float] = None,
     ks_threshold: Optional[float] = None,
     db: Session = Depends(get_db),
-    current_tenant: dict = Depends(get_current_tenant),
+    current_tenant: Tenant = Depends(get_current_tenant),
     _: User = Depends(require_viewer),
 ):
     """
@@ -222,7 +221,7 @@ def update_model_drift_thresholds(
     """
     model = (
         db.query(MLModel)
-        .filter(MLModel.id == model_id, MLModel.tenant_id == current_tenant["id"])
+        .filter(MLModel.id == model_id, MLModel.tenant_id == current_tenant.id)
         .first()
     )
 

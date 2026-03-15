@@ -40,10 +40,17 @@ async def websocket_predict(
     Autenticación JWT via query parameter ?token=...
     """
     logger.info(f"WebSocket connection attempt for model {model_id}")
+    logger.info(f"Token received: {token[:10] if token else 'None'}...")
     # Validar JWT
-    payload = decode_token(token)
-    if not payload:
-        await websocket.close(code=1008, reason="Invalid token")
+    try:
+        payload = decode_token(token)
+        if not payload:
+            logger.warning(f"Invalid token for model {model_id}")
+            await websocket.close(code=1008, reason="Invalid token")
+            return
+    except Exception as e:
+        logger.error(f"Error decoding token: {e}")
+        await websocket.close(code=1008, reason="Token decoding error")
         return
 
     user_id = payload.get("sub")
