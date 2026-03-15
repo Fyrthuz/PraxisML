@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/components/AuthContext";
+import { config } from '@/lib/config';
 
 export default function Login() {
     const [isLogin, setIsLogin] = useState(true);
@@ -32,7 +33,7 @@ export default function Login() {
                 headers = { "Content-Type": "application/json" };
             }
 
-            const res = await fetch(`http://localhost:8000${endpoint}`, {
+            const res = await fetch(config.API_BASE_URL + endpoint, {
                 method: "POST",
                 headers,
                 body,

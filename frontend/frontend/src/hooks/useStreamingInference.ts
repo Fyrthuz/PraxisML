@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
+import { config } from '@/lib/config';
 
 interface StreamingResult {
     id: number;
@@ -30,7 +31,7 @@ export function useStreamingInference(
         setIsConnecting(true);
         setError(null);
 
-        const wsUrl = `ws://localhost:8000/api/v1/streaming/predict/${modelId}?token=${token}&explain=${explain}`;
+        const wsUrl = `${config.WS_BASE_URL}/api/v1/streaming/predict/${modelId}?token=${token}&explain=${explain}`;
         
         try {
             const ws = new WebSocket(wsUrl);

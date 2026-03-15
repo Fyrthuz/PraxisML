@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
 import { Dataset, DatasetPreview } from "@/lib/api";
 import toast from "react-hot-toast";
+import { config } from '@/lib/config';
 
-const API = "http://localhost:8000/api/v1";
+const API = config.getFullApiUrl("");
 
 export function useDatasets(token: string | null) {
     const [datasets, setDatasets] = useState<Dataset[]>([]);

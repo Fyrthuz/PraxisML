@@ -1,4 +1,6 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+import { config } from './config';
+
+const API_BASE_URL = config.getFullApiUrl("");
 
 // Helper for authenticated requests
 async function fetchAuth(url: string, options: RequestInit = {}) {

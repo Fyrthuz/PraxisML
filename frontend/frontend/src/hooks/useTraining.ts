@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { AlgorithmInfo, TrainingStatus } from "@/lib/api";
 import toast from "react-hot-toast";
+import { config } from '@/lib/config';
 
-const API = "http://localhost:8000/api/v1";
+const API = config.getFullApiUrl("");
 
 export function useTraining(token: string | null, onComplete?: () => void) {
     // Algorithm catalog

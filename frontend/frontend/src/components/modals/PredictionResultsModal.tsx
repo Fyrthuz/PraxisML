@@ -4,6 +4,7 @@ import { Loader2, Table2, X, XCircle, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dataset, MLModel, Prediction, PredictionExplainResult } from "@/lib/api";
 import ExplainabilityPanel from "@/components/ExplainabilityPanel";
+import { config } from '@/lib/config';
 
 interface PredictionResultsModalProps {
     prediction: Prediction;
@@ -35,7 +36,7 @@ export default function PredictionResultsModal({
         if (!token) return;
         setLoading(true);
         setError(null);
-        fetch(`http://localhost:8000/api/v1/predictions/${prediction.id}/data`, {
+        fetch(config.getFullApiUrl(`/predictions/${prediction.id}/data`), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((res) => {
@@ -57,7 +58,7 @@ export default function PredictionResultsModal({
     useEffect(() => {
         if (!token || !showExplain || !prediction.id) return;
         setLoadingShap(true);
-        fetch(`http://localhost:8000/api/v1/predictions/${prediction.id}/explain`, {
+        fetch(config.getFullApiUrl(`/predictions/${prediction.id}/explain`), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((res) => {

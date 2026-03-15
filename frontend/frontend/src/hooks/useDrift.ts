@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import { config } from '@/lib/config';
 
 export interface DriftMetrics {
   dataset_drift: boolean;
@@ -28,8 +29,8 @@ export function useDrift(token: string | null) {
 
     try {
       const endpoint = datasetId
-        ? `http://localhost:8000/api/v1/drift/report/${datasetId}`
-        : `http://localhost:8000/api/v1/drift/report/${modelId}`;
+        ? config.getFullApiUrl(`/drift/report/${datasetId}`)
+        : config.getFullApiUrl(`/drift/report/${modelId}`);
 
       const res = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
@@ -60,8 +61,8 @@ export function useDrift(token: string | null) {
 
     try {
       const endpoint = entityType === 'dataset'
-        ? `http://localhost:8000/api/v1/datasets/${entityId}/drift-thresholds`
-        : `http://localhost:8000/api/v1/models/${entityId}/drift-thresholds`;
+        ? config.getFullApiUrl(`/datasets/${entityId}/drift-thresholds`)
+        : config.getFullApiUrl(`/models/${entityId}/drift-thresholds`);
 
       const res = await fetch(endpoint, {
         method: 'PATCH',

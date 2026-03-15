@@ -4,6 +4,7 @@ import { useAuth } from '../AuthContext';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { MLModel } from '@/lib/api';
+import { config } from '@/lib/config';
 
 interface SingleImageUploadProps {
     models: MLModel[];
@@ -91,7 +92,7 @@ export default function SingleImageUpload({ models, onPredictionStarted }: Singl
                 formData.append('file', file);
             }
 
-            const res = await fetch('http://localhost:8000/api/v1/predictions/predict/single', {
+            const res = await fetch(config.getFullApiUrl('/predictions/predict/single'), {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,

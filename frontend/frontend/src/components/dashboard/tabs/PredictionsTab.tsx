@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { CheckCircle2, XCircle, Clock, Activity, Loader2, ExternalLink, UploadCloud } from 'lucide-react';
 import { MLModel, Prediction, Dataset } from '../../../lib/api';
 import SingleTabularInference from '../SingleTabularInference';
+import { config } from '@/lib/config';
 
 interface PredictionsTabProps {
     predictions: Prediction[];
@@ -231,7 +232,7 @@ export default function PredictionsTab({
                     onPredictionStarted={() => {
                         // Refresh the predictions list when a single file starts
                         if (token) {
-                            fetch('http://localhost:8000/api/v1/predictions', {
+                            fetch(config.getFullApiUrl('/predictions'), {
                                 headers: { Authorization: `Bearer ${token}` }
                             }).then(r => r.json()).then(preds => {
                                 setPredictions(Array.isArray(preds) ? preds : []);

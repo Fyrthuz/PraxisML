@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { config } from '@/lib/config';
 
 // The shape of our Auth state
 interface AuthState {
@@ -43,7 +44,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const fetchProfile = async (currentToken: string) => {
         try {
             // Fetch /auth/me for User
-            const userRes = await fetch("http://localhost:8000/api/v1/auth/me", {
+            const userRes = await fetch(config.getFullApiUrl("/auth/me"), {
                 headers: { Authorization: `Bearer ${currentToken}` },
             });
             if (userRes.ok) {
@@ -53,7 +54,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             }
 
             // Fetch /tenants/me for Tenant
-            const tenantRes = await fetch("http://localhost:8000/api/v1/tenants/me", {
+            const tenantRes = await fetch(config.getFullApiUrl("/tenants/me"), {
                 headers: { Authorization: `Bearer ${currentToken}` },
             });
             if (tenantRes.ok) {

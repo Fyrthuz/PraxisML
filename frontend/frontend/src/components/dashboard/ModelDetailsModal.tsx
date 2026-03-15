@@ -3,6 +3,7 @@ import { X, Cpu, Tag, Calendar, Database, Target, Activity, Copy, Check, Downloa
 import { MLModel, api, PreprocessingStep } from '../../lib/api';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
+import { config } from '@/lib/config';
 
 interface ModelDetailsModalProps {
     model: MLModel | null;
@@ -75,7 +76,7 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
         }
         setIsDownloading(true);
         try {
-            const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1'}/models/${model.id}/download?tenant_id=${model.tenant_id}`;
+            const url = `${config.getFullApiUrl(`/models/${model.id}/download`)}?tenant_id=${model.tenant_id}`;
             const res = await fetch(url, {
                 headers: { Authorization: `Bearer ${token}` },
             });

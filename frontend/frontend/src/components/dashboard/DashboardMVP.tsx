@@ -22,10 +22,11 @@ import { usePredictions } from "@/hooks/usePredictions";
 import { useTraining } from "@/hooks/useTraining";
 
 import { Prediction } from "@/lib/api";
+import { config } from '@/lib/config';
 
 type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming";
 
-const API = "http://localhost:8000/api/v1";
+const API = config.getFullApiUrl("");
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

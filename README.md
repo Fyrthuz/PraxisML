@@ -25,6 +25,9 @@
 - **Almacenamiento global con MinIO**: Tanto MLflow (artefactos) como DVC (datasets) están configurados para usar **MinIO** como backend de objetos S3-compatible por defecto, facilitando el despliegue en la nube.
 - **Observabilidad**: Prometheus + Grafana para monitorización en tiempo real.
 - **Frontend React (Next.js)**: Dashboard con polling en tiempo real, drag & drop y gestión visual de recursos.
+- **Explicabilidad (XAI)**: Panel de explicabilidad SHAP integrado en resultados de predicción para interpretación de modelos.
+- **Streaming en Tiempo Real**: Inferencia continua via WebSockets con cuotas de conexión y manejo de reconexión.
+- **Data Drift Monitoring**: Monitorización de estabilidad de distribuciones con umbrales configurables.
 
 ---
 
@@ -123,8 +126,22 @@ Toda la configuración se gestiona mediante variables de entorno. El archivo `ba
 | `STORAGE_BACKEND` | `local` | `{local, minio, s3}` | Backend de almacenamiento |
 | `RATE_LIMIT_TRAINING` | `10/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de entrenamiento |
 | `RATE_LIMIT_INFERENCE` | `30/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de inferencia |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | URL completa | URL de la API para el frontend (WebSocket se convierte automáticamente a ws://) |
 
 > **⚠️ Seguridad en producción**: Con `ENVIRONMENT=production` o `staging`, la app **no arrancará** si la `SECRET_KEY` mantiene el valor por defecto.
+
+#### Configuración del Frontend
+
+Para desplegar el frontend en diferentes entornos, configurar la variable de entorno:
+
+```bash
+# .env (frontend)
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
+
+Esta variable se usa automáticamente para:
+- Construir URLs de API HTTP
+- Convertir URLs HTTP a WebSocket (ws://) para streaming
 
 Ver [`.env.example`](.env.example) para la lista completa.
 
@@ -379,9 +396,11 @@ Documentación interactiva en **`http://localhost:8000/docs`**
 | Método | Path | Rol | Descripción |
 |--------|------|-----|-------------|
 | POST | `/api/v1/predictions/predict` | editor | Despachar inferencia async (rate-limited) |
-| POST | `/api/v1/predictions/predict/single` | editor | Inferencia directa sobre una imagen |
+| POST | `/api/v1/predictions/predict/single` | editor | Inferencia directa sobre una imagen o tabular |
 | GET | `/api/v1/predictions/status/{id}` | viewer | Consultar estado de la predicción |
 | GET | `/api/v1/predictions` | viewer | Historial de predicciones |
+| GET | `/api/v1/predictions/{id}/explain` | viewer | Obtener valores SHAP para una predicción (explicabilidad) |
+| POST | `/api/v1/streaming/predict/{model_id}` | editor | **Streaming WebSocket**: Inferencia en tiempo real (conecta via WebSocket) |
 
 ### Preprocesamiento
 | Método | Path | Rol | Descripción |

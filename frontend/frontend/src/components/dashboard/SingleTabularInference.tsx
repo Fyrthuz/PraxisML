@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, Loader2, PlayCircle, Settings2 } from 'lucide-re
 import { useAuth } from '../AuthContext';
 import { Button } from '@/components/ui/button';
 import { MLModel } from '@/lib/api';
+import { config } from '@/lib/config';
 
 interface SingleTabularInferenceProps {
     models: MLModel[];
@@ -41,7 +42,7 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
             formData.append('uncertainty_method', uncertaintyMethod);
             formData.append('features', JSON.stringify(featureValues));
 
-            const res = await fetch('http://localhost:8000/api/v1/predictions/predict/single', {
+            const res = await fetch(config.getFullApiUrl('/predictions/predict/single'), {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,
