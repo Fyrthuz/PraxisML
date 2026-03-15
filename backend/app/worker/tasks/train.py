@@ -59,8 +59,12 @@ def run_training(
         if not dataset:
             raise ValueError(f"Dataset {dataset_id} no encontrado.")
 
-        df = read_tabular(dataset.file_path, dataset.file_type)
-        logger.info("Dataset cargado: %d filas × %d columnas", len(df), len(df.columns))
+        from app.services.storage_service import get_storage
+        from io import BytesIO
+        storage = get_storage()
+        data_bytes = storage.download(dataset.file_path)
+        df = read_tabular(BytesIO(data_bytes), dataset.file_type)
+        logger.info("Dataset cargado desde storage: %d filas × %d columnas", len(df), len(df.columns))
 
         # 2. Preparar hiperparámetros especiales para PyTorch
         if framework == "pytorch":

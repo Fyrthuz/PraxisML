@@ -21,31 +21,38 @@ export function useDrift(token: string | null) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchDriftReport = useCallback(async (modelId: string, datasetId?: string) => {
+  const fetchDriftReport = useCallback(async (modelId?: string, datasetId?: string) => {
     if (!token) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const endpoint = datasetId
-        ? config.getFullApiUrl(`/drift/report/dataset/${datasetId}`)
-        : config.getFullApiUrl(`/drift/report/model/${modelId}`);
+      let endpoint = '';
+      if (datasetId) {
+        endpoint = config.getFullApiUrl(`/drift/report/dataset/${datasetId}`);
+      } else if (modelId) {
+        endpoint = config.getFullApiUrl(`/drift/report/model/${modelId}`);
+      } else {
+        throw new Error('Must provide either modelId or datasetId');
+      }
 
       const res = await fetch(endpoint, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (!res.ok) {
-        throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server returned ${res.status}: ${res.statusText}`);
       }
 
       const report = await res.json();
       setDriftReports(prev => [...prev, report]);
       return report;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error fetching drift report');
-      toast.error('Error al cargar reporte de drift');
+      const msg = err instanceof Error ? err.message : 'Error fetching drift report';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -60,30 +67,33 @@ export function useDrift(token: string | null) {
     if (!token) return;
 
     try {
+      // Build query string for thresholds
+      const params = new URLSearchParams();
+      if (psiThreshold !== undefined) params.append('psi_threshold', psiThreshold.toString());
+      if (ksThreshold !== undefined) params.append('ks_threshold', ksThreshold.toString());
+      
       const endpoint = entityType === 'dataset'
-        ? config.getFullApiUrl(`/datasets/${entityId}/drift-thresholds`)
-        : config.getFullApiUrl(`/models/${entityId}/drift-thresholds`);
+        ? config.getFullApiUrl(`/datasets/${entityId}/drift-thresholds?${params.toString()}`)
+        : config.getFullApiUrl(`/models/${entityId}/drift-thresholds?${params.toString()}`);
 
       const res = await fetch(endpoint, {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          psi_threshold: psiThreshold,
-          ks_threshold: ksThreshold,
-        }),
+        }
       });
 
       if (!res.ok) {
-        throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server returned ${res.status}: ${res.statusText}`);
       }
 
       toast.success('Umbrales de drift actualizados');
       return await res.json();
     } catch (err) {
-      toast.error('Error al actualizar umbrales de drift');
+      const msg = err instanceof Error ? err.message : 'Error al actualizar umbrales de drift';
+      toast.error(msg);
       throw err;
     }
   }, [token]);

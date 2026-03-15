@@ -164,14 +164,16 @@ def apply_pipeline(
     pipeline: ColumnTransformer,
     df: pd.DataFrame,
     target_column: Optional[str] = None,
+    fit: bool = True,
 ) -> Tuple[pd.DataFrame, Optional[pd.Series]]:
     """
-    Ajusta y transforma el DataFrame con el pipeline.
+    Ajusta y transforma (o solo transforma) el DataFrame con el pipeline.
 
     Args:
         pipeline: ColumnTransformer construido por build_pipeline.
         df: DataFrame original.
         target_column: Nombre de la columna objetivo (se separa antes de transformar).
+        fit: Si es True, hace fit_transform. Si es False, solo transform (inferencia).
 
     Returns:
         (df_transformed, y) donde y es la serie objetivo si se especificó.
@@ -184,7 +186,10 @@ def apply_pipeline(
             raise ValueError(f"Columna objetivo '{target_column}' no encontrada en el dataset.")
         y = df_input.pop(target_column)
 
-    transformed = pipeline.fit_transform(df_input)
+    if fit:
+        transformed = pipeline.fit_transform(df_input)
+    else:
+        transformed = pipeline.transform(df_input)
 
     # Obtener nombres de columnas del output
     try:

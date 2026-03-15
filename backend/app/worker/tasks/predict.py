@@ -7,12 +7,15 @@ import time
 import logging
 import numpy as np
 from datetime import datetime
+from io import BytesIO
+from pathlib import Path
 
 from celery import Task
 from sqlalchemy.orm import Session
 
 from app.worker.celery_app import celery_app
 from app.core.config import settings
+from app.services.storage_service import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,7 @@ def run_heavy_inference(
     from app.core_ml.factory import PredictionFactory, UncertaintyMethod
 
     db: Session = SessionLocal()
+    storage = get_storage()
 
     try:
         # ── 1. Marcar como RUNNING ──────────────────────────────────────────
@@ -56,21 +60,30 @@ def run_heavy_inference(
         # ── 2. Cargar Dataset ───────────────────────────────────────────────
         self.update_state(state="PROGRESS", meta={"status": "Cargando dataset/archivo..."})
 
-        file_path = input_file_path
-        if not file_path:
+        input_file_obj = None
+        current_file_path = input_file_path
+        
+        if not current_file_path:
             dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
             if not dataset:
                 raise ValueError(f"Dataset {dataset_id} no encontrado en BD.")
-            file_path = dataset.file_path
+            
+            # Descargar desde storage
+            logger.info(f"Descargando dataset desde storage: {dataset.file_path}")
+            data_bytes = storage.download(dataset.file_path)
+            input_file_obj = BytesIO(data_bytes)
+            current_file_path = dataset.file_path # Para detectar la extensión
+        else:
+            # Si se pasó una ruta local, la usamos directamente
+            input_file_obj = current_file_path
 
-        from pathlib import Path
-        ext = Path(file_path).suffix.lower()
+        ext = Path(current_file_path).suffix.lower()
         file_type_str = ext.lstrip(".")
 
         from app.core_ml.tabular_parser import is_tabular, read_tabular
 
         if is_tabular(file_type_str):
-            input_data = read_tabular(file_path, file_type_str)
+            input_data = read_tabular(input_file_obj, file_type_str)
         else:
             raise ValueError(f"Formato de archivo '{file_type_str}' no soportado para inferencia tabular.")
 
@@ -102,7 +115,7 @@ def run_heavy_inference(
             try:
                 pipeline = load_pipeline(ml_model.preprocessing_pipeline_path)
                 # target_column in inference is usually not present, apply_pipeline handles it
-                input_data, _ = apply_pipeline(pipeline, input_data)
+                input_data, _ = apply_pipeline(pipeline, input_data, fit=False)
                 # Asegurar formato compatible para el modelo (tensores o numpy floats)
                 input_data = input_data.astype(np.float32)
             except Exception as e:
@@ -132,7 +145,7 @@ def run_heavy_inference(
         pred_array = results["prediction"]       # Array format depends on data (B, C, H, W) or (N,)
         unc_array = results["uncertainty"]       # Array format depends on data (B, H, W) or (N,)
 
-        # ── 5. Guardar resultados en disco ──────────────────────────────────
+        # ── 5. Guardar resultados en disco (TODO: también subir a StorageService si se desea) ──
         self.update_state(state="PROGRESS", meta={"status": "Guardando resultados..."})
         results_dir = Path(settings.DATA_DIR) / "tenants" / tenant_id / "predictions" / prediction_id
         results_dir.mkdir(parents=True, exist_ok=True)
@@ -149,6 +162,8 @@ def run_heavy_inference(
         mlflow_inference_run_id = None
         if not ml_model.is_torchscript and ml_model.mlflow_run_id:
             try:
+                from app.services.mlflow_service import MLFlowService
+                mlflow_svc = MLFlowService()
                 with mlflow_svc.start_inference_run(
                     model_run_id=ml_model.mlflow_run_id,
                     tenant_id=tenant_id,

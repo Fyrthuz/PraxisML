@@ -81,8 +81,11 @@ def login_access_token(
     if not user.hashed_password or not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
 
-    # Generar Token JWT (Payload solo con id de usuario de momento)
-    access_token = security.create_access_token(subject=user.id)
+    # Generar Token JWT con id de usuario y tenant_id
+    access_token = security.create_access_token(
+        subject=user.id,
+        extra_data={"tenant_id": user.tenant_id}
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.get("/me", response_model=UserResponse)

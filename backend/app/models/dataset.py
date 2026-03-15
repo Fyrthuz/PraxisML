@@ -13,8 +13,8 @@ class Dataset(Base):
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    file_path = Column(String, nullable=False)  # Ruta local donde está el archivo
-    config_path = Column(String, nullable=True)  # Ruta local donde está el config.json
+    file_path = Column(String, nullable=False)  # Object key en el StorageService (e.g. tenants/{id}/datasets/{name})
+    config_path = Column(String, nullable=True)  # Object key del config.json en el StorageService
     file_size_bytes = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

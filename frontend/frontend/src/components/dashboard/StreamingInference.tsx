@@ -12,10 +12,31 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
+  Expand,
+  X,
 } from 'lucide-react';
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 import { Button } from '@/components/ui/button';
 import { MLModel } from '@/lib/api';
-import { useStreamingInference } from '@/hooks/useStreamingInference';
+import { useStreamingInference, StreamingResult } from '@/hooks/useStreamingInference';
 
 interface StreamingInferenceProps {
   models: MLModel[];
@@ -27,6 +48,8 @@ export default function StreamingInference({ models, token }: StreamingInference
   const [explain, setExplain] = useState(true);
   const [rowInput, setRowInput] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
+  const [selectedShapResult, setSelectedShapResult] = useState<StreamingResult | null>(null);
+  const [showAllShap, setShowAllShap] = useState(false);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -67,6 +90,74 @@ export default function StreamingInference({ models, token }: StreamingInference
     }
   };
 
+  // Helper function to render SHAP chart
+  const renderShapChart = (shapValues: number[], featureNames: string[], title: string) => {
+    // Sort by absolute impact (showing all variables)
+    const sortedIndices = shapValues
+      .map((value, index) => ({ value: Math.abs(value), index }))
+      .sort((a, b) => b.value - a.value)
+      .map(item => item.index);
+
+    const sortedFeatureNames = sortedIndices.map(i => featureNames[i]);
+    const sortedShapValues = sortedIndices.map(i => shapValues[i]);
+
+    const data = {
+      labels: sortedFeatureNames,
+      datasets: [
+        {
+          label: 'Impacto en predicción (SHAP)',
+          data: sortedShapValues,
+          backgroundColor: sortedShapValues.map(v =>
+            v >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'
+          ),
+          borderColor: sortedShapValues.map(v =>
+            v >= 0 ? 'rgb(34, 197, 94)' : 'rgb(239, 68, 68)'
+          ),
+          borderWidth: 1,
+        },
+      ],
+    };
+
+    const options = {
+      indexAxis: 'y' as const,
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false,
+        },
+        title: {
+          display: true,
+          text: title,
+          color: '#e5e5e5',
+          font: {
+            size: 14,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#a3a3a3',
+          },
+          grid: {
+            color: 'rgba(255, 255, 255, 0.1)',
+          },
+        },
+        y: {
+          ticks: {
+            color: '#e5e5e5',
+          },
+          grid: {
+            display: false,
+          },
+        },
+      },
+    };
+
+    return { data, options };
+  };
+
   return (
     <div className="flex flex-col h-full p-6 space-y-6">
       {/* Header */}
@@ -77,7 +168,18 @@ export default function StreamingInference({ models, token }: StreamingInference
             Predicciones en tiempo real mediante WebSocket
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {results.some(r => r.shapValues && r.featureNames) && (
+            <Button
+              onClick={() => setShowAllShap(true)}
+              variant="outline"
+              size="sm"
+              className="bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700"
+            >
+              <BarChart3 className="w-4 h-4 mr-1" />
+              Ver todo el gráfico
+            </Button>
+          )}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm ${
             isConnected 
               ? 'bg-emerald-500/10 text-emerald-400' 
@@ -258,7 +360,18 @@ export default function StreamingInference({ models, token }: StreamingInference
                   
                   {result.shapValues && result.featureNames && (
                     <div className="pt-2 border-t border-neutral-700">
-                      <div className="text-xs text-neutral-500 mb-1">SHAP (Top 3):</div>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-xs text-neutral-500">SHAP (Top 3):</div>
+                        <Button
+                          onClick={() => setSelectedShapResult(result)}
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 px-2 text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700"
+                        >
+                          <Expand className="w-3 h-3 mr-1" />
+                          Ver gráfico completo
+                        </Button>
+                      </div>
                       <div className="flex flex-wrap gap-2">
                         {result.shapValues.slice(0, 3).map((value, idx) => (
                           <span
@@ -297,6 +410,107 @@ export default function StreamingInference({ models, token }: StreamingInference
       <div className="text-xs text-neutral-500 text-center">
         Conexiones WebSocket mantienen 30 minutos de inactividad antes de cerrarse automáticamente
       </div>
+
+      {/* SHAP Chart Modal */}
+      {selectedShapResult && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl w-full max-w-3xl max-h-[80vh] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700">
+              <h3 className="text-lg font-semibold text-neutral-200">Gráfico SHAP - Predicción #{selectedShapResult.id}</h3>
+              <Button
+                onClick={() => setSelectedShapResult(null)}
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {selectedShapResult.shapValues && selectedShapResult.featureNames && (
+                <div className="bg-neutral-800/50 rounded-lg p-4">
+                  <div className="grid grid-cols-3 gap-4 text-sm mb-4">
+                    <div>
+                      <span className="text-neutral-500">Predicción:</span>{' '}
+                      <span className="text-emerald-400 font-mono">
+                        {selectedShapResult.prediction?.toFixed(4) || 'N/A'}
+                      </span>
+                    </div>
+                    {selectedShapResult.uncertainty !== undefined && (
+                      <div>
+                        <span className="text-neutral-500">Incertidumbre:</span>{' '}
+                        <span className="text-amber-400 font-mono">
+                          {selectedShapResult.uncertainty.toFixed(4)}
+                        </span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-neutral-500">Total Features:</span>{' '}
+                      <span className="text-indigo-400 font-mono">
+                        {selectedShapResult.shapValues.length}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="min-h-[400px]">
+                    <Bar data={renderShapChart(selectedShapResult.shapValues, selectedShapResult.featureNames, 'Contribución de características (SHAP)').data} 
+                         options={renderShapChart(selectedShapResult.shapValues, selectedShapResult.featureNames, 'Contribución de características (SHAP)').options} />
+                  </div>
+                  <div className="mt-4 text-xs text-neutral-500">
+                    <p>
+                      <span className="text-emerald-400">Verde:</span> Características que aumentan la predicción
+                    </p>
+                    <p>
+                      <span className="text-red-400">Rojo:</span> Características que disminuyen la predicción
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* All SHAP Charts Modal */}
+      {showAllShap && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-neutral-900 border border-neutral-700 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-700">
+              <h3 className="text-lg font-semibold text-neutral-200">Todos los gráficos SHAP</h3>
+              <Button
+                onClick={() => setShowAllShap(false)}
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[75vh] space-y-4">
+              {results.filter(r => r.shapValues && r.featureNames).slice(-10).reverse().map((result) => (
+                <div key={result.id} className="bg-neutral-800/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span className="text-sm text-neutral-400">
+                        Predicción #{result.id}: <span className="text-emerald-400 font-mono ml-1">{result.prediction?.toFixed(4) || 'N/A'}</span>
+                      </span>
+                    </div>
+                    {result.uncertainty !== undefined && (
+                      <span className="text-xs text-neutral-500">
+                        Incertidumbre: <span className="text-amber-400 font-mono">{result.uncertainty.toFixed(4)}</span>
+                      </span>
+                    )}
+                  </div>
+                  <div className="h-80">
+                    <Bar data={renderShapChart(result.shapValues!, result.featureNames!, '').data} 
+                         options={renderShapChart(result.shapValues!, result.featureNames!, '').options} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

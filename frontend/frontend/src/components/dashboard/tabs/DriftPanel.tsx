@@ -35,7 +35,7 @@ export default function DriftPanel({ dataset, token }: DriftPanelProps) {
 
   const handleFetchReport = async () => {
     if (dataset.id) {
-      await fetchDriftReport('', dataset.id);
+      await fetchDriftReport(undefined, dataset.id);
     }
   };
 
@@ -48,7 +48,7 @@ export default function DriftPanel({ dataset, token }: DriftPanelProps) {
     ? driftReports[driftReports.length - 1] 
     : null;
 
-  const hasDrift = latestReport?.metrics.dataset_drift;
+  const hasDrift = latestReport?.metrics?.dataset_drift;
 
   return (
     <div className="space-y-4">
@@ -199,7 +199,7 @@ export default function DriftPanel({ dataset, token }: DriftPanelProps) {
             Sin análisis de drift
           </p>
           <p className="text-neutral-600 text-xs mt-1">
-            Haz clic en "Analizar" para verificar la estabilidad del dataset
+            Haz clic en &quot;Analizar&quot; para verificar la estabilidad del dataset
           </p>
         </div>
       )}

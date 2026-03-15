@@ -115,7 +115,14 @@ def create_app() -> FastAPI:
     cors_origins = settings.cors_origins_list
     if settings.ENVIRONMENT == "development":
         # En desarrollo, permitir cualquier origen para facilitar pruebas
-        cors_origins = ["*"]
+        # Incluir explícitamente el origen del frontend para WebSockets
+        cors_origins = [
+            "http://localhost:3000",
+            "http://127.0.0.1:3000",
+            "ws://localhost:3000",
+            "ws://127.0.0.1:3000",
+            "*",
+        ]
 
     app.add_middleware(
         CORSMiddleware,
@@ -124,6 +131,18 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Middleware de debug para WebSockets en desarrollo
+    if settings.ENVIRONMENT == "development":
+
+        @app.middleware("http")
+        async def debug_websocket_middleware(request, call_next):
+            if request.url.path.startswith("/api/v1/streaming"):
+                logger.info(
+                    f"WebSocket debug: Origin={request.headers.get('origin')}, Host={request.headers.get('host')}, URL={request.url}"
+                )
+            response = await call_next(request)
+            return response
 
     # ── Global exception handlers ─────────────────────────────────────────────
 

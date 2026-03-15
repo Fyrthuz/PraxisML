@@ -17,6 +17,8 @@ def get_shap_values(
     data: Union[np.ndarray, pd.DataFrame],
     feature_names: Optional[List[str]] = None,
     background_samples: int = 100,
+    background: Optional[Union[np.ndarray, pd.DataFrame]] = None,
+    task_type: str = "classification",
 ) -> Dict[str, Any]:
     """
     Calcula SHAP values usando KernelExplainer para cualquier modelo.
@@ -26,11 +28,15 @@ def get_shap_values(
         data: Datos de entrada (numpy array o DataFrame)
         feature_names: Nombres de las características
         background_samples: Número de muestras para background dataset
+        background: Dataset de referencia (opcional). Si no se provee, se usa una muestra de 'data'.
+        task_type: Tipo de tarea ('classification' o 'regression')
 
     Returns:
         Dict con 'shap_values' (lista de arrays) y 'expected_value'
     """
     try:
+        import torch
+
         # Convertir a numpy si es DataFrame
         if isinstance(data, pd.DataFrame):
             if feature_names is None:
@@ -43,26 +49,79 @@ def get_shap_values(
         if feature_names is None:
             feature_names = [f"feature_{i}" for i in range(data_np.shape[1])]
 
-        # Crear wrapper para modelo si es necesario
-        if hasattr(model, "predict"):
-            # Modelo scikit-learn
-            predictor = model.predict
-        else:
-            # Modelo PyTorch desde MLflow (debe tener método predict)
-            if not hasattr(model, "predict"):
-                raise ValueError(
-                    "Modelo no tiene método predict. Se requiere método predict para SHAP."
-                )
-            predictor = model.predict
+        # Definir una función de predicción robusta que maneje la conversión NumPy -> Tensor
+        # y devuelva probabilidades/logits continuos para mejores explicaciones.
+        def predict_function(x):
+            try:
+                # 1. Caso PyTorch (nn.Module o TorchScript)
+                if hasattr(model, "forward") or isinstance(model, (torch.nn.Module, torch.jit.ScriptModule, torch.jit.RecursiveScriptModule)):
+                    device = next(model.parameters()).device if hasattr(model, "parameters") and list(model.parameters()) else torch.device("cpu")
+                    # Convertir input (NumPy de SHAP) a Tensor
+                    tensor_x = torch.from_numpy(x).float().to(device)
+                    
+                    model.eval()
+                    with torch.no_grad():
+                        output = model(tensor_x)
+                        
+                        # Si la salida es 1D (regresión o binary proba única), asegurar 2D
+                        if output.dim() == 1:
+                            output = output.unsqueeze(1)
+                        
+                        # Si es clasificación con una sola salida (probabilidad binaria)
+                        if task_type == "classification" and output.shape[1] == 1:
+                            # SHAP prefiere ver las dos clases [p0, p1] para evitar gradientes planos
+                            p1 = output
+                            p0 = 1.0 - p1
+                            output = torch.cat([p0, p1], dim=1)
+                        
+                        return output.cpu().numpy()
+                
+                # 2. Caso MLflow model wrapper o Sklearn
+                if task_type == "classification" and hasattr(model, "predict_proba"):
+                    return model.predict_proba(x)
+                
+                if hasattr(model, "predict"):
+                    return model.predict(x)
+                
+                raise ValueError("El modelo no tiene un método de predicción identificable.")
+            except Exception as e:
+                logger.error(f"Error en predict_function durante SHAP: {e}")
+                raise
 
-        # Crear background dataset para KernelExplainer
-        if len(data_np) > background_samples:
-            background = shap.sample(data_np, background_samples)
-        else:
-            background = data_np
+        # Asegurar formatos numpy para KernelExplainer
+        data_np = np.asarray(data).astype(np.float32)
 
-        # Crear explainer
-        explainer = shap.KernelExplainer(predictor, background)
+        # Determinar background dataset para KernelExplainer
+        if background is not None:
+            if isinstance(background, pd.DataFrame):
+                # Convertir categóricas a numéricas por si acaso
+                for col in background.select_dtypes(['object', 'category']).columns:
+                    background[col] = background[col].astype('category').cat.codes
+                background_np = background.to_numpy().astype(np.float32)
+            else:
+                background_np = np.asarray(background).astype(np.float32)
+            
+            # Limitar tamaño del background si es muy grande
+            if len(background_np) > background_samples:
+                background_np = shap.sample(background_np, background_samples)
+            logger.info(f"SHAP: Usando background externo de {len(background_np)} muestras.")
+        else:
+            # Si no hay background externo, usar muestra de 'data'
+            if len(data_np) > background_samples:
+                background_np = shap.sample(data_np, background_samples)
+            else:
+                background_np = data_np
+            logger.info(f"SHAP: Usando 'data' como su propio background ({len(background_np)} muestras).")
+
+        # Validación final de background para evitar ceros
+        if len(background_np) <= 1:
+            if len(data_np) == 1 and np.array_equal(background_np, data_np):
+                logger.warning("SHAP: TRAP DETECTED. El background es idéntico al dato a explicar. Los valores SHAP serán 0.")
+            else:
+                logger.warning(f"SHAP: Background muy pequeño ({len(background_np)} muestras). La explicación puede no ser fiable.")
+
+        # Crear explainer con la función robusta
+        explainer = shap.KernelExplainer(predict_function, background_np)
 
         # Calcular SHAP values
         shap_values = explainer.shap_values(data_np)
@@ -70,16 +129,18 @@ def get_shap_values(
         # Convertir a lista si es numpy array
         if isinstance(shap_values, np.ndarray):
             shap_values_list = shap_values.tolist()
+        elif isinstance(shap_values, list):
+            shap_values_list = [sv.tolist() if isinstance(sv, np.ndarray) else sv for sv in shap_values]
         else:
-            shap_values_list = [sv.tolist() for sv in shap_values]
+            shap_values_list = shap_values
 
         return {
             "shap_values": shap_values_list,
-            "expected_value": explainer.expected_value,
+            "expected_value": explainer.expected_value.tolist() if hasattr(explainer.expected_value, "tolist") else explainer.expected_value,
             "feature_names": feature_names,
         }
     except Exception as e:
-        logger.error(f"Error calculando SHAP values: {e}")
+        logger.error(f"Error calculando SHAP values: {e}", exc_info=True)
         raise
 
 

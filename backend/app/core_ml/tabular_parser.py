@@ -47,11 +47,15 @@ def read_tabular(file_path: str, file_type: Optional[str] = None) -> pd.DataFram
         ValueError: si el formato no es soportado.
         FileNotFoundError: si el archivo no existe.
     """
-    if not os.path.exists(file_path):
+    is_path = isinstance(file_path, (str, Path))
+    if is_path and not os.path.exists(file_path):
         raise FileNotFoundError(f"Archivo no encontrado: {file_path}")
 
     if file_type is None:
-        file_type = detect_file_type(file_path)
+        if is_path:
+            file_type = detect_file_type(str(file_path))
+        else:
+            raise ValueError("file_type is required when passing a file-like object")
 
     if file_type == "csv":
         return pd.read_csv(file_path)

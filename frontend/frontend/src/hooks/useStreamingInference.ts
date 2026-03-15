@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { config } from '@/lib/config';
 
-interface StreamingResult {
+export interface StreamingResult {
     id: number;
     row: any;
     prediction?: number;
@@ -24,6 +24,12 @@ export function useStreamingInference(
     const [error, setError] = useState<string | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const onResultRef = useRef(onResult);
+
+    // Update the ref whenever the callback changes to prevent reconnect loops
+    useEffect(() => {
+        onResultRef.current = onResult;
+    }, [onResult]);
 
     const connect = useCallback(() => {
         if (!token) {
@@ -38,7 +44,7 @@ export function useStreamingInference(
         setIsConnecting(true);
         setError(null);
 
-        const wsUrl = `${config.WS_BASE_URL}/api/v1/streaming/predict/${modelId}?token=${token}&explain=${explain}`;
+        const wsUrl = `${config.WS_BASE_URL}/api/v1/streaming/predict/${modelId}?token=${encodeURIComponent(token)}&explain=${explain}`;
         
         try {
             const ws = new WebSocket(wsUrl);
@@ -54,6 +60,7 @@ export function useStreamingInference(
             ws.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
+                    console.log('WebSocket message received:', data);
                     
                     if (data.error) {
                         setError(data.error);
@@ -70,7 +77,7 @@ export function useStreamingInference(
                     };
 
                     setResults(prev => [...prev.slice(-99), result]); // Mantener últimos 100 resultados
-                    onResult?.(result);
+                    onResultRef.current?.(result);
                 } catch (err) {
                     console.error('Error parsing WebSocket message:', err);
                 }
@@ -81,23 +88,30 @@ export function useStreamingInference(
                 setError('Error en la conexión de streaming');
             };
 
-            ws.onclose = () => {
-                console.log('WebSocket disconnected');
+            ws.onclose = (event) => {
+                console.log('WebSocket disconnected', event.code, event.reason);
                 setIsConnected(false);
                 setIsConnecting(false);
                 
-                // Intentar reconexión después de 5 segundos
-                reconnectTimeoutRef.current = setTimeout(() => {
-                    if (!isConnected) {
+                if (event.code !== 1000 && event.code !== 1001) {
+                    const reason = event.reason ? `: ${event.reason}` : '';
+                    setError(`Conexión terminada (Código ${event.code})${reason}`);
+                }
+                
+                // Intentar reconexión después de 5 segundos si no fue una desconexión intencionada
+                if (event.code !== 1000) {
+                    reconnectTimeoutRef.current = setTimeout(() => {
+                        // Usamos una función anónima para obtener el valor más reciente de connect
                         connect();
-                    }
-                }, 5000);
+                    }, 5000);
+                }
             };
         } catch (err) {
+            console.error('Error establishing WebSocket:', err);
             setError('No se pudo establecer la conexión WebSocket');
             setIsConnecting(false);
         }
-    }, [token, modelId, explain, isConnected, onResult]);
+    }, [token, modelId, explain]);
 
     const disconnect = useCallback(() => {
         if (reconnectTimeoutRef.current) {

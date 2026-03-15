@@ -38,7 +38,11 @@ def get_dataset_profile(
         )
 
     try:
-        df = read_tabular(dataset.file_path, dataset.file_type)
+        from app.services.storage_service import get_storage
+        from io import BytesIO
+        storage = get_storage()
+        data_bytes = storage.download(dataset.file_path)
+        df = read_tabular(BytesIO(data_bytes), dataset.file_type)
         profile = profile_dataset(df)
         return {
             "dataset_id": dataset.id,

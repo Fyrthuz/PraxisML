@@ -18,11 +18,17 @@ logger = logging.getLogger(__name__)
 class DVCService:
     def __init__(self, tenant_id: str):
         self.tenant_id = tenant_id
-        self.tenant_dir = Path(settings.DATA_DIR) / "tenants" / tenant_id
+        # Alineamos con LocalStorageService: Path(settings.DATA_DIR) / "storage"
+        self.storage_base = Path(settings.DATA_DIR) / "storage"
+        self.tenant_dir = self.storage_base / "tenants" / tenant_id
         self.data_dir = self.tenant_dir / "datasets"
-        self.dvc_dir = self.tenant_dir # DVC repo root is the tenant root
+        self.dvc_dir = self.tenant_dir # El root del repo DVC es el root del tenant en el storage
         self.tenant_dir.mkdir(parents=True, exist_ok=True)
         self.data_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_local_path(self, storage_key: str) -> Path:
+        """Convierte una storage key en una ruta local absoluta para DVC."""
+        return self.storage_base / storage_key
 
     def _run_command(
         self, cmd: List[str], cwd: Optional[Path] = None
@@ -120,7 +126,7 @@ class DVCService:
         return {
             "hash": file_hash,
             "dvc_hash": dvc_info.get("md5", file_hash),
-            "size": os.path.getsize(file_path),
+            "size": os.path.getsize(str(file_path)),
         }
 
     def _parse_dvc_file(self, dvc_file_path: str) -> Dict[str, Any]:

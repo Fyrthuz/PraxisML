@@ -8,6 +8,8 @@ from typing import List, Optional
 from pydantic import BaseModel
 import os
 import logging
+import tempfile
+from io import BytesIO
 
 from app.database import get_db
 from app.models.dataset import Dataset
@@ -25,6 +27,7 @@ from app.core_ml.preprocessing import (
     apply_pipeline,
     save_pipeline,
 )
+from app.services.storage_service import get_storage
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -77,7 +80,14 @@ def preview_preprocessing(
     Requiere rol **editor** o superior.
     """
     dataset = _get_tabular_dataset(config.dataset_id, tenant, db)
-    df = read_tabular(dataset.file_path, dataset.file_type)
+    
+    storage = get_storage()
+    try:
+        data_bytes = storage.download(dataset.file_path)
+        df = read_tabular(BytesIO(data_bytes), dataset.file_type)
+    except Exception as e:
+        logger.error(f"Error downloading dataset for preview: {e}")
+        raise HTTPException(status_code=500, detail=f"Error downloading dataset from storage: {e}")
 
     try:
         pipeline_config = {"steps": [s.model_dump() for s in config.steps]}
@@ -125,7 +135,14 @@ def apply_preprocessing(
         dict con el nuevo dataset_id y la ruta del pipeline guardado.
     """
     dataset = _get_tabular_dataset(dataset_id, tenant, db)
-    df = read_tabular(dataset.file_path, dataset.file_type)
+    
+    storage = get_storage()
+    try:
+        data_bytes = storage.download(dataset.file_path)
+        df = read_tabular(BytesIO(data_bytes), dataset.file_type)
+    except Exception as e:
+        logger.error(f"Error downloading dataset for preprocessing: {e}")
+        raise HTTPException(status_code=500, detail=f"Error downloading dataset from storage: {e}")
 
     try:
         pipeline_config = {
@@ -141,12 +158,7 @@ def apply_preprocessing(
     pipeline_name = f"{dataset.name}_pipeline"
     pipeline_path = save_pipeline(pipeline, pipeline_name, tenant.id, pipeline_config)
 
-    # ── Guardar dataset transformado como nueva versión ──────────────────────
-    tenant_dir = os.path.join(settings.DATA_DIR, "tenants", tenant.id)
-    datasets_dir = os.path.join(tenant_dir, "datasets")
-    os.makedirs(datasets_dir, exist_ok=True)
-
-    # Calcular nueva versión
+    # ── Calcular nueva versión ──────────────────────────────────────────────
     existing_count = (
         db.query(Dataset)
         .filter(Dataset.tenant_id == tenant.id, Dataset.name == dataset.name)
@@ -159,68 +171,82 @@ def apply_preprocessing(
         df_transformed[config.target_column] = y.values
 
     new_filename = f"{dataset.name}_v{new_version}_preprocessed.csv"
-    new_file_path = os.path.join(datasets_dir, new_filename)
-    df_transformed.to_csv(new_file_path, index=False)
+    storage_key = f"tenants/{tenant.id}/datasets/{new_filename}"
+    
+    # ── Guardar temporalmente para DVC y extracción de metadata ──────────────
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+            df_transformed.to_csv(tmp.name, index=False)
+            tmp_path = tmp.name
 
-    # ── Registrar en DVC ─────────────────────────────────────────────────────
-    from app.services.dvc_service import track_dataset_with_dvc
+        # Upload to storage
+        with open(tmp_path, "rb") as f:
+            content = f.read()
+            storage.upload(storage_key, content)
+        
+        file_size = len(content)
+        new_file_path = storage_key # La ruta en BD será la storage key
 
-    # Usar el mismo registry que el dataset original, o crear uno nuevo si no tiene
-    # Los atributos del objeto dataset ya están cargados de la BD, son valores normales
-    original_registry = dataset.dvc_registry_name
-    if not original_registry:
-        original_registry = dataset.name
+        # ── Registrar en DVC (opcional si está configurado) ──────────────────
+        from app.services.dvc_service import track_dataset_with_dvc, DVCService
+        
+        registry_name = dataset.dvc_registry_name or dataset.name
+        dvc_info = {}
+        try:
+            dvc_service = DVCService(tenant.id)
+            # DVC requiere que el archivo esté dentro de su workspace (repo)
+            local_path = dvc_service.get_local_path(storage_key)
+            
+            # Aseguramos que el archivo existe en el workspace local antes de trackear
+            if not local_path.exists():
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(local_path, "wb") as f:
+                    f.write(content)
+            
+            dvc_info = track_dataset_with_dvc(
+                tenant_id=tenant.id,
+                file_path=str(local_path),
+                registry_name=registry_name,
+            )
+            logger.info(f"Dataset preprocesado registrado en DVC: {storage_key}")
+        except Exception as e:
+            logger.warning(f"Error al trackear con DVC: {e}")
 
-    dvc_info = track_dataset_with_dvc(
-        tenant_id=tenant.id,
-        file_path=new_file_path,
-        registry_name=original_registry,
-    )
-    registry_name = original_registry if original_registry else dataset.name
+        # ── Registrar nuevo dataset en BD ────────────────────────────────────
+        new_dataset = Dataset(
+            name=f"{dataset.name} (v{new_version} preprocessed)",
+            description=f"Preprocesado desde '{dataset.name}' (v{dataset.version}). Target: {config.target_column or 'N/A'}",
+            file_path=new_file_path,
+            file_size_bytes=file_size,
+            file_type="csv",
+            num_rows=len(df_transformed),
+            num_columns=len(df_transformed.columns),
+            column_names=df_transformed.columns.tolist(),
+            version=new_version,
+            pipeline_path=pipeline_path,
+            tenant_id=tenant.id,
+            # Campos DVC
+            is_dvc_tracked=dvc_info.get("is_dvc_tracked", False),
+            dvc_hash=dvc_info.get("dvc_hash"),
+            dvc_remote=dvc_info.get("dvc_remote"),
+            dvc_registry_name=dvc_info.get("dvc_registry_name"),
+            dvc_version=dvc_info.get("dvc_version"),
+        )
+        db.add(new_dataset)
+        db.commit()
+        db.refresh(new_dataset)
 
-    dvc_info = track_dataset_with_dvc(
-        tenant_id=tenant.id,
-        file_path=new_file_path,
-        registry_name=registry_name,
-    )
-
-    dvc_info = track_dataset_with_dvc(
-        tenant_id=tenant.id,
-        file_path=new_file_path,
-        registry_name=registry_name,
-    )
-
-    # ── Registrar nuevo dataset en BD ────────────────────────────────────────
-    new_dataset = Dataset(
-        name=f"{dataset.name} (v{new_version} preprocessed)",
-        description=f"Preprocesado desde '{dataset.name}' (v{dataset.version}). Target: {config.target_column or 'N/A'}",
-        file_path=new_file_path,
-        file_size_bytes=os.path.getsize(new_file_path),
-        file_type="csv",
-        num_rows=len(df_transformed),
-        num_columns=len(df_transformed.columns),
-        column_names=df_transformed.columns.tolist(),
-        version=new_version,
-        pipeline_path=pipeline_path,
-        tenant_id=tenant.id,
-        # Campos DVC
-        is_dvc_tracked=dvc_info.get("is_dvc_tracked", False),
-        dvc_hash=dvc_info.get("dvc_hash"),
-        dvc_remote=dvc_info.get("dvc_remote"),
-        dvc_registry_name=dvc_info.get("dvc_registry_name"),
-        dvc_version=dvc_info.get("dvc_version"),
-    )
-    db.add(new_dataset)
-    db.commit()
-    db.refresh(new_dataset)
-
-    return {
-        "message": "Preprocesamiento aplicado correctamente.",
-        "new_dataset_id": new_dataset.id,
-        "new_dataset_name": new_dataset.name,
-        "pipeline_path": pipeline_path,
-        "transformed_shape": [len(df_transformed), len(df_transformed.columns)],
-    }
+        return {
+            "message": "Preprocesamiento aplicado correctamente.",
+            "new_dataset_id": new_dataset.id,
+            "new_dataset_name": new_dataset.name,
+            "pipeline_path": pipeline_path,
+            "transformed_shape": [len(df_transformed), len(df_transformed.columns)],
+        }
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

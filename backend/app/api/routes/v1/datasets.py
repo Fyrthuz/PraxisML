@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
@@ -7,6 +7,7 @@ import shutil
 import logging
 
 from app.services.dvc_service import DVCService
+from app.services.storage_service import get_storage
 from app.database import get_db
 from app.models.dataset import Dataset
 from app.models.user import User
@@ -55,18 +56,27 @@ def download_dataset(
     if dataset.is_dvc_tracked:
         try:
             dvc_service = DVCService(tenant.id)
+            # DVC necesita una ruta local para operar. Resolvemos el key.
+            local_path = dvc_service.get_local_path(dataset.file_path)
             # Pull ensure the file exists locally
-            dvc_service.pull_dataset(file_path)
+            dvc_service.pull_dataset(str(local_path))
         except Exception as e:
             logger.warning(f"Failed to pull dataset from DVC before download: {e}")
 
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado en el servidor")
+    try:
+        storage = get_storage()
+        data_bytes = storage.download(dataset.file_path)
+    except Exception as e:
+        logger.error(f"Error downloading dataset from storage: {e}")
+        raise HTTPException(status_code=404, detail="Archivo no encontrado en el storage")
 
-    return FileResponse(
-        path=file_path,
-        filename=os.path.basename(file_path),
-        media_type="application/octet-stream"
+    import io
+    return StreamingResponse(
+        io.BytesIO(data_bytes),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": f"attachment; filename={os.path.basename(dataset.file_path)}"
+        }
     )
 # Extensiones aceptadas
 _ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".parquet", ".zip")
@@ -107,39 +117,41 @@ async def upload_dataset(
 
     file_type = detect_file_type(file.filename)
 
-    # ── Guardar en disco ─────────────────────────────────────────────────────
-    tenant_dataset_dir = os.path.join(
-        settings.DATA_DIR, "tenants", tenant.id, "datasets"
-    )
-    os.makedirs(tenant_dataset_dir, exist_ok=True)
-
-    file_path = os.path.join(tenant_dataset_dir, file.filename)
+    # ── Guardar en Storage ───────────────────────────────────────────────────
+    storage = get_storage()
+    
+    # Key format: tenants/{tenant_id}/datasets/{filename}
+    storage_key = f"tenants/{tenant.id}/datasets/{file.filename}"
+    
     try:
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+        # Read file content
+        content = await file.read()
+        storage.upload(storage_key, content)
     except Exception as e:
+        logger.error(f"Error subiendo dataset a storage: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error guardando el archivo: {e}",
+            detail=f"Error subiendo el archivo al storage: {e}",
         )
 
-    # ── Config file (opcional, para .zip con imágenes) ───────────────────────
-    config_path = None
+    # ── Config file (opcional) ───────────────────────────────────────────────
+    config_storage_key = None
     if config_file and config_file.filename:
         if not config_file.filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Config file must be a JSON")
-        config_path = os.path.join(
-            tenant_dataset_dir, f"{name}_config_{config_file.filename}"
-        )
+        
+        config_storage_key = f"tenants/{tenant.id}/datasets/{name}_config_{config_file.filename}"
         try:
-            with open(config_path, "wb") as buffer:
-                shutil.copyfileobj(config_file.file, buffer)
+            config_content = await config_file.read()
+            storage.upload(config_storage_key, config_content)
         except Exception as e:
+            logger.error(f"Error subiendo config file a storage: {e}")
             raise HTTPException(
-                status_code=500, detail=f"Error saving config file: {e}"
+                status_code=500, detail=f"Error subiendo config file al storage: {e}"
             )
 
-    file_size = os.path.getsize(file_path)
+    file_size = len(content)
+    file_path = storage_key # Guardamos la storage key en file_path
 
     # ── Extraer metadata tabular ─────────────────────────────────────────────
     num_rows = None
@@ -148,7 +160,12 @@ async def upload_dataset(
 
     if file_type and is_tabular(file_type):
         try:
-            meta = extract_metadata(file_path, file_type)
+            # Metadata extraction still needs a local file or bytes
+            # For now, extract_metadata will be called with BytesIO if possible, 
+            # or we might need a slight refactor if it only accepts paths.
+            # Assuming tabular_parser can work with BytesIO or we save temporarily.
+            from io import BytesIO
+            meta = extract_metadata(BytesIO(content), file_type)
             num_rows = meta["num_rows"]
             num_columns = meta["num_columns"]
             column_names = meta["column_names"]
@@ -177,12 +194,20 @@ async def upload_dataset(
 
     if is_dvc_tracked:
         try:
-
             dvc_service = DVCService(tenant.id)
             dvc_service.init_repository()
             dvc_service.configure_remote()
 
-            dvc_result = dvc_service.add_dataset(file_path, dvc_registry)
+            # DVC requiere que el archivo exista en el sistema de archivos local (workspace)
+            # El workspace de DVC está alineado con el storage local si existe.
+            local_path = dvc_service.get_local_path(storage_key)
+            if not local_path.exists():
+                # Si no existe localmente (ej: storage S3), lo creamos para DVC
+                local_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(local_path, "wb") as f:
+                    f.write(content)
+
+            dvc_result = dvc_service.add_dataset(str(local_path), dvc_registry)
             _is_actually_tracked = True
             dvc_hash = dvc_result.get("hash")
             dvc_remote = "minio"
@@ -195,7 +220,7 @@ async def upload_dataset(
         name=name,
         description=description,
         file_path=file_path,
-        config_path=config_path,
+        config_path=config_storage_key, # Usamos la storage key
         file_size_bytes=file_size,
         file_type=file_type,
         num_rows=num_rows,
@@ -261,8 +286,11 @@ def preview_dataset(
         )
 
     try:
+        storage = get_storage()
+        data_bytes = storage.download(dataset.file_path)
+        from io import BytesIO
         preview_df, meta = get_preview(
-            dataset.file_path, dataset.file_type, max_rows=max_rows
+            BytesIO(data_bytes), dataset.file_type, max_rows=max_rows
         )
         # Reemplazar NaN con None para serialización JSON
         preview_rows = preview_df.where(preview_df.notna(), None).to_dict(
@@ -307,20 +335,31 @@ def delete_dataset(
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset no encontrado.")
 
-    # Borrar archivos de disco
-    if dataset.file_path and os.path.exists(dataset.file_path):
+    # Borrar de Storage
+    storage = get_storage()
+    if dataset.file_path:
         try:
-            os.remove(dataset.file_path)
-            logger.info("Archivo eliminado: %s", dataset.file_path)
-        except OSError as e:
-            logger.warning("No se pudo eliminar archivo: %s — %s", dataset.file_path, e)
+            storage.delete(dataset.file_path)
+            logger.info("Archivo eliminado del storage: %s", dataset.file_path)
+        except Exception as e:
+            logger.warning("No se pudo eliminar archivo del storage: %s — %s", dataset.file_path, e)
 
-    if dataset.config_path and os.path.exists(dataset.config_path):
+    # Eliminación DVC (opcional)
+    if dataset.is_dvc_tracked:
         try:
-            os.remove(dataset.config_path)
-        except OSError as e:
+            dvc_service = DVCService(tenant.id)
+            local_path = dvc_service.get_local_path(dataset.file_path)
+            dvc_service.remove_tracking(str(local_path))
+            logger.info(f"DVC tracking removed for {dataset.id}")
+        except Exception as e:
+            logger.warning(f"Could not remove DVC tracking for {dataset.id}: {e}")
+
+    if dataset.config_path:
+        try:
+            storage.delete(dataset.config_path)
+        except Exception as e:
             logger.warning(
-                "No se pudo eliminar config: %s — %s", dataset.config_path, e
+                "No se pudo eliminar config del storage: %s — %s", dataset.config_path, e
             )
 
     # Borrar registro de BD

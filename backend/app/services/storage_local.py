@@ -10,12 +10,15 @@ Variables de entorno (opcionales):
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import BinaryIO
 
 from app.services.storage_service import StorageService
 from app.core.exceptions import StorageError, StorageObjectNotFoundError
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class LocalStorageService(StorageService):
@@ -27,6 +30,7 @@ class LocalStorageService(StorageService):
     def _resolve(self, key: str) -> Path:
         # Evita path traversal
         resolved = (self.base_dir / key).resolve()
+        logger.debug(f"LocalStorage: Resolviendo {key} -> {resolved} (Existe: {resolved.exists()})")
         if not str(resolved).startswith(str(self.base_dir.resolve())):
             raise StorageError(f"Clave de almacenamiento no válida: {key}")
         return resolved
@@ -45,6 +49,7 @@ class LocalStorageService(StorageService):
         except StorageError:
             raise
         except Exception as exc:
+            logger.error(f"Error subiendo {key} a disco local: {exc}")
             raise StorageError(f"Error subiendo {key} a disco local", detail=str(exc)) from exc
 
     def download(self, key: str) -> bytes:
