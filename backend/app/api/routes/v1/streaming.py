@@ -156,22 +156,22 @@ async def websocket_predict(
             logger.error(f"Error durante el setup del modelo: {e}", exc_info=True)
             await websocket.close(code=1011, reason=f"Error cargando modelo: {str(e)}")
             return
-        
+
         # Cargar background para SHAP si se solicita inicialmente
         background_data = None
         if explain:
             background_data = await _load_background_data(db, metadata, preprocessing_pipeline, feature_names)
-        
+
         db.close()
 
         # Loop principal: recibir filas y enviar predicciones
         while True:
             data = await websocket.receive_text()
             row_data = json.loads(data)
-            
+
             # El cliente puede pedir explicaciones en cada mensaje individualmente
             msg_explain = row_data.get("explain", explain)
-            
+
             # Lazy loading de background if requested but missing
             if msg_explain and background_data is None:
                 logger.info("SHAP: Explicación solicitada pero background no cargado. Re-intentando carga...")
@@ -184,11 +184,11 @@ async def websocket_predict(
 
             # Procesar fila individual con el modelo real
             result = await process_row_real(
-                row_data, 
-                model, 
-                feature_names, 
-                preprocessing_pipeline, 
-                msg_explain, 
+                row_data,
+                model,
+                feature_names,
+                preprocessing_pipeline,
+                msg_explain,
                 background_data,
                 task_type=metadata.get("task_type", "classification")
             )
@@ -217,12 +217,12 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
         if not dataset_id:
             logger.warning("SHAP: No hay dataset_id asociado al modelo. Se usará la fila actual como background (¡No recomendado!).")
             return None
-            
+
         from app.models.dataset import Dataset
         from app.services.storage_service import get_storage
         from io import BytesIO
         import pandas as pd
-        
+
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if not dataset:
             logger.error(f"SHAP: No se encontró el dataset {dataset_id} en la base de datos.")
@@ -230,16 +230,16 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
         elif not dataset.file_path:
             logger.error(f"SHAP: El dataset {dataset_id} no tiene file_path.")
             return None
-            
+
         storage = get_storage()
         logger.info(f"SHAP: Intentando descargar background desde {dataset.file_path}...")
         try:
             storage_key = dataset.file_path
-            
+
             logger.info(f"SHAP: Resolviendo key de storage: {storage_key}")
             data_bytes = storage.download(storage_key)
             file_type = dataset.file_type or "csv"
-            
+
             if file_type == "csv":
                 df_background = pd.read_csv(BytesIO(data_bytes))
             elif file_type == "parquet":
@@ -249,13 +249,13 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
             else:
                 logger.warning(f"SHAP: Formato '{file_type}' no soportado directamente. Intentando con CSV.")
                 df_background = pd.read_csv(BytesIO(data_bytes))
-            
+
             logger.info(f"SHAP: Dataset cargado ({file_type}). Filas totales: {len(df_background)}")
-            
+
             # Tomar una muestra (100 filas suelen bastar para KernelExplainer)
             sample_size = min(100, len(df_background))
             background_data = df_background.sample(n=sample_size, random_state=42)
-            
+
             # Preprocesar background si hay pipeline Y el dataset NO parece estar preprocesado ya
             # Si el dataset tiene su propio pipeline_path, asumimos que el CSV ya está en formato post-pipeline
             if preprocessing_pipeline:
@@ -265,7 +265,7 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
                     from app.core_ml.preprocessing import apply_pipeline
                     logger.info("SHAP: Aplicando pipeline de preprocesamiento al background (Dataset crudo)...")
                     background_data, _ = apply_pipeline(preprocessing_pipeline, background_data, fit=False)
-            
+
             # Alinear features con lo que espera el modelo
             if feature_names:
                 logger.info(f"SHAP: Alineando {len(feature_names)} features. Columnas actuales del background: {background_data.columns.tolist()[:5]}...")
@@ -274,7 +274,7 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
                         # logger.warning(f"SHAP: Feature '{col}' no encontrada en background. Se inicializa a 0.")
                         background_data[col] = 0.0
                 background_data = background_data[feature_names]
-            
+
             logger.info(f"SHAP: Background data listo para usar ({len(background_data)} filas). Mean prediction on background would be a good exp_val.")
             return background_data
         except Exception as dl_err:
@@ -357,14 +357,14 @@ async def process_row_real(
                 from app.core_ml.explainability import get_shap_values
                 n_features = len(feature_names)
                 logger.info(f"Calculando SHAP para {n_features} features. Tarea: {task_type}. Background: {'Cargado' if background_data is not None else 'Ninguno (usará data)'}")
-                
+
                 if background_data is not None:
                     logger.info(f"Dimensiones de background_data: {getattr(background_data, 'shape', 'desconocido')}")
 
                 # Calcular SHAP values para todos los features
                 shap_result = get_shap_values(
-                    model, df, feature_names, 
-                    background=background_data, 
+                    model, df, feature_names,
+                    background=background_data,
                     task_type=task_type
                 )
 
@@ -372,17 +372,17 @@ async def process_row_real(
                 # get_shap_values puede devolver diversas estructuras según el explainer y versión
                 raw_shap = shap_result["shap_values"]
                 shap_values = []
-                
+
                 try:
                     # Estructura A: [clase][fila][feature] -> len(raw_shap) = n_clases, len(raw__shap[0]) = 1
-                    if (isinstance(raw_shap, list) and len(raw_shap) > 0 and 
-                        isinstance(raw_shap[0], list) and len(raw_shap[0]) == 1 and 
+                    if (isinstance(raw_shap, list) and len(raw_shap) > 0 and
+                        isinstance(raw_shap[0], list) and len(raw_shap[0]) == 1 and
                         isinstance(raw_shap[0][0], list) and len(raw_shap[0][0]) == n_features):
                         class_idx = 1 if len(raw_shap) == 2 else 0
                         shap_values = raw_shap[class_idx][0]
-                    
+
                     # Estructura B: [fila][feature][clase] -> len(raw_shap) = 1, len(raw_shap[0]) = n_features
-                    elif (isinstance(raw_shap, list) and len(raw_shap) == 1 and 
+                    elif (isinstance(raw_shap, list) and len(raw_shap) == 1 and
                           isinstance(raw_shap[0], list) and len(raw_shap[0]) == n_features):
                         if isinstance(raw_shap[0][0], list):
                             # Cada feature tiene una lista de contribuciones por clase
@@ -391,22 +391,22 @@ async def process_row_real(
                         else:
                             # Caso simple [fila][feature]
                             shap_values = raw_shap[0]
-                    
+
                     # Estructura C: [fila][feature] directa (Común en regresión o single-output)
                     elif isinstance(raw_shap, list) and len(raw_shap) > 0 and isinstance(raw_shap[0], list) and len(raw_shap[0]) == n_features:
                          shap_values = raw_shap[0]
-                         
+
                     else:
                         # Fallback: intentar tomar el primer elemento si es lista, o el objeto directo
                         shap_values = raw_shap[0] if (isinstance(raw_shap, list) and len(raw_shap) > 0) else raw_shap
-                
+
                 except Exception as unpack_err:
                     logger.warning(f"Error desempaquetando SHAP: {unpack_err}. Usando raw_shap.")
                     shap_values = raw_shap
 
                 result["shap_values"] = shap_values
                 result["feature_names"] = feature_names
-                
+
                 # Asegurar que expected_value es un escalar para el frontend
                 exp_val = shap_result["expected_value"]
                 if task_type == "classification" and isinstance(exp_val, (list, np.ndarray)) and len(exp_val) > 1:
@@ -417,7 +417,7 @@ async def process_row_real(
                     result["expected_value"] = float(exp_val[0])
                 else:
                     result["expected_value"] = float(exp_val)
-                
+
                 logger.info(f"SHAP completado. Exp_val={result['expected_value']}, Out_val={result.get('prediction')}")
 
             except Exception as shap_error:

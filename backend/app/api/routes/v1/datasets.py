@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
-import shutil
 import logging
 
 from app.services.dvc_service import DVCService
@@ -20,7 +19,6 @@ from app.api.deps import (
     require_admin,
     check_dataset_quota,
 )
-from app.core.config import settings
 from app.core_ml.tabular_parser import (
     detect_file_type,
     is_tabular,
@@ -49,8 +47,6 @@ def download_dataset(
 
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset no encontrado")
-
-    file_path = dataset.file_path
 
     # Si es DVC, intentamos hacer pull por si acaso no está en el nodo actual
     if dataset.is_dvc_tracked:
@@ -119,10 +115,10 @@ async def upload_dataset(
 
     # ── Guardar en Storage ───────────────────────────────────────────────────
     storage = get_storage()
-    
+
     # Key format: tenants/{tenant_id}/datasets/{filename}
     storage_key = f"tenants/{tenant.id}/datasets/{file.filename}"
-    
+
     try:
         # Read file content
         content = await file.read()
@@ -139,7 +135,7 @@ async def upload_dataset(
     if config_file and config_file.filename:
         if not config_file.filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Config file must be a JSON")
-        
+
         config_storage_key = f"tenants/{tenant.id}/datasets/{name}_config_{config_file.filename}"
         try:
             config_content = await config_file.read()
@@ -161,7 +157,7 @@ async def upload_dataset(
     if file_type and is_tabular(file_type):
         try:
             # Metadata extraction still needs a local file or bytes
-            # For now, extract_metadata will be called with BytesIO if possible, 
+            # For now, extract_metadata will be called with BytesIO if possible,
             # or we might need a slight refactor if it only accepts paths.
             # Assuming tabular_parser can work with BytesIO or we save temporarily.
             from io import BytesIO

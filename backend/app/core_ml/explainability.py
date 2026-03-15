@@ -58,31 +58,31 @@ def get_shap_values(
                     device = next(model.parameters()).device if hasattr(model, "parameters") and list(model.parameters()) else torch.device("cpu")
                     # Convertir input (NumPy de SHAP) a Tensor
                     tensor_x = torch.from_numpy(x).float().to(device)
-                    
+
                     model.eval()
                     with torch.no_grad():
                         output = model(tensor_x)
-                        
+
                         # Si la salida es 1D (regresión o binary proba única), asegurar 2D
                         if output.dim() == 1:
                             output = output.unsqueeze(1)
-                        
+
                         # Si es clasificación con una sola salida (probabilidad binaria)
                         if task_type == "classification" and output.shape[1] == 1:
                             # SHAP prefiere ver las dos clases [p0, p1] para evitar gradientes planos
                             p1 = output
                             p0 = 1.0 - p1
                             output = torch.cat([p0, p1], dim=1)
-                        
+
                         return output.cpu().numpy()
-                
+
                 # 2. Caso MLflow model wrapper o Sklearn
                 if task_type == "classification" and hasattr(model, "predict_proba"):
                     return model.predict_proba(x)
-                
+
                 if hasattr(model, "predict"):
                     return model.predict(x)
-                
+
                 raise ValueError("El modelo no tiene un método de predicción identificable.")
             except Exception as e:
                 logger.error(f"Error en predict_function durante SHAP: {e}")
@@ -100,7 +100,7 @@ def get_shap_values(
                 background_np = background.to_numpy().astype(np.float32)
             else:
                 background_np = np.asarray(background).astype(np.float32)
-            
+
             # Limitar tamaño del background si es muy grande
             if len(background_np) > background_samples:
                 background_np = shap.sample(background_np, background_samples)

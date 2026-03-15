@@ -62,12 +62,12 @@ def run_heavy_inference(
 
         input_file_obj = None
         current_file_path = input_file_path
-        
+
         if not current_file_path:
             dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
             if not dataset:
                 raise ValueError(f"Dataset {dataset_id} no encontrado en BD.")
-            
+
             # Descargar desde storage
             logger.info(f"Descargando dataset desde storage: {dataset.file_path}")
             data_bytes = storage.download(dataset.file_path)

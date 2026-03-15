@@ -25,7 +25,6 @@ try:
     from evidently import ColumnMapping
     from evidently.report import Report
     from evidently.metric_preset import DataDriftPreset
-    from evidently.metrics import ColumnDriftMetric
 
     EVIDENTLY_AVAILABLE = True
 except ImportError:

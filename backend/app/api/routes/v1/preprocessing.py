@@ -20,7 +20,6 @@ from app.api.deps import (
     require_editor,
     require_viewer,
 )
-from app.core.config import settings
 from app.core_ml.tabular_parser import read_tabular, is_tabular
 from app.core_ml.preprocessing import (
     build_pipeline,
@@ -80,7 +79,7 @@ def preview_preprocessing(
     Requiere rol **editor** o superior.
     """
     dataset = _get_tabular_dataset(config.dataset_id, tenant, db)
-    
+
     storage = get_storage()
     try:
         data_bytes = storage.download(dataset.file_path)
@@ -135,7 +134,7 @@ def apply_preprocessing(
         dict con el nuevo dataset_id y la ruta del pipeline guardado.
     """
     dataset = _get_tabular_dataset(dataset_id, tenant, db)
-    
+
     storage = get_storage()
     try:
         data_bytes = storage.download(dataset.file_path)
@@ -172,7 +171,7 @@ def apply_preprocessing(
 
     new_filename = f"{dataset.name}_v{new_version}_preprocessed.csv"
     storage_key = f"tenants/{tenant.id}/datasets/{new_filename}"
-    
+
     # ── Guardar temporalmente para DVC y extracción de metadata ──────────────
     tmp_path = None
     try:
@@ -184,26 +183,26 @@ def apply_preprocessing(
         with open(tmp_path, "rb") as f:
             content = f.read()
             storage.upload(storage_key, content)
-        
+
         file_size = len(content)
         new_file_path = storage_key # La ruta en BD será la storage key
 
         # ── Registrar en DVC (opcional si está configurado) ──────────────────
         from app.services.dvc_service import track_dataset_with_dvc, DVCService
-        
+
         registry_name = dataset.dvc_registry_name or dataset.name
         dvc_info = {}
         try:
             dvc_service = DVCService(tenant.id)
             # DVC requiere que el archivo esté dentro de su workspace (repo)
             local_path = dvc_service.get_local_path(storage_key)
-            
+
             # Aseguramos que el archivo existe en el workspace local antes de trackear
             if not local_path.exists():
                 local_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(local_path, "wb") as f:
                     f.write(content)
-            
+
             dvc_info = track_dataset_with_dvc(
                 tenant_id=tenant.id,
                 file_path=str(local_path),
