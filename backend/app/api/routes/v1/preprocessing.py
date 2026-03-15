@@ -1,6 +1,7 @@
 """
 API route para configurar y aplicar pipelines de preprocesamiento en datasets tabulares.
 """
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -31,13 +32,16 @@ router = APIRouter()
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
+
 class PreprocessingStep(BaseModel):
-    type: str           # "impute", "scale", "encode", "feature_eng", "drop"
+    type: str  # "impute", "scale", "encode", "feature_eng", "drop"
     columns: List[str]
-    strategy: Optional[str] = None   # para impute: mean, median, most_frequent, constant
-    method: Optional[str] = None     # para scale/encode/feature_eng: standard, minmax, robust / onehot, ordinal / log_transform, polynomial, binning
-    fill_value: Optional[str] = None # para impute strategy=constant
-    bins: Optional[int] = None       # para feature_eng binning
+    strategy: Optional[str] = None  # para impute: mean, median, most_frequent, constant
+    method: Optional[str] = (
+        None  # para scale/encode/feature_eng: standard, minmax, robust / onehot, ordinal / log_transform, polynomial, binning
+    )
+    fill_value: Optional[str] = None  # para impute strategy=constant
+    bins: Optional[int] = None  # para feature_eng binning
 
 
 class PreprocessingConfig(BaseModel):
@@ -49,9 +53,9 @@ class PreprocessingConfig(BaseModel):
 class PreprocessingPreviewResponse(BaseModel):
     original_columns: List[str]
     transformed_columns: List[str]
-    original_shape: List[int]       # [rows, cols]
-    transformed_shape: List[int]    # [rows, cols]
-    preview_rows: List[dict]        # First 10 transformed rows
+    original_shape: List[int]  # [rows, cols]
+    transformed_shape: List[int]  # [rows, cols]
+    preview_rows: List[dict]  # First 10 transformed rows
     pipeline_path: Optional[str] = None
 
 
@@ -84,7 +88,11 @@ def preview_preprocessing(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error en preprocesamiento: {e}")
 
-    preview = df_transformed.head(10).where(df_transformed.head(10).notna(), None).to_dict(orient="records")
+    preview = (
+        df_transformed.head(10)
+        .where(df_transformed.head(10).notna(), None)
+        .to_dict(orient="records")
+    )
 
     return PreprocessingPreviewResponse(
         original_columns=df.columns.tolist(),
@@ -122,7 +130,7 @@ def apply_preprocessing(
     try:
         pipeline_config = {
             "steps": [s.model_dump() for s in config.steps],
-            "target_column": config.target_column
+            "target_column": config.target_column,
         }
         pipeline = build_pipeline(pipeline_config, df.columns.tolist())
         df_transformed, y = apply_pipeline(pipeline, df, config.target_column)
@@ -154,6 +162,15 @@ def apply_preprocessing(
     new_file_path = os.path.join(datasets_dir, new_filename)
     df_transformed.to_csv(new_file_path, index=False)
 
+    # ── Registrar en DVC ─────────────────────────────────────────────────────
+    from app.services.dvc_service import track_dataset_with_dvc
+
+    dvc_info = track_dataset_with_dvc(
+        tenant_id=tenant.id,
+        file_path=new_file_path,
+        registry_name=f"preprocessed_{dataset.name}",
+    )
+
     # ── Registrar nuevo dataset en BD ────────────────────────────────────────
     new_dataset = Dataset(
         name=f"{dataset.name} (v{new_version} preprocessed)",
@@ -167,6 +184,12 @@ def apply_preprocessing(
         version=new_version,
         pipeline_path=pipeline_path,
         tenant_id=tenant.id,
+        # Campos DVC
+        is_dvc_tracked=dvc_info.get("is_dvc_tracked", False),
+        dvc_hash=dvc_info.get("dvc_hash"),
+        dvc_remote=dvc_info.get("dvc_remote"),
+        dvc_registry_name=dvc_info.get("dvc_registry_name"),
+        dvc_version=dvc_info.get("dvc_version"),
     )
     db.add(new_dataset)
     db.commit()
@@ -196,15 +219,20 @@ def get_dataset_pipeline_config(
     Busca en los tags/params del run de MLFlow si existe.
     Requiere rol **viewer** o superior.
     """
-    dataset = db.query(Dataset).filter(
-        Dataset.id == dataset_id, Dataset.tenant_id == tenant.id
-    ).first()
+    dataset = (
+        db.query(Dataset)
+        .filter(Dataset.id == dataset_id, Dataset.tenant_id == tenant.id)
+        .first()
+    )
 
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset no encontrado.")
 
     if not dataset.pipeline_path:
-        return {"steps": [], "message": "Este dataset no tiene un pipeline de preprocesamiento asociado."}
+        return {
+            "steps": [],
+            "message": "Este dataset no tiene un pipeline de preprocesamiento asociado.",
+        }
 
     # Si el pipeline_path es una URI de MLFlow (runs:/...), podemos intentar sacar info
     if dataset.pipeline_path.startswith("runs:/"):
@@ -219,12 +247,13 @@ def get_dataset_pipeline_config(
 
             # Buscamos en los tags si guardamos la config allí
             import json
+
             steps_json = run.data.tags.get("pipeline_steps")
             if steps_json:
                 return {
                     "steps": json.loads(steps_json),
                     "run_id": run_id,
-                    "target_column": run.data.tags.get("target_column")
+                    "target_column": run.data.tags.get("target_column"),
                 }
         except Exception as e:
             logger.warning(f"No se pudo recuperar info detallada de MLFlow: {e}")
@@ -232,13 +261,14 @@ def get_dataset_pipeline_config(
     return {
         "steps": [],
         "pipeline_path": dataset.pipeline_path,
-        "message": "Pipeline encontrado pero la configuración detallada no está disponible en MLFlow."
+        "message": "Pipeline encontrado pero la configuración detallada no está disponible en MLFlow.",
     }
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _get_tabular_dataset(dataset_id: str, tenant: Tenant, db: Session) -> Dataset:
     """Obtiene un dataset validando que sea tabular y pertenezca al tenant."""

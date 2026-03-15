@@ -1,4 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Form, File, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    status,
+    Form,
+    File,
+    UploadFile,
+)
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -57,11 +66,15 @@ def request_prediction(
     # Validar existencia de dataset y modelo para fallo rápido
     dataset = db.query(Dataset).filter(Dataset.id == req.dataset_id).first()
     if not dataset:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Dataset no encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Dataset no encontrado."
+        )
 
     ml_model = db.query(MLModel).filter(MLModel.id == req.model_id).first()
     if not ml_model:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado."
+        )
 
     # Crear registro PENDING en BD antes de encolar
     prediction = Prediction(
@@ -104,6 +117,7 @@ def request_single_prediction(
     model_id: str = Form(...),
     uncertainty_method: str = Form("none"),
     features: str = Form(...),
+    explain: bool = Form(False),
     _user: User = Depends(require_editor),
     tenant: Tenant = Depends(check_prediction_quota),
     db: Session = Depends(get_db),
@@ -119,11 +133,16 @@ def request_single_prediction(
     try:
         features_dict = json.loads(features)
     except json.JSONDecodeError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Las características proporcionadas no son un JSON válido.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Las características proporcionadas no son un JSON válido.",
+        )
 
     ml_model = db.query(MLModel).filter(MLModel.id == model_id).first()
     if not ml_model:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado."
+        )
 
     # Crear registro Prediction
     prediction = Prediction(
@@ -145,6 +164,7 @@ def request_single_prediction(
         method=uncertainty_method,
         prediction_id=prediction.id,
         features=features_dict,
+        explain=explain,
     )
 
     prediction.task_id = task.id
@@ -177,7 +197,9 @@ def request_batch_prediction(
 
     ml_model = db.query(MLModel).filter(MLModel.id == model_id).first()
     if not ml_model:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado."
+        )
 
     # Guardar archivo temporalmente
     tenant_tmp_dir = os.path.join(settings.DATA_DIR, "tenants", tenant.id, "tmp")
@@ -191,7 +213,7 @@ def request_batch_prediction(
     prediction = Prediction(
         status="PENDING",
         method=uncertainty_method,
-        dataset_id=None, # No hay un dataset_id de la tabla Dataset
+        dataset_id=None,  # No hay un dataset_id de la tabla Dataset
         model_id=model_id,
         tenant_id=tenant.id,
     )
@@ -207,7 +229,7 @@ def request_batch_prediction(
         model_id=model_id,
         method=uncertainty_method,
         prediction_id=prediction.id,
-        input_file_path=file_path # Nuevo argumento para la tarea
+        input_file_path=file_path,  # Nuevo argumento para la tarea
     )
 
     prediction.task_id = task.id
@@ -259,9 +281,12 @@ def list_predictions(
     Obtiene todas las predicciones del tenant.
     Requiere rol **viewer** o superior.
     """
-    predictions = db.query(Prediction).filter(
-        Prediction.tenant_id == tenant.id
-    ).order_by(Prediction.created_at.desc()).all()
+    predictions = (
+        db.query(Prediction)
+        .filter(Prediction.tenant_id == tenant.id)
+        .order_by(Prediction.created_at.desc())
+        .all()
+    )
     return predictions
 
 
@@ -276,9 +301,11 @@ def get_prediction_result(
     Obtiene el resultado completo de una predicción almacenada en BD.
     Requiere rol **viewer** o superior.
     """
-    prediction = db.query(Prediction).filter(
-        Prediction.id == prediction_id, Prediction.tenant_id == tenant.id
-    ).first()
+    prediction = (
+        db.query(Prediction)
+        .filter(Prediction.id == prediction_id, Prediction.tenant_id == tenant.id)
+        .first()
+    )
     if not prediction:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -298,9 +325,11 @@ def get_prediction_data(
     Retorna el contenido crudo de los ficheros de predicción e incertidumbre (.npy) como JSON.
     Requiere rol **viewer** o superior.
     """
-    prediction = db.query(Prediction).filter(
-        Prediction.id == prediction_id, Prediction.tenant_id == tenant.id
-    ).first()
+    prediction = (
+        db.query(Prediction)
+        .filter(Prediction.id == prediction_id, Prediction.tenant_id == tenant.id)
+        .first()
+    )
 
     if not prediction:
         raise HTTPException(status_code=404, detail="Prediction not found")
@@ -319,18 +348,26 @@ def get_prediction_data(
             cleaned = np.where(np.logical_or(np.isnan(arr), np.isinf(arr)), None, arr)
             results["uncertainty"] = cleaned.tolist()
 
-        if prediction.input_image_path and os.path.exists(prediction.input_image_path) and prediction.input_image_path.endswith('.npy'):
+        if (
+            prediction.input_image_path
+            and os.path.exists(prediction.input_image_path)
+            and prediction.input_image_path.endswith(".npy")
+        ):
             arr = np.load(prediction.input_image_path)
             # For input data, we also sanitize just in case
-            if arr.dtype.kind in 'fc':
-                cleaned = np.where(np.logical_or(np.isnan(arr), np.isinf(arr)), None, arr)
+            if arr.dtype.kind in "fc":
+                cleaned = np.where(
+                    np.logical_or(np.isnan(arr), np.isinf(arr)), None, arr
+                )
                 results["input_data"] = cleaned.tolist()
             else:
                 results["input_data"] = arr.tolist()
 
     except Exception as e:
         logger.error(f"Error loading prediction data for {prediction_id}: {e}")
-        raise HTTPException(status_code=500, detail=f"Error reading result files: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error reading result files: {str(e)}"
+        )
 
     return results
 
@@ -348,9 +385,11 @@ def get_prediction_visualization(
     img_type: 'result' o 'uncertainty'
     Requiere rol **viewer** o superior.
     """
-    prediction = db.query(Prediction).filter(
-        Prediction.id == prediction_id, Prediction.tenant_id == tenant.id
-    ).first()
+    prediction = (
+        db.query(Prediction)
+        .filter(Prediction.id == prediction_id, Prediction.tenant_id == tenant.id)
+        .first()
+    )
 
     if not prediction:
         raise HTTPException(status_code=404, detail="Prediction not found")
@@ -363,14 +402,24 @@ def get_prediction_visualization(
 
         # Determine media type from extension
         ext = os.path.splitext(original_path)[1].lower()
-        media_types = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".bmp": "image/bmp"}
+        media_types = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".gif": "image/gif",
+            ".bmp": "image/bmp",
+        }
         media_type = media_types.get(ext, "image/png")
 
         return StreamingResponse(open(original_path, "rb"), media_type=media_type)
 
-    path_to_load = prediction.result_path if img_type == "result" else prediction.uncertainty_path
+    path_to_load = (
+        prediction.result_path if img_type == "result" else prediction.uncertainty_path
+    )
     if not path_to_load or not os.path.exists(path_to_load):
-        raise HTTPException(status_code=404, detail=f"{img_type} file not found or not generated yet")
+        raise HTTPException(
+            status_code=404, detail=f"{img_type} file not found or not generated yet"
+        )
 
     try:
         arr = np.load(path_to_load)
@@ -393,21 +442,27 @@ def get_prediction_visualization(
 
         # Apply pseudo-color for uncertainty map if desired, or just grayscale via PIL
         from PIL import Image
+
         img = Image.fromarray(arr).convert("L")
 
         # Si es uncertainty mapeamos a colormap viridis o similar (Opcional, pero para UI rápido sirve RGB)
         if img_type == "uncertainty":
             import matplotlib.pyplot as plt
-            cmap = plt.get_cmap("inferno") # Usando heatmap color map para error/uncertainty
+
+            cmap = plt.get_cmap(
+                "inferno"
+            )  # Usando heatmap color map para error/uncertainty
             # normalize array between 0-1 for cmap
             arr_norm = arr.astype(np.float32) / 255.0
             colored_img = (cmap(arr_norm)[:, :, :3] * 255).astype(np.uint8)
             img = Image.fromarray(colored_img)
 
         img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='PNG')
+        img.save(img_byte_arr, format="PNG")
         img_byte_arr.seek(0)
 
         return StreamingResponse(img_byte_arr, media_type="image/png")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generating visualization: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error generating visualization: {str(e)}"
+        )

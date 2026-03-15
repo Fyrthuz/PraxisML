@@ -8,15 +8,19 @@ from app.core_ml.factory import PredictionFactory, UncertaintyMethod
 
 logger = logging.getLogger(__name__)
 
-@celery_app.task(bind=True, name="app.worker.tasks.single_predict.run_single_tabular_inference")
+
+@celery_app.task(
+    bind=True, name="app.worker.tasks.single_predict.run_single_tabular_inference"
+)
 def run_single_tabular_inference(
     self: Task,
     tenant_id: str,
-    image_path: str, # Mantener por compatibilidad de firma si es necesario, aunque sea None
+    image_path: str,  # Mantener por compatibilidad de firma si es necesario, aunque sea None
     model_id: str,
     method: str,
     prediction_id: str,
     features: dict = None,
+    explain: bool = False,
 ):
     """
     Tarea Celery liviana:
@@ -59,6 +63,7 @@ def run_single_tabular_inference(
         # 3. Process features
         if features is not None:
             import pandas as pd
+
             feature_names = ml_model.metrics_metadata.get("feature_names", [])
             df = pd.DataFrame([features])
 
@@ -71,16 +76,23 @@ def run_single_tabular_inference(
             # Apply preprocessing if available
             if ml_model.preprocessing_pipeline_path:
                 from app.core_ml.preprocessing import load_pipeline, apply_pipeline
+
                 try:
                     pipeline = load_pipeline(ml_model.preprocessing_pipeline_path)
                     df, _ = apply_pipeline(pipeline, df)
                 except Exception as e:
-                    logger.error(f"Error applying preprocessing to single inference: {e}")
-                    raise ValueError(f"Fallo al aplicar pipeline de preprocesamiento: {e}")
+                    logger.error(
+                        f"Error applying preprocessing to single inference: {e}"
+                    )
+                    raise ValueError(
+                        f"Fallo al aplicar pipeline de preprocesamiento: {e}"
+                    )
 
             input_data = df.to_numpy().astype(np.float32)
         else:
-            raise ValueError("No se proporcionaron features para la inferencia tabular.")
+            raise ValueError(
+                "No se proporcionaron features para la inferencia tabular."
+            )
 
         # 4. Infer via Factory
         unc_method = UncertaintyMethod(method.lower())
@@ -96,7 +108,23 @@ def run_single_tabular_inference(
         # El input a inferir debe ser numpy
         result_dict = estimator.estimate_uncertainty(input_data)
 
-        # 5. Guardar predicciones numpy
+        # 5. Calcular SHAP values si se solicita
+        if explain:
+            from app.core_ml.explainability import get_shap_values
+
+            try:
+                feature_names = ml_model.metrics_metadata.get("feature_names", [])
+                if not feature_names:
+                    feature_names = [f"feature_{i}" for i in range(input_data.shape[1])]
+
+                shap_result = get_shap_values(model, input_data, feature_names)
+                result_dict["shap_values"] = shap_result["shap_values"]
+                result_dict["shap_expected_value"] = shap_result["expected_value"]
+                result_dict["feature_names"] = feature_names
+            except Exception as e:
+                logger.warning(f"No se pudieron calcular SHAP values: {e}")
+
+        # 6. Guardar predicciones numpy
         out_dir = Path(settings.DATA_DIR) / "tenants" / tenant_id / "predictions"
         out_dir.mkdir(parents=True, exist_ok=True)
 

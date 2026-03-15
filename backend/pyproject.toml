@@ -47,6 +47,10 @@ dependencies = [
     "mlflow==3.10.0",
     "setuptools",
     "dvc[s3]",
+    # --- XAI / Explicabilidad ---
+    "shap>=0.44.0",
+    # --- Data Drift ---
+    "evidently>=0.4.0",
 ]
 
 [project.optional-dependencies]

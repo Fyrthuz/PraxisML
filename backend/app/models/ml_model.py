@@ -64,3 +64,7 @@ class MLModel(Base):
     # Aislamiento
     tenant_id = Column(String, ForeignKey("tenant.id"), nullable=False, index=True)
     tenant = relationship("Tenant", back_populates="models")
+
+    # Trazabilidad DVC
+    dataset_dvc_hash = Column(String, nullable=True)
+    dataset_dvc_registry_name = Column(String, nullable=True)

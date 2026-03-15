@@ -180,6 +180,9 @@ def run_training(
             is_active=True,
             is_public=False,
             tenant_id=tenant_id,
+            # Trazabilidad DVC
+            dataset_dvc_hash=dataset.dvc_hash,
+            dataset_dvc_registry_name=dataset.dvc_registry_name,
         )
         db.add(new_model)
         db.commit()
