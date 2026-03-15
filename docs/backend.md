@@ -20,8 +20,13 @@ El backend expone una API REST asíncrona robusta y maneja el motor de Machine L
 - **/core_ml/**: Motor central de predicciones e incertidumbre libre de dependencias HTTP. Define la capa base del inferenciador Scikit-learn y PyTorch, parseadores de datasets declarativos y familias de algoritmos.
 - **/models/**: Declaraciones SQLAlchemy ORM.
 - **/schemas/**: Validadores Pydantic de Request y Response.
-- **services/**: Repositorios y adaptadores de servicios externos (Motor de almacenamiento MinIO, adaptador nativo de MLflow API, motor de validación `DataProfiler`).
-- **/worker/**: Aplicación Celery asíncrona. Aquí se encuentran los `tasks` que toman el control computacional pesado.
+- **services/**: Repositorios y adaptadores de servicios externos:
+    - `mlflow_service.py`: Registro y gestión de modelos.
+    - `dvc_service.py`: Versionado de datasets con DVC.
+    - `drift_service.py`: Motor de detección de drift usando Evidently.
+    - `storage_service.py`: Abstracción de almacenamiento (Local, MinIO, S3).
+    - `data_profiler.py`: Análisis exploratorio automatizado.
+- **/worker/**: Aplicación Celery asíncrona para tareas pesadas (Train, Predict, Drift Check).
 
 ## 3. Entidades Core
 
@@ -53,7 +58,33 @@ El motor `core_ml.factory` implementa Factory Pattern para inyectar la familia d
 3. Celery invoca la carga dinámica en memoria del binario (vía `torch.jit.load()` si es TorchScript impidiendo Pickle vulnerabilities, o cargando Pipelines/SKLearn si es ML general).
 4. El Ensemble realiza N predicciones (Forward Passes simulados perturbando datos/modelo) y fusiona resultados antes de devolverlos.
 
-## 5. Control de Acceso y Rate Limiting
+## 5. Monitorización y Servicios Avanzados
+
+### 5.1. Data Drift (Evidently)
+El sistema permite monitorizar la degradación de los modelos comparando la distribución de los datos de entrenamiento (referencia) frente a los de producción (actuales).
+- **Métricas**: PSI (Population Stability Index) y Test KS (Kolmogorov-Smirnov).
+- **Umbrales**: Configurables por dataset o modelo, con herencia automática.
+- **Reportes**: Generación de reportes JSON detallados por cada feature.
+
+### 5.2. Inferencia en Streaming (WebSockets)
+Inferencia de baja latencia para flujos de datos continuos.
+- **Autenticación**: JWT vía query param en el handshake inicial.
+- **Cuotas**: Límite de 10 conexiones simultáneas por Tenant.
+- **Procesamiento**: Cada mensaje recibido se preprocesa y predice en tiempo real, devolviendo también incertidumbre y XAI si se solicita.
+
+### 5.3. Explicabilidad (XAI con SHAP)
+Uso de `KernelExplainer` para proporcionar interpretabilidad agnóstica al modelo.
+- **Cálculo**: Al vuelo durante la predicción (opcional) o bajo demanda vía endpoint `/explain`.
+- **Visualización**: Contribuciones de cada variable al valor final de la predicción.
+
+## 6. Almacenamiento (Storage Factory)
+
+El sistema abstrae el acceso a archivos mediante un `StorageService` que soporta múltiples backends:
+- **Local**: Carpeta compartida (ideal para dev).
+- **MinIO**: S3-compatible auto-alojado.
+- **AWS S3**: Almacenamiento en la nube.
+
+## 7. Control de Acceso y Rate Limiting
 
 - **Endpoints Exigentes (Train/Pred)**: Decorador `@limiter.limit` (ej. `30/minute`). Extrae la IP de la petición limitando abuso.
 - **RBAC**: Las dependencias inyectadas resuelven si un usuario tiene la facultad. El primer usuario de un Tenant adquiere cargo de `ADMIN`. Existen los roles `admin`, `editor`, `viewer`.
@@ -72,8 +103,9 @@ def upload_dataset(..., verify_quota = Depends(check_dataset_quota)):
     ...
 ```
 
-## 6. Pruebas y CI
+## 8. Pruebas y CI
 El proyecto cuenta con suites de `pytest` (unitarias e integración).
 - Uso intensivo de *mocking* (MagicMock) en Unit tests frente a bases de MLflow o MinIO.
 - Base de datos en memoria o aislada transaccionalmente para Integration tests (API REST completa cubierta en `test_api_endpoints.py`).
 - Flujo CI mediante GitHub Actions validando Lints (Ruff) con un límite de cobertura exigido en CI (Pytest `--cov-fail-under=30%` alcanzando ~45%).
+- **Model Validation**: Script `validate_model.py` integrado en CI para verificar que los modelos cumplen con las métricas mínimas antes de ser promovidos a producción.

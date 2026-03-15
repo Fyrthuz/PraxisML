@@ -53,10 +53,12 @@ TFM_productivo/
 │   │   │   ├── tenants.py      # CRUD de tenants + gestión de quotas
 │   │   │   ├── datasets.py     # Upload de datasets (ZIP + config.json) + DVC
 │   │   │   ├── models.py       # Upload de modelos + MLflow Registry
-│   │   │   ├── predictions.py  # Inferencia async y single-image
+│   │   │   ├── predictions.py  # Inferencia async y single-image + XAI
 │   │   │   ├── training.py     # Entrenamiento Sklearn / PyTorch
 │   │   │   ├── preprocessing.py # Pipelines de preprocesamiento
-│   │   │   └── profiling.py    # Profiling de datasets
+│   │   │   ├── profiling.py    # Profiling de datasets
+│   │   │   ├── drift.py        # Monitorización de data drift
+│   │   │   └── streaming.py    # Inferencia en tiempo real via WebSockets
 │   │   ├── core/               # Seguridad / Config / JWT / Rate Limiting
 │   │   │   ├── config.py       # Configuración centralizada con validadores
 │   │   │   ├── exceptions.py   # Jerarquía de excepciones de dominio
@@ -66,13 +68,19 @@ TFM_productivo/
 │   │   │   ├── factory.py      # PredictionFactory — selecciona estimador
 │   │   │   ├── hyperparams.py  # Registro de algoritmos y defaults
 │   │   │   ├── preprocessing.py # Pipelines sklearn ColumnTransformer
+│   │   │   ├── explainability.py # Explicabilidad SHAP (KernelExplainer)
+│   │   │   ├── dataset_parser.py # Parser de datasets ZIP
+│   │   │   ├── tabular_parser.py # Parser para datos tabulares (CSV/JSON)
 │   │   │   └── uncertainty/    # Estimadores de incertidumbre
 │   │   ├── models/             # Modelos SQLAlchemy ORM
 │   │   ├── schemas/            # Schemas Pydantic (request/response)
 │   │   ├── services/           # Lógica de negocio (MLflow, storage, training, DVC)
 │   │   │   ├── mlflow_service.py      # MLflow + Model Registry
 │   │   │   ├── dvc_service.py         # DVC data versioning
-│   │   │   └── training_service.py    # Entrenamiento de modelos
+│   │   │   ├── training_service.py    # Entrenamiento de modelos
+│   │   │   ├── drift_service.py       # Cálculo de drift con Evidently
+│   │   │   ├── data_profiler.py       # Profiling con ydata-profiling
+│   │   │   └── storage_service.py     # Factory de almacenamiento (Local/MinIO/S3)
 │   │   ├── worker/             # Workers Celery
 │   │   │   └── tasks/          # Tareas async (predict, train)
 │   │   ├── utils/              # Utilidades
@@ -90,7 +98,9 @@ TFM_productivo/
 ├── frontend/                   # Next.js frontend
 │   └── frontend/
 │       ├── src/app/            # App Router (Login, Dashboards)
-│       └── src/components/     # AuthProvider, Modals, Drag&Drop
+│       ├── src/components/     # UI Components (ExplainabilityPanel, DriftPanel)
+│       ├── src/hooks/          # Custom Hooks (useDrift, useStreamingInference)
+│       └── src/lib/            # API Client (api.ts) y utilidades
 ├── infra/                      # Configuración de infraestructura
 │   ├── prometheus/             # Scraping de métricas
 │   └── grafana/                # Dashboards y provisioning
@@ -112,9 +122,9 @@ Toda la configuración se gestiona mediante variables de entorno. El archivo `ba
 
 ### Orden de precedencia (mayor → menor)
 
-1. **Variables de entorno del sistema** (Docker, CI, shell export)
-2. **Archivo `.env`** (raíz del proyecto o CWD)
-3. **Defaults en `config.py`** (solo válidos para desarrollo local)
+1.  **Variables de entorno del sistema** (Docker, CI, shell export)
+2.  **Archivo `.env`** (raíz del proyecto o CWD)
+3.  **Defaults en `config.py`** (solo válidos para desarrollo local)
 
 ### Variables principales
 
@@ -217,10 +227,10 @@ Sistema de gestión de versiones de modelos con stages:
 
 ### Flujo de uso
 
-3. **Gestionar versiones**: Inspeccionar cada versión para ver métricas, parámetros y tags asociados. Promover a Production o archivar.
-4. **Descargar modelos**: Botón de descarga directa en cada versión del registry para obtener un ZIP con el modelo, pipeline y metadatos.
-5. **CI/CD**: Workflow automático (`model_ci.yml`) para validar métricas antes de promoción.
-6. **Multi-tenant isolation**: Los nombres en el Registry se prefijan automáticamente con `tenant_{id}_` para garantizar aislamiento y visibilidad correcta en la UI.
+3.  **Gestionar versiones**: Inspeccionar cada versión para ver métricas, parámetros y tags asociados. Promover a Production o archivar.
+4.  **Descargar modelos**: Botón de descarga directa en cada versión del registry para obtener un ZIP con el modelo, pipeline y metadatos.
+5.  **CI/CD**: Workflow automático (`model_ci.yml`) para validar métricas antes de promoción.
+6.  **Multi-tenant isolation**: Los nombres en el Registry se prefijan automáticamente con `tenant_{id}_` para garantizar aislamiento y visibilidad correcta en la UI.
 
 ### Campos del modelo
 
@@ -241,16 +251,16 @@ Sistema de versionado de datasets con sincronización a MinIO/S3:
 
 ### Características
 
-- **Versionado automático**: Cada upload crea una nueva versión
-- **Sincronización remote**: Push/pull automático a MinIO/S3
-- **Hashing**: MD5 hash para integridad de datos
-- **Promoción**: Marcar datasets como "Production"
+-   **Versionado automático**: Cada upload crea una nueva versión
+-   **Sincronización remote**: Push/pull automático a MinIO/S3
+-   **Hashing**: MD5 hash para integridad de datos
+-   **Promoción**: Marcar datasets como "Production"
 
 ### Flujo de uso
 
-1. **Subir con DVC**: Al subir un dataset, activar "Track with DVC"
-2. **Ver versiones**: Ir al tab "Data Registry" para ver el historial
-3. **Gestionar**: Promover a producción, push/pull desde remote
+1.  **Subir con DVC**: Al subir un dataset, activar "Track with DVC"
+2.  **Ver versiones**: Ir al tab "Data Registry" para ver el historial
+3.  **Gestionar**: Promover a producción, push/pull desde remote
 
 ### Campos del dataset
 
@@ -267,8 +277,8 @@ Sistema de versionado de datasets con sincronización a MinIO/S3:
 ## ⚡ Quick Start (Docker)
 
 ### Prerrequisitos
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- Node.js ≥ 18 (para desarrollo del frontend)
+-   [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+-   Node.js ≥ 18 (para desarrollo del frontend)
 
 ### 1. Configurar entorno
 ```bash
@@ -408,6 +418,17 @@ Documentación interactiva en **`http://localhost:8000/docs`**
 | POST | `/api/v1/preprocessing/preview` | editor | Previsualizar transformaciones |
 | POST | `/api/v1/preprocessing/apply` | editor | Aplicar pipeline y guardar en MLflow |
 | GET | `/api/v1/preprocessing/pipelines` | viewer | Consultar pipelines guardados |
+
+### Data Drift
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| GET | `/api/v1/drift/report/{id}` | viewer | Obtener reporte de drift |
+| PATCH | `/api/v1/drift/thresholds/{id}` | editor | Actualizar umbrales (PSI/KS) |
+
+### Profiling
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| GET | `/api/v1/profiling/{dataset_id}` | viewer | Obtener profiling de un dataset |
 
 ---
 

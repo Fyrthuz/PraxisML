@@ -8,7 +8,9 @@ PraxisML es una plataforma diseñada siguiendo una arquitectura de microservicio
 graph TD
     User((Usuario)) --> |HTTP/HTTPS| Frontend[Frontend Next.js]
     User --> |REST API| API[FastAPI Backend]
+    User --> |WebSockets| API
     Frontend --> |REST API| API
+    Frontend --> |WebSockets| API
     
     API --> |SQL| DB[(PostgreSQL)]
     API --> |S3 API| Storage[(MinIO / S3)]
@@ -19,6 +21,7 @@ graph TD
     Worker --> |Update State| DB
     Worker --> |Read/Write Models| Storage
     Worker --> |Log Metrics/Models| MLflow
+    Worker --> |Drift Reports| DB
     
     Prometheus[Prometheus] --> |Scrape Metrics| API
     Grafana[Grafana] --> |Query| Prometheus
@@ -48,8 +51,13 @@ Servicio independiente dedicado exclusivamente al ciclo de vida del modelo de Ma
 ### 2.5. Capa de Datos Persistente
 - **Relacional (PostgreSQL)**: Almacena Tenants, Usuarios, metadatos de Datasets, referencias a Modelos y registros de Predicciones.
 - **Object Storage (MinIO / S3)**: Almacén inmutable para grandes volúmenes de datos binarios (ZIPs de datasets, blobs de imágenes médicas, pesos neuronales).
+- **Data Versioning (DVC)**: Control de versiones de datasets sincronizado con el Object Storage.
 
-### 2.6. Observabilidad (Prometheus + Grafana)
+### 2.6. Servicios de Monitorización y XAI
+- **Evidently AI**: Motor para detección de data drift y generación de reportes de calidad de datos.
+- **SHAP**: Librería para explicabilidad matemática de predicciones individuales y batch.
+
+### 2.7. Observabilidad (Prometheus + Grafana)
 FastAPI expone un endpoint `/metrics` en formato Prometheus mediante la librería `prometheus-fastapi-instrumentator`.
 - **Prometheus** hace *scraping* cada X segundos.
 - **Grafana** visualiza latencias, throughput (RPS), códigos de error 4xx/5xx y consumo de recursos.

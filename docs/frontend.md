@@ -7,28 +7,36 @@ El cliente principal de PraxisML, una SPA (Single Page Application) servida desd
 - **Librería UI**: `React 19`.
 - **Ecosistema CSS**: `TailwindCSS v4` completo implementando `postcss`.
 - **Componentes Base**: `Radix UI` proporcionando accesibilidad y modales primitivos limpios (e.g. `lucide-react` para iconos gráficos).
+- **Visualización Avanzada**: `chart.js` y `react-chartjs-2` para gráficos de explicabilidad y drift.
 - **Tipado**: `TypeScript 5` estricto de end-to-end con `eslint-config-next`.
-- **Notificaciones/Alertas**: `react-hot-toast` para propagación de errores provenientes de tareas asíncronas de Celery, con visualización atractiva de validaciones JWT o RBAC de forma unificada.
-- **Charts y Gráficos**: `recharts` para visualizaciones, paneles del tenant y resúmenes de *Profiling* o Métricas de MLflow en frontend (si aplicase implementarlo así o en dashboards nativos).
+- **Notificaciones/Alertas**: `react-hot-toast` para propagación de errores provenientes de tareas asíncronas de Celery o WebSockets.
+- **Charts y Gráficos**: `recharts` para visualizaciones generales y paneles del tenant.
 
 ## 2. Estilo de Código y Directrices Generales
 
-- **App Router (`src/app`)**: Navegación principal, SSR o CSR, Layouts anidados por roles. Existen páginas estáticas para pre-login (como la web promocional y la pantalla de autentiación / registro). Todo requiere un JWT válido excepto *Login / Sign Up*.
-- **Auth Provider**: El patrón context encapsulado, persistiendo o refrescando el token de `FastAPI` transparentemente (OAuth2). Si expira el token y lanza 401 el Backend, Next renderiza el Modal reautorizador y enruta de vuelta hacia `login`.
-- **Drag & Drop**: Funciones construidas nativamente o con utilidades React para la carga local de Datasets (`ZIP`, `.json`) y modelos seguros de Pytorch (`.pt`) directamente a los endpoints `/upload` del Backend.
-- **Manejo de Errores de API (4xx / 5xx)**: Componente axios o interceptor global de `fetch` intercepta un 403 (Permisos Denegados, ej. ser `VIEWER` intentando subir modelo), un 429 (Cuota Consumida `QuotaExceededError`) u otra variante, reflejándolos de vuelta en alertas flotantes amigables y cancelando el evento.
+- **App Router (`src/app`)**: Navegación principal. Incluye secciones para `Datasets`, `Models`, `Predictions`, y la nueva sección de `Streaming`.
+- **Auth Provider**: El patrón context encapsulado, persistiendo o refrescando el token de `FastAPI` transparentemente (OAuth2).
+- **Custom Hooks (`src/hooks`)**: Lógica encapsulada para funcionalidades complejas:
+    - `useDrift`: Gestión de reportes de drift y actualización de umbrales.
+    - `useStreamingInference`: Manejo del ciclo de vida de WebSockets para inferencia en tiempo real.
+    - `usePredictions`: Polling y resultados de inferencia batch/single.
+- **Drag & Drop**: Funciones para la carga local de Datasets (`ZIP`, `.json`) y modelos seguros de Pytorch (`.pt`).
+- **Manejo de Errores de API (4xx / 5xx)**: Interceptor global que refleja errores en alertas flotantes amigables.
 - **Client Components (`"use client"`)**: Se delega el mínimo indispensable al navegador (hooks pre-compilados y polling).
 
-## 3. Estado Asíncrono de Tareas de Celery y Polling
+## 3. Componentes de Visualización (XAI & Drift)
 
-Los flujos vitales de Machine Learning (entrenamiento o procesamiento pesado) no bloquean el servidor ni bloquean el cliente:
-1. El usuario interactúa: ej. "Entrenar".
-2. Next.js hace `POST` al backend.
-3. Backend devuelve un `HTTP 202 Accepted` y JSON `{ task_id: "xyz" ... }`.
-4. El Frontend Next.js suscribe un ciclo de *Polling*: `interval` (cada 2 segundos, `GET /api/v1/training/status/xyz`).
-5. Cuando el status finaliza en `SUCCESS` o `FAILURE`, se limpia el `interval` y se pinta por renderizado condicional el resultado final o gráfica, con un *toast success*.
-6. La UX mantiene una visualización estilo barra de carga o "Pendiente" unificada globalmente para no pausar a los creadores (editors) mientras el Worker de Redis resuelve el entrenamiento en *the background*.
+### 3.1. ExplainabilityPanel
+Visualiza las contribuciones SHAP utilizando gráficos de barras. Permite entender qué variables están influyendo más en una predicción específica, ya sea en tiempo real (Streaming) o en diferido.
 
-## 4. UI/UX: Modos Claros/Oscuros y Componentes Base
+### 3.2. DriftPanel
+Integrado en la vista de Datasets, muestra la estabilidad de los datos. Permite ajustar los umbrales PSI y KS directamente desde la UI y visualizar qué columnas están sufriendo variaciones estadísticas significativas.
+
+## 4. Estado Asíncrono de Tareas de Celery y WebSockets
+
+1. **Polling (Celery)**: Para tareas de largo recorrido (Training, Batch Predictions). El frontend consulta el estado cada 2s hasta llegar a un estado final.
+2. **WebSockets (Streaming)**: Para inferencia inmediata. Se mantiene una conexión abierta que permite enviar filas de datos y recibir predicciones al instante sin la sobrecarga de HTTP.
+
+## 5. UI/UX: Modos Claros/Oscuros y Componentes Base
 
 El proyecto soporta modales nativos Tailwind CSS utilizando `clsx` y `tailwind-merge` (`twMerge`) para fusionar clases estables con inyectadas. Aportando animaciones a los botones (e.g `class-variance-authority`), asegurando uniformidad transversal (botones, badges para roles de equipo de trabajo, etc).
