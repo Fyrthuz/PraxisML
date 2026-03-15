@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, Table2, Database, Eye, Trash2, X, ArrowRightCircle } from 'lucide-react';
+import { Plus, Table2, Database, Eye, Trash2, X, ArrowRightCircle, Activity } from 'lucide-react';
 import { Dataset, DatasetPreview, PreprocessingStep, api } from '../../../lib/api';
+import DriftPanel from './DriftPanel';
 
 interface DatasetsTabProps {
     datasets: Dataset[];
@@ -25,10 +26,12 @@ export default function DatasetsTab({
     handlePreviewDataset,
     setPreviewData,
     fileTypeBadgeColor,
-    tenantId
-}: DatasetsTabProps & { tenantId: string }) {
+    tenantId,
+    token
+}: DatasetsTabProps & { tenantId: string; token: string | null }) {
     const [pipelineSteps, setPipelineSteps] = React.useState<PreprocessingStep[] | null>(null);
     const [targetCol, setTargetCol] = React.useState<string | null>(null);
+    const [selectedDatasetForDrift, setSelectedDatasetForDrift] = useState<Dataset | null>(null);
 
     React.useEffect(() => {
         if (!previewData) {
@@ -113,6 +116,16 @@ export default function DatasetsTab({
                                             onClick={() => handlePreviewDataset(ds.id)}
                                         >
                                             <Eye className="w-3 h-3 mr-1" /> Preview
+                                        </Button>
+                                    )}
+                                    {ds.file_type && ['csv', 'xlsx', 'parquet'].includes(ds.file_type) && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 text-xs text-neutral-400 hover:text-amber-400 px-2"
+                                            onClick={() => setSelectedDatasetForDrift(ds)}
+                                        >
+                                            <Activity className="w-3 h-3 mr-1" /> Drift
                                         </Button>
                                     )}
                                     <Button
@@ -216,6 +229,30 @@ export default function DatasetsTab({
                                 )}
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Drift Panel Modal */}
+            {selectedDatasetForDrift && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                    <div className="w-full max-w-2xl max-h-[85vh] overflow-auto bg-neutral-900 border border-neutral-800 rounded-3xl p-8 relative">
+                        <button 
+                            onClick={() => setSelectedDatasetForDrift(null)} 
+                            className="absolute top-6 right-6 text-neutral-400 hover:text-white"
+                        >
+                            <X className="w-5 h-5" />
+                        </button>
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold flex items-center gap-2">
+                                <Activity className="w-6 h-6 text-amber-400" />
+                                Data Drift Monitor
+                            </h2>
+                            <p className="text-neutral-400 text-sm mt-1">
+                                Análisis de estabilidad de distribuciones para: {selectedDatasetForDrift.name}
+                            </p>
+                        </div>
+                        <DriftPanel dataset={selectedDatasetForDrift} token={token} />
                     </div>
                 </div>
             )}

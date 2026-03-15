@@ -1,8 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Loader2, Table2, X, XCircle } from "lucide-react";
+import { Loader2, Table2, X, XCircle, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dataset, MLModel, Prediction } from "@/lib/api";
+import { Dataset, MLModel, Prediction, PredictionExplainResult } from "@/lib/api";
+import ExplainabilityPanel from "@/components/ExplainabilityPanel";
 
 interface PredictionResultsModalProps {
     prediction: Prediction;
@@ -24,8 +25,11 @@ export default function PredictionResultsModal({
         uncertainty?: any;
         input_data?: any;
     } | null>(null);
+    const [shapData, setShapData] = useState<PredictionExplainResult | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadingShap, setLoadingShap] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [showExplain, setShowExplain] = useState(false);
 
     useEffect(() => {
         if (!token) return;
@@ -49,6 +53,27 @@ export default function PredictionResultsModal({
                 setLoading(false);
             });
     }, [prediction.id, token]);
+
+    useEffect(() => {
+        if (!token || !showExplain || !prediction.id) return;
+        setLoadingShap(true);
+        fetch(`http://localhost:8000/api/v1/predictions/${prediction.id}/explain`, {
+            headers: { Authorization: `Bearer ${token}` },
+        })
+            .then((res) => {
+                if (!res.ok)
+                    throw new Error(`Server returned ${res.status}: ${res.statusText}`);
+                return res.json();
+            })
+            .then((json) => {
+                setShapData(json);
+                setLoadingShap(false);
+            })
+            .catch((err) => {
+                console.error("Failed to fetch SHAP data:", err);
+                setLoadingShap(false);
+            });
+    }, [prediction.id, token, showExplain]);
 
     const renderTable = () => {
         if (!data) return null;
@@ -272,7 +297,45 @@ export default function PredictionResultsModal({
                             </Button>
                         </div>
                     ) : (
-                        renderTable()
+                        <div className="space-y-4">
+                            {renderTable()}
+                            
+                            {/* Botón para mostrar explicabilidad */}
+                            {prediction.explain && (
+                                <div className="flex justify-center">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setShowExplain(!showExplain)}
+                                        className="bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700 rounded-xl px-6"
+                                    >
+                                        <BarChart3 className="w-4 h-4 mr-2" />
+                                        {showExplain ? 'Ocultar Explicabilidad' : 'Mostrar Explicabilidad (SHAP)'}
+                                    </Button>
+                                </div>
+                            )}
+                            
+                            {/* Panel de explicabilidad */}
+                            {showExplain && (
+                                <div className="mt-4">
+                                    {loadingShap ? (
+                                        <div className="flex items-center justify-center py-8">
+                                            <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                                        </div>
+                                    ) : shapData ? (
+                                        <ExplainabilityPanel
+                                            shapValues={shapData.shap_values}
+                                            featureNames={shapData.feature_names}
+                                            expectedValue={shapData.expected_value}
+                                            prediction={data?.prediction?.[0]?.[0] || 0}
+                                        />
+                                    ) : (
+                                        <div className="text-center text-neutral-500 py-8">
+                                            No se pudieron cargar los datos de explicabilidad
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
 

@@ -726,12 +726,41 @@ def decode_token(token: str) -> Optional[dict]:
 
 ## Cronograma de Implementación
 
-1. **Semana 1:** Tareas 1.1-1.3 (DVC)
-2. **Semana 2:** Tareas 2.1-2.3 (XAI base)
-3. **Semana 3:** Tareas 2.4-2.6 (XAI completo + frontend)
-4. **Semana 4:** Tareas 3.1-3.5 (Drift)
-5. **Semana 5:** Tareas 4.1-4.6 (WebSockets)
-6. **Semana 6:** Tareas 5.1-5.2 (Autenticación) + Integración y pruebas
+1. **Semana 1:** Tareas 1.1-1.3 (DVC) ✅ Completado
+2. **Semana 2:** Tareas 2.1-2.3 (XAI base) ✅ Completado
+3. **Semana 3:** Tareas 2.4-2.6 (XAI completo + frontend) ✅ Completado
+4. **Semana 4:** Tareas 3.1-3.5 (Drift) ✅ Completado
+5. **Semana 5:** Tareas 4.1-4.6 (WebSockets) ✅ Completado
+6. **Semana 6:** Tareas 5.1-5.2 (Autenticación) + Integración y pruebas ✅ Completado
+
+---
+
+## Progreso Frontend - Implementado
+
+### 1. Explicabilidad (XAI)
+- **Componente `ExplainabilityPanel.tsx`:** Visualización de gráficos de barras con contribuciones SHAP
+- **Integración en `PredictionResultsModal.tsx`:** Toggle para mostrar/ocultar explicabilidad
+- **Tipos en `api.ts`:** `SHAPResult` y `PredictionExplainResult`
+- **Endpoint:** `GET /predictions/{prediction_id}/explain`
+
+### 2. Streaming con WebSockets
+- **Componente `StreamingInference.tsx`:** Vista separada para inferencia en tiempo real
+- **Hook `useStreamingInference.ts`:** Manejo de conexiones WebSocket
+- **Conexión:** `/streaming/predict/{model_id}?token={jwt}&explain={true/false}`
+- **Umbral de inactividad:** 30 minutos (configurado en backend)
+
+### 3. Data Drift
+- **Componente `DriftPanel.tsx`:** Visualización de reportes de drift en sección de datasets
+- **Hook `useDrift.ts`:** Manejo de datos y actualización de umbrales
+- **Integración:** Botón "Drift" en cada tarjeta de dataset
+- **Configuración:** Umbrales PSI y KS configurables por usuario
+
+### 4. Navegación
+- **Sidebar:** Nueva opción "Streaming" en la navegación lateral
+- **DashboardMVP:** Integración de todas las nuevas vistas
+
+### 5. Dependencias Instaladas
+- `chart.js` y `react-chartjs-2` para gráficos de explicabilidad
 
 ---
 

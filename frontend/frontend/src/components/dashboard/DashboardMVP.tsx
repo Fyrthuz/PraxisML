@@ -14,6 +14,7 @@ import PredictionsTab from "./tabs/PredictionsTab";
 import TrainingTab from "./tabs/TrainingTab";
 import PreprocessingTab from "./tabs/PreprocessingTab";
 import PredictionResultsModal from "@/components/modals/PredictionResultsModal";
+import StreamingInference from "./StreamingInference";
 
 import { useDatasets } from "@/hooks/useDatasets";
 import { useModels } from "@/hooks/useModels";
@@ -22,7 +23,7 @@ import { useTraining } from "@/hooks/useTraining";
 
 import { Prediction } from "@/lib/api";
 
-type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry";
+type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming";
 
 const API = "http://localhost:8000/api/v1";
 
@@ -188,6 +189,7 @@ export default function DashboardMVP() {
                             setPreviewData={datasetHook.setPreviewData}
                             fileTypeBadgeColor={fileTypeBadgeColor}
                             tenantId={tenant?.id || ""}
+                            token={token}
                         />
                     )}
 
@@ -275,6 +277,13 @@ export default function DashboardMVP() {
                             tenantId={tenant?.id}
                             token={token}
                             onRefresh={() => datasetHook.fetchDatasets()}
+                        />
+                    )}
+
+                    {activeView === "streaming" && (
+                        <StreamingInference
+                            models={modelHook.models}
+                            token={token}
                         />
                     )}
                 </div>

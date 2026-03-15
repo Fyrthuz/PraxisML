@@ -76,6 +76,22 @@ export interface Prediction {
     tenant_id: string;
     mlflow_inference_run_id?: string;
     created_at: string;
+    explain?: boolean;
+}
+
+export interface SHAPResult {
+    shap_values: number[][];
+    expected_value: number;
+    feature_names: string[];
+}
+
+export interface PredictionExplainResult {
+    shap_values: number[];
+    expected_value: number;
+    feature_names: string[];
+    total_importance: number;
+    positive_contributors: { feature: string; value: number }[];
+    negative_contributors: { feature: string; value: number }[];
 }
 
 export interface PredictionRequest {
@@ -362,6 +378,12 @@ export const api = {
     async listPredictions(tenantId: string): Promise<Prediction[]> {
         const res = await fetchAuth(`${API_BASE_URL}/predictions?tenant_id=${tenantId}`);
         if (!res.ok) throw new Error("Failed to list predictions");
+        return res.json();
+    },
+
+    async getPredictionExplain(predictionId: string): Promise<PredictionExplainResult> {
+        const res = await fetchAuth(`${API_BASE_URL}/predictions/${predictionId}/explain`);
+        if (!res.ok) throw new Error("Failed to fetch SHAP values");
         return res.json();
     },
 

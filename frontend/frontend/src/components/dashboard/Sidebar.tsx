@@ -1,8 +1,8 @@
 "use client";
-import { BarChart3, Database, Filter, Cpu, Clock, FlaskConical, Settings, Plus, BookMarked, GitBranch } from "lucide-react";
+import { BarChart3, Database, Filter, Cpu, Clock, FlaskConical, Settings, Plus, BookMarked, GitBranch, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry";
+type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming";
 
 interface NavItem {
     id: View;
@@ -18,6 +18,7 @@ const NAV_ITEMS: NavItem[] = [
     { id: "registry", label: "Model Registry", icon: <BookMarked className="w-5 h-5" /> },
     { id: "predictions", label: "Predictions", icon: <Clock className="w-5 h-5" /> },
     { id: "training", label: "Training", icon: <FlaskConical className="w-5 h-5" /> },
+    { id: "streaming", label: "Streaming", icon: <Wifi className="w-5 h-5" /> },
 ];
 
 interface SidebarProps {
