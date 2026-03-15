@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 def get_dataset_drift_report(
     dataset_id: str,
     db: Session = Depends(get_db),
-    current_tenant: dict = Depends(get_current_tenant),
+    current_tenant: Tenant = Depends(get_current_tenant),
     _: User = Depends(require_viewer),
 ):
     """
@@ -46,7 +46,7 @@ def get_dataset_drift_report(
     Compara el dataset actual con una referencia (ejemplo: versión anterior).
     """
     logger.info(
-        f"Getting drift report for dataset {dataset_id} in tenant {current_tenant['id']}"
+        f"Getting drift report for dataset {dataset_id} in tenant {current_tenant.id}"
     )
 
     if not EVIDENTLY_AVAILABLE:
@@ -115,7 +115,7 @@ def get_dataset_drift_report(
 def get_model_drift_report(
     model_id: str,
     db: Session = Depends(get_db),
-    current_tenant: dict = Depends(get_current_tenant),
+    current_tenant: Tenant = Depends(get_current_tenant),
     _: User = Depends(require_viewer),
 ):
     """

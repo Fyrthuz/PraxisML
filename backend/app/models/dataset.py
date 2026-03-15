@@ -38,7 +38,12 @@ class Dataset(Base):
     parent_dataset_id = Column(
         String, nullable=True
     )  # Dataset original si es versión derivada
-    is_active = Column(Boolean, default=False)  # Si es la versión activa/prod en el registry
+    is_active = Column(
+        Boolean, default=False
+    )  # Si es la versión activa/prod en el registry
+
+    # ── Metadatos y métricas ──────────────────────────────────────────────────
+    metrics_metadata = Column(JSON, nullable=True)  # Métricas, umbrales de drift, etc.
 
     # Relación con el Tenant (Aislamiento Multi-Tenant)
     tenant_id = Column(String, ForeignKey("tenant.id"), nullable=False, index=True)
