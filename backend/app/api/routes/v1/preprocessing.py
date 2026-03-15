@@ -165,10 +165,29 @@ def apply_preprocessing(
     # ── Registrar en DVC ─────────────────────────────────────────────────────
     from app.services.dvc_service import track_dataset_with_dvc
 
+    # Usar el mismo registry que el dataset original, o crear uno nuevo si no tiene
+    # Los atributos del objeto dataset ya están cargados de la BD, son valores normales
+    original_registry = dataset.dvc_registry_name
+    if not original_registry:
+        original_registry = dataset.name
+
     dvc_info = track_dataset_with_dvc(
         tenant_id=tenant.id,
         file_path=new_file_path,
-        registry_name=f"preprocessed_{dataset.name}",
+        registry_name=original_registry,
+    )
+    registry_name = original_registry if original_registry else dataset.name
+
+    dvc_info = track_dataset_with_dvc(
+        tenant_id=tenant.id,
+        file_path=new_file_path,
+        registry_name=registry_name,
+    )
+
+    dvc_info = track_dataset_with_dvc(
+        tenant_id=tenant.id,
+        file_path=new_file_path,
+        registry_name=registry_name,
     )
 
     # ── Registrar nuevo dataset en BD ────────────────────────────────────────
