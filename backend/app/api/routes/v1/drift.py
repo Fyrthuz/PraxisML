@@ -44,8 +44,22 @@ def get_dataset_drift_report(
     Genera un reporte de drift para un dataset específico.
     Compara el dataset actual con una referencia (ejemplo: versión anterior).
     """
+    logger.info(
+        f"Getting drift report for dataset {dataset_id} in tenant {current_tenant['id']}"
+    )
+
     if not EVIDENTLY_AVAILABLE:
-        raise HTTPException(status_code=501, detail="Evidently no está instalado")
+        logger.warning("Evidently no está instalado, devolviendo datos simulados")
+        # Devolver datos simulados si Evidently no está disponible
+        return {
+            "dataset_id": dataset_id,
+            "timestamp": datetime.now().isoformat(),
+            "drift_detected": False,
+            "drift_by_columns": {},
+            "psi_threshold": 0.2,
+            "ks_threshold": 0.05,
+            "simulated": True,
+        }
 
     # Obtener dataset
     dataset = (
@@ -55,6 +69,9 @@ def get_dataset_drift_report(
     )
 
     if not dataset:
+        logger.error(
+            f"Dataset {dataset_id} not found for tenant {current_tenant['id']}"
+        )
         raise HTTPException(status_code=404, detail="Dataset no encontrado")
 
     # Simulación: comparar con versión anterior o datos de referencia
