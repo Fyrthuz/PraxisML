@@ -1,6 +1,6 @@
 # PraxisML — ML Engineering & AI Platform
 
-> **TFM Productivo** — Fernando González Salas  
+> **PraxisML** — Fernando González Salas  
 > Plataforma integral para el desarrollo, entrenamiento, despliegue y monitorización de modelos de Machine Learning e Inteligencia Artificial.
 
 ---
@@ -45,7 +45,7 @@ Para comprender a fondo la arquitectura, el diseño de la API y las decisiones t
 ## Project Structure
 
 ```
-TFM_productivo/
+PraxisML/
 ├── backend/                    # FastAPI + Celery backend
 │   ├── app/
 │   │   ├── api/routes/v1/      # REST endpoints
