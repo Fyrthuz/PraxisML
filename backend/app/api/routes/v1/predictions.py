@@ -7,9 +7,10 @@ from fastapi import (
     Form,
     File,
     UploadFile,
+    Query,
 )
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.database import get_db
 from app.models.prediction import Prediction
@@ -18,6 +19,7 @@ from app.models.ml_model import MLModel
 from app.models.user import User
 from app.models.tenant import Tenant
 from app.schemas.prediction import PredictionResponse
+from app.schemas.pagination import PaginatedResponse
 from app.api.deps import (
     get_current_tenant,
     require_editor,
@@ -271,23 +273,38 @@ def get_prediction_status(
     return response
 
 
-@router.get("/predictions", response_model=List[PredictionResponse])
+@router.get("/predictions", response_model=PaginatedResponse[PredictionResponse])
 def list_predictions(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
     """
-    Obtiene todas las predicciones del tenant.
+    Obtiene las predicciones del tenant con paginación.
     Requiere rol **viewer** o superior.
     """
-    predictions = (
+    query = (
         db.query(Prediction)
         .filter(Prediction.tenant_id == tenant.id)
         .order_by(Prediction.created_at.desc())
-        .all()
     )
-    return predictions
+
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+
+    predictions = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    return PaginatedResponse(
+        items=predictions,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        has_next=page < total_pages,
+        has_prev=page > 1,
+    )
 
 
 @router.get("/predictions/{prediction_id}", response_model=PredictionResponse)

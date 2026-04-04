@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.worker.celery_app import celery_app
 from app.core_ml.factory import PredictionFactory, UncertaintyMethod
+from app.services.inference_service import get_inference_service
 
 logger = logging.getLogger(__name__)
 
@@ -49,46 +50,23 @@ def run_single_tabular_inference(
         ml_model = db.query(MLModel).filter(MLModel.id == model_id).first()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        if ml_model.is_torchscript and ml_model.torchscript_path:
-            logger.info("Cargando TorchScript model...")
-            model = torch.jit.load(ml_model.torchscript_path, map_location=device)
-        else:
-            logger.info("Cargando MLFlow model...")
-            mlflow_svc = MLFlowService()
-            model = mlflow_svc.load_model(ml_model.mlflow_run_id, device=device)
-
-        model.to(device)
-        model.eval()
+        inference_svc = get_inference_service(use_cache=True)
+        model = inference_svc.load_model(ml_model, device=device)
 
         # 3. Process features
         if features is not None:
             import pandas as pd
 
             feature_names = ml_model.metrics_metadata.get("feature_names", [])
-            df = pd.DataFrame([features])
-
-            if feature_names:
-                for col in feature_names:
-                    if col not in df.columns:
-                        df[col] = 0.0
-                df = df[feature_names]
-
-            # Apply preprocessing if available
+            pipeline = None
             if ml_model.preprocessing_pipeline_path:
-                from app.core_ml.preprocessing import load_pipeline, apply_pipeline
+                pipeline = inference_svc.load_preprocessing_pipeline(
+                    ml_model.preprocessing_pipeline_path
+                )
 
-                try:
-                    pipeline = load_pipeline(ml_model.preprocessing_pipeline_path)
-                    df, _ = apply_pipeline(pipeline, df)
-                except Exception as e:
-                    logger.error(
-                        f"Error applying preprocessing to single inference: {e}"
-                    )
-                    raise ValueError(
-                        f"Fallo al aplicar pipeline de preprocesamiento: {e}"
-                    )
-
-            input_data = df.to_numpy().astype(np.float32)
+            input_data = inference_svc.preprocess_features(
+                features, feature_names, pipeline
+            )
         else:
             raise ValueError(
                 "No se proporcionaron features para la inferencia tabular."

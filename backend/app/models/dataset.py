@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, DateTime, ForeignKey, Integer, JSON, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.base import Base
 import uuid
 
@@ -13,10 +13,14 @@ class Dataset(Base):
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    file_path = Column(String, nullable=False)  # Object key en el StorageService (e.g. tenants/{id}/datasets/{name})
-    config_path = Column(String, nullable=True)  # Object key del config.json en el StorageService
+    file_path = Column(
+        String, nullable=False
+    )  # Object key en el StorageService (e.g. tenants/{id}/datasets/{name})
+    config_path = Column(
+        String, nullable=True
+    )  # Object key del config.json en el StorageService
     file_size_bytes = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # ── Nuevos campos Fase 1: Data Ops ────────────────────────────────────────
     file_type = Column(String, nullable=True)  # csv, xlsx, parquet, zip

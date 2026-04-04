@@ -117,9 +117,21 @@ class MLFlowService:
                     return model
 
                 # Cargar el objeto PyTorch (puede ser model o state_dict)
-                checkpoint = torch.load(
-                    file_to_load, map_location=device, weights_only=False
-                )
+                # Intentar primero con weights_only=True por seguridad (evita RCE)
+                # Si falla, es probablemente un state_dict legacy - hacer fallback
+                try:
+                    checkpoint = torch.load(
+                        file_to_load, map_location=device, weights_only=True
+                    )
+                except (RuntimeError, ValueError) as e:
+                    logger.warning(
+                        "No se pudieron cargar pesos con weights_only=True, "
+                        "haciendo fallback a weights_only=False: %s",
+                        str(e),
+                    )
+                    checkpoint = torch.load(
+                        file_to_load, map_location=device, weights_only=False
+                    )
 
                 if isinstance(checkpoint, torch.nn.Module):
                     model = checkpoint
@@ -214,9 +226,10 @@ class MLFlowService:
             )
 
             # Intentar cargar como modelo completo; si falla, guardar el .pth como artefacto raw
+            # weights_only=True para seguridad, fallback si es state_dict legacy
             try:
                 pytorch_model = torch.load(
-                    pth_path, map_location="cpu", weights_only=False
+                    pth_path, map_location="cpu", weights_only=True
                 )
                 if isinstance(pytorch_model, nn.Module):
                     mlflow.pytorch.log_model(pytorch_model, artifact_path="model")
@@ -224,10 +237,26 @@ class MLFlowService:
                     # Es un state_dict — loguear el fichero raw para preservarlo
                     mlflow.log_artifact(pth_path, artifact_path="model")
                     mlflow.set_tag("model_type", "state_dict")
-            except Exception:
-                # Fallback: guardar el fichero raw
-                mlflow.log_artifact(pth_path, artifact_path="model")
-                mlflow.set_tag("model_type", "raw_pth")
+            except (RuntimeError, ValueError) as e:
+                logger.warning(
+                    "No se pudieron cargar pesos con weights_only=True, "
+                    "haciendo fallback: %s",
+                    str(e),
+                )
+                # Fallback: intentar con weights_only=False
+                try:
+                    pytorch_model = torch.load(
+                        pth_path, map_location="cpu", weights_only=False
+                    )
+                    if isinstance(pytorch_model, nn.Module):
+                        mlflow.pytorch.log_model(pytorch_model, artifact_path="model")
+                    else:
+                        mlflow.log_artifact(pth_path, artifact_path="model")
+                        mlflow.set_tag("model_type", "state_dict")
+                except Exception:
+                    # Fallback final: guardar el фиchero raw
+                    mlflow.log_artifact(pth_path, artifact_path="model")
+                    mlflow.set_tag("model_type", "raw_pth")
 
             if metrics:
                 mlflow.log_metrics(metrics)
@@ -388,6 +417,7 @@ class MLFlowService:
             }
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Error fetching run details: %s", e)
             return {}
 
@@ -418,6 +448,7 @@ class MLFlowService:
             }
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Error fetching registered models: %s", e)
             return {"models": []}
 

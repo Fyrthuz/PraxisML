@@ -12,6 +12,8 @@ from app.database import SessionLocal
 from app.models.ml_model import MLModel
 from app.models.user import User
 from app.core.security import decode_token
+from app.services.model_cache import get_model_cache
+from app.services.background_cache import get_background_cache
 import torch
 
 logger = logging.getLogger(__name__)
@@ -25,15 +27,25 @@ active_connections: Dict[str, Dict[str, WebSocket]] = {}
 async def websocket_predict(
     websocket: WebSocket,
     model_id: str,
-    token: str = Query(..., description="JWT token"),
     explain: bool = Query(False, description="Incluir explicabilidad SHAP"),
 ):
     """
     Endpoint WebSocket para predicciones en tiempo real.
-    Autenticación JWT via query parameter ?token=...
+    Autenticación JWT via primer mensaje JSON: {"token": "..."}
     """
+    await websocket.accept()
+
+    try:
+        auth_message = await websocket.receive_json()
+        token = auth_message.get("token")
+        if not token:
+            await websocket.close(code=1008, reason="Missing token in auth message")
+            return
+    except Exception:
+        await websocket.close(code=1008, reason="Invalid auth message format")
+        return
+
     logger.info(f"WebSocket connection attempt for model {model_id}")
-    logger.info(f"Token received: {token[:10] if token else 'None'}...")
     # Validar JWT
     try:
         payload = decode_token(token)
@@ -51,8 +63,6 @@ async def websocket_predict(
     tenant_id = payload.get("tenant_id")
 
     if not tenant_id and user_id:
-
-
         db = SessionLocal()
         try:
             user = db.query(User).filter(User.id == user_id).first()
@@ -94,7 +104,9 @@ async def websocket_predict(
                 .first()
             )
             if not ml_model:
-                logger.warning(f"Modelo {model_id} no encontrado para tenant {tenant_id}")
+                logger.warning(
+                    f"Modelo {model_id} no encontrado para tenant {tenant_id}"
+                )
                 await websocket.close(
                     code=1008, reason=f"Modelo {model_id} no encontrado"
                 )
@@ -107,33 +119,53 @@ async def websocket_predict(
             metadata = ml_model.metrics_metadata or {}
             preprocessing_pipeline_path = ml_model.preprocessing_pipeline_path
 
-            # Cargar modelo real
+            # Cargar modelo real (usar cache para evitar carga redundante)
             device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
             logger.info(f"Usando dispositivo: {device} para modelo {model_id}")
 
-            if is_torchscript and torchscript_path:
-                logger.info(f"Cargando TorchScript model desde {torchscript_path}...")
-                if not os.path.exists(torchscript_path):
-                    logger.error(f"Fichero TorchScript no encontrado: {torchscript_path}")
-                    await websocket.close(code=1008, reason="Fichero de modelo no encontrado en disco")
-                    return
-                model = torch.jit.load(torchscript_path, map_location=device)
-            else:
-                logger.info(f"Cargando MLFlow model para run {mlflow_run_id}...")
-                from app.services.mlflow_service import MLFlowService
-
-                mlflow_svc = MLFlowService()
-                model = mlflow_svc.load_model(mlflow_run_id, device=device)
+            cache = get_model_cache()
+            cache_key = (
+                f"{model_id}:{is_torchscript}:{torchscript_path or mlflow_run_id}"
+            )
+            model = cache.get(cache_key)
 
             if model is None:
-                logger.error(f"No se pudo cargar el modelo {model_id}")
-                await websocket.close(code=1008, reason="Error cargando modelo: model is None")
-                return
+                if is_torchscript and torchscript_path:
+                    logger.info(
+                        f"Cargando TorchScript model desde {torchscript_path}..."
+                    )
+                    if not os.path.exists(torchscript_path):
+                        logger.error(
+                            f"Fichero TorchScript no encontrado: {torchscript_path}"
+                        )
+                        await websocket.close(
+                            code=1008, reason="Fichero de modelo no encontrado en disco"
+                        )
+                        return
+                    model = torch.jit.load(torchscript_path, map_location=device)
+                else:
+                    logger.info(f"Cargando MLFlow model para run {mlflow_run_id}...")
+                    from app.services.mlflow_service import MLFlowService
 
-            if hasattr(model, "to"):
-                model.to(device)
-            if hasattr(model, "eval"):
-                model.eval()
+                    mlflow_svc = MLFlowService()
+                    model = mlflow_svc.load_model(mlflow_run_id, device=device)
+
+                if model is None:
+                    logger.error(f"No se pudo cargar el modelo {model_id}")
+                    await websocket.close(
+                        code=1008, reason="Error cargando modelo: model is None"
+                    )
+                    return
+
+                if hasattr(model, "to"):
+                    model.to(device)
+                if hasattr(model, "eval"):
+                    model.eval()
+
+                cache.set(cache_key, model, ttl=600)
+                logger.info(f"Modelo {model_id} almacenado en cache")
+            else:
+                logger.info(f"Modelo {model_id} cargado desde cache")
 
             # Obtener nombres de features
             feature_names = metadata.get("feature_names", [])
@@ -147,7 +179,10 @@ async def websocket_predict(
             if preprocessing_pipeline_path:
                 try:
                     from app.core_ml.preprocessing import load_pipeline
-                    logger.info(f"Cargando pipeline desde {preprocessing_pipeline_path}...")
+
+                    logger.info(
+                        f"Cargando pipeline desde {preprocessing_pipeline_path}..."
+                    )
                     preprocessing_pipeline = load_pipeline(preprocessing_pipeline_path)
                 except Exception as e:
                     logger.error(f"Error cargando pipeline de preprocesamiento: {e}")
@@ -160,7 +195,9 @@ async def websocket_predict(
         # Cargar background para SHAP si se solicita inicialmente
         background_data = None
         if explain:
-            background_data = await _load_background_data(db, metadata, preprocessing_pipeline, feature_names)
+            background_data = await _load_background_data(
+                db, metadata, preprocessing_pipeline, feature_names
+            )
 
         db.close()
 
@@ -174,11 +211,15 @@ async def websocket_predict(
 
             # Lazy loading de background if requested but missing
             if msg_explain and background_data is None:
-                logger.info("SHAP: Explicación solicitada pero background no cargado. Re-intentando carga...")
+                logger.info(
+                    "SHAP: Explicación solicitada pero background no cargado. Re-intentando carga..."
+                )
                 # Re-abrimos sesión para la carga lazy
                 async_db = SessionLocal()
                 try:
-                    background_data = await _load_background_data(async_db, metadata, preprocessing_pipeline, feature_names)
+                    background_data = await _load_background_data(
+                        async_db, metadata, preprocessing_pipeline, feature_names
+                    )
                 finally:
                     async_db.close()
 
@@ -190,7 +231,7 @@ async def websocket_predict(
                 preprocessing_pipeline,
                 msg_explain,
                 background_data,
-                task_type=metadata.get("task_type", "classification")
+                task_type=metadata.get("task_type", "classification"),
             )
 
             # Enviar respuesta
@@ -211,12 +252,23 @@ async def websocket_predict(
 
 
 async def _load_background_data(db, metadata, preprocessing_pipeline, feature_names):
-    """Auxiliar para cargar background data desde el dataset original."""
+    """Auxiliar para cargar background data desde el dataset original (con cache)."""
     try:
         dataset_id = metadata.get("dataset_id")
         if not dataset_id:
-            logger.warning("SHAP: No hay dataset_id asociado al modelo. Se usará la fila actual como background (¡No recomendado!).")
+            logger.warning(
+                "SHAP: No hay dataset_id asociado al modelo. Se usará la fila actual como background (¡No recomendado!)."
+            )
             return None
+
+        cache_key = f"{dataset_id}:{len(feature_names) if feature_names else 0}"
+        cache = get_background_cache()
+        cached_data = cache.get(cache_key)
+        if cached_data is not None:
+            logger.info(
+                f"SHAP: Background data cargado desde cache para dataset {dataset_id}"
+            )
+            return cached_data
 
         from app.models.dataset import Dataset
         from app.services.storage_service import get_storage
@@ -225,14 +277,18 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
 
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if not dataset:
-            logger.error(f"SHAP: No se encontró el dataset {dataset_id} en la base de datos.")
+            logger.error(
+                f"SHAP: No se encontró el dataset {dataset_id} en la base de datos."
+            )
             return None
         elif not dataset.file_path:
             logger.error(f"SHAP: El dataset {dataset_id} no tiene file_path.")
             return None
 
         storage = get_storage()
-        logger.info(f"SHAP: Intentando descargar background desde {dataset.file_path}...")
+        logger.info(
+            f"SHAP: Intentando descargar background desde {dataset.file_path}..."
+        )
         try:
             storage_key = dataset.file_path
 
@@ -247,10 +303,14 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
             elif file_type == "xlsx":
                 df_background = pd.read_excel(BytesIO(data_bytes))
             else:
-                logger.warning(f"SHAP: Formato '{file_type}' no soportado directamente. Intentando con CSV.")
+                logger.warning(
+                    f"SHAP: Formato '{file_type}' no soportado directamente. Intentando con CSV."
+                )
                 df_background = pd.read_csv(BytesIO(data_bytes))
 
-            logger.info(f"SHAP: Dataset cargado ({file_type}). Filas totales: {len(df_background)}")
+            logger.info(
+                f"SHAP: Dataset cargado ({file_type}). Filas totales: {len(df_background)}"
+            )
 
             # Tomar una muestra (100 filas suelen bastar para KernelExplainer)
             sample_size = min(100, len(df_background))
@@ -260,28 +320,48 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
             # Si el dataset tiene su propio pipeline_path, asumimos que el CSV ya está en formato post-pipeline
             if preprocessing_pipeline:
                 if dataset.pipeline_path:
-                    logger.info(f"SHAP: El dataset {dataset_id} ya parece estar preprocesado (pipeline_path={dataset.pipeline_path}). Saltando apply_pipeline.")
+                    logger.info(
+                        f"SHAP: El dataset {dataset_id} ya parece estar preprocesado (pipeline_path={dataset.pipeline_path}). Saltando apply_pipeline."
+                    )
                 else:
                     from app.core_ml.preprocessing import apply_pipeline
-                    logger.info("SHAP: Aplicando pipeline de preprocesamiento al background (Dataset crudo)...")
-                    background_data, _ = apply_pipeline(preprocessing_pipeline, background_data, fit=False)
+
+                    logger.info(
+                        "SHAP: Aplicando pipeline de preprocesamiento al background (Dataset crudo)..."
+                    )
+                    background_data, _ = apply_pipeline(
+                        preprocessing_pipeline, background_data, fit=False
+                    )
 
             # Alinear features con lo que espera el modelo
             if feature_names:
-                logger.info(f"SHAP: Alineando {len(feature_names)} features. Columnas actuales del background: {background_data.columns.tolist()[:5]}...")
+                logger.info(
+                    f"SHAP: Alineando {len(feature_names)} features. Columnas actuales del background: {background_data.columns.tolist()[:5]}..."
+                )
                 for col in feature_names:
                     if col not in background_data.columns:
                         # logger.warning(f"SHAP: Feature '{col}' no encontrada en background. Se inicializa a 0.")
                         background_data[col] = 0.0
                 background_data = background_data[feature_names]
 
-            logger.info(f"SHAP: Background data listo para usar ({len(background_data)} filas). Mean prediction on background would be a good exp_val.")
+            logger.info(
+                f"SHAP: Background data listo para usar ({len(background_data)} filas). Mean prediction on background would be a good exp_val."
+            )
+
+            cache.set(cache_key, background_data, ttl=1800)
+            logger.info(f"SHAP: Background data almacenado en cache: {cache_key}")
+
             return background_data
         except Exception as dl_err:
-            logger.error(f"SHAP: Error crítico descargando/procesando background: {dl_err}", exc_info=True)
+            logger.error(
+                f"SHAP: Error crítico descargando/procesando background: {dl_err}",
+                exc_info=True,
+            )
             return None
     except Exception as b_err:
-        logger.error(f"SHAP: Error inesperado en el bloque de background: {b_err}", exc_info=True)
+        logger.error(
+            f"SHAP: Error inesperado en el bloque de background: {b_err}", exc_info=True
+        )
         return None
 
 
@@ -355,17 +435,24 @@ async def process_row_real(
         if explain:
             try:
                 from app.core_ml.explainability import get_shap_values
+
                 n_features = len(feature_names)
-                logger.info(f"Calculando SHAP para {n_features} features. Tarea: {task_type}. Background: {'Cargado' if background_data is not None else 'Ninguno (usará data)'}")
+                logger.info(
+                    f"Calculando SHAP para {n_features} features. Tarea: {task_type}. Background: {'Cargado' if background_data is not None else 'Ninguno (usará data)'}"
+                )
 
                 if background_data is not None:
-                    logger.info(f"Dimensiones de background_data: {getattr(background_data, 'shape', 'desconocido')}")
+                    logger.info(
+                        f"Dimensiones de background_data: {getattr(background_data, 'shape', 'desconocido')}"
+                    )
 
                 # Calcular SHAP values para todos los features
                 shap_result = get_shap_values(
-                    model, df, feature_names,
+                    model,
+                    df,
+                    feature_names,
                     background=background_data,
-                    task_type=task_type
+                    task_type=task_type,
                 )
 
                 # SHAP values para la primera (y única) fila
@@ -375,15 +462,24 @@ async def process_row_real(
 
                 try:
                     # Estructura A: [clase][fila][feature] -> len(raw_shap) = n_clases, len(raw__shap[0]) = 1
-                    if (isinstance(raw_shap, list) and len(raw_shap) > 0 and
-                        isinstance(raw_shap[0], list) and len(raw_shap[0]) == 1 and
-                        isinstance(raw_shap[0][0], list) and len(raw_shap[0][0]) == n_features):
+                    if (
+                        isinstance(raw_shap, list)
+                        and len(raw_shap) > 0
+                        and isinstance(raw_shap[0], list)
+                        and len(raw_shap[0]) == 1
+                        and isinstance(raw_shap[0][0], list)
+                        and len(raw_shap[0][0]) == n_features
+                    ):
                         class_idx = 1 if len(raw_shap) == 2 else 0
                         shap_values = raw_shap[class_idx][0]
 
                     # Estructura B: [fila][feature][clase] -> len(raw_shap) = 1, len(raw_shap[0]) = n_features
-                    elif (isinstance(raw_shap, list) and len(raw_shap) == 1 and
-                          isinstance(raw_shap[0], list) and len(raw_shap[0]) == n_features):
+                    elif (
+                        isinstance(raw_shap, list)
+                        and len(raw_shap) == 1
+                        and isinstance(raw_shap[0], list)
+                        and len(raw_shap[0]) == n_features
+                    ):
                         if isinstance(raw_shap[0][0], list):
                             # Cada feature tiene una lista de contribuciones por clase
                             class_idx = 1 if len(raw_shap[0][0]) == 2 else 0
@@ -393,15 +489,26 @@ async def process_row_real(
                             shap_values = raw_shap[0]
 
                     # Estructura C: [fila][feature] directa (Común en regresión o single-output)
-                    elif isinstance(raw_shap, list) and len(raw_shap) > 0 and isinstance(raw_shap[0], list) and len(raw_shap[0]) == n_features:
-                         shap_values = raw_shap[0]
+                    elif (
+                        isinstance(raw_shap, list)
+                        and len(raw_shap) > 0
+                        and isinstance(raw_shap[0], list)
+                        and len(raw_shap[0]) == n_features
+                    ):
+                        shap_values = raw_shap[0]
 
                     else:
                         # Fallback: intentar tomar el primer elemento si es lista, o el objeto directo
-                        shap_values = raw_shap[0] if (isinstance(raw_shap, list) and len(raw_shap) > 0) else raw_shap
+                        shap_values = (
+                            raw_shap[0]
+                            if (isinstance(raw_shap, list) and len(raw_shap) > 0)
+                            else raw_shap
+                        )
 
                 except Exception as unpack_err:
-                    logger.warning(f"Error desempaquetando SHAP: {unpack_err}. Usando raw_shap.")
+                    logger.warning(
+                        f"Error desempaquetando SHAP: {unpack_err}. Usando raw_shap."
+                    )
                     shap_values = raw_shap
 
                 result["shap_values"] = shap_values
@@ -409,7 +516,11 @@ async def process_row_real(
 
                 # Asegurar que expected_value es un escalar para el frontend
                 exp_val = shap_result["expected_value"]
-                if task_type == "classification" and isinstance(exp_val, (list, np.ndarray)) and len(exp_val) > 1:
+                if (
+                    task_type == "classification"
+                    and isinstance(exp_val, (list, np.ndarray))
+                    and len(exp_val) > 1
+                ):
                     # Si es lista de esperados por clase, elegir la misma clase que en SHAP
                     class_idx = 1 if len(exp_val) == 2 else 0
                     result["expected_value"] = float(exp_val[class_idx])
@@ -418,7 +529,9 @@ async def process_row_real(
                 else:
                     result["expected_value"] = float(exp_val)
 
-                logger.info(f"SHAP completado. Exp_val={result['expected_value']}, Out_val={result.get('prediction')}")
+                logger.info(
+                    f"SHAP completado. Exp_val={result['expected_value']}, Out_val={result.get('prediction')}"
+                )
 
             except Exception as shap_error:
                 logger.error(f"Error calculando SHAP values: {shap_error}")

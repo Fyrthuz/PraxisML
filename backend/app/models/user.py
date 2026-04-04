@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.base import Base
 import uuid
 
@@ -11,9 +11,10 @@ def generate_uuid():
 
 class UserRole:
     """Roles disponibles por tenant."""
-    ADMIN = "admin"     # Gestión completa: modelos, datasets, usuarios del tenant
-    EDITOR = "editor"   # Puede entrenar, hacer inferencia y gestionar datasets
-    VIEWER = "viewer"   # Solo lectura: ver predicciones y modelos
+
+    ADMIN = "admin"  # Gestión completa: modelos, datasets, usuarios del tenant
+    EDITOR = "editor"  # Puede entrenar, hacer inferencia y gestionar datasets
+    VIEWER = "viewer"  # Solo lectura: ver predicciones y modelos
 
 
 VALID_ROLES = {UserRole.ADMIN, UserRole.EDITOR, UserRole.VIEWER}
@@ -36,4 +37,4 @@ class User(Base):
     tenant_id = Column(String, ForeignKey("tenant.id"), nullable=False, index=True)
 
     tenant = relationship("Tenant", back_populates="users")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

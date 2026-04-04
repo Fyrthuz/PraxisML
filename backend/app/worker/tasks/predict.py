@@ -3,10 +3,11 @@ Tarea Celery pesada: carga el modelo desde MLFlow, ejecuta la estimación de
 incertidumbre, trackea la inferencia en MLFlow y guarda el resultado en disco
 y en la base de datos.
 """
+
 import time
 import logging
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
@@ -28,7 +29,7 @@ def run_heavy_inference(
     model_id: str,
     method: str,
     prediction_id: str,
-    input_file_path: str = None, # Soporta subida directa de archivo
+    input_file_path: str = None,  # Soporta subida directa de archivo
 ) -> dict:
     """
     Tarea pesada que NO bloquea la API FastAPI.
@@ -58,7 +59,9 @@ def run_heavy_inference(
         db.commit()
 
         # ── 2. Cargar Dataset ───────────────────────────────────────────────
-        self.update_state(state="PROGRESS", meta={"status": "Cargando dataset/archivo..."})
+        self.update_state(
+            state="PROGRESS", meta={"status": "Cargando dataset/archivo..."}
+        )
 
         input_file_obj = None
         current_file_path = input_file_path
@@ -72,7 +75,7 @@ def run_heavy_inference(
             logger.info(f"Descargando dataset desde storage: {dataset.file_path}")
             data_bytes = storage.download(dataset.file_path)
             input_file_obj = BytesIO(data_bytes)
-            current_file_path = dataset.file_path # Para detectar la extensión
+            current_file_path = dataset.file_path  # Para detectar la extensión
         else:
             # Si se pasó una ruta local, la usamos directamente
             input_file_obj = current_file_path
@@ -85,7 +88,9 @@ def run_heavy_inference(
         if is_tabular(file_type_str):
             input_data = read_tabular(input_file_obj, file_type_str)
         else:
-            raise ValueError(f"Formato de archivo '{file_type_str}' no soportado para inferencia tabular.")
+            raise ValueError(
+                f"Formato de archivo '{file_type_str}' no soportado para inferencia tabular."
+            )
 
         # ── 3. Cargar Modelo ────────────────────────────────────────────────
         self.update_state(state="PROGRESS", meta={"status": "Cargando modelo..."})
@@ -109,9 +114,12 @@ def run_heavy_inference(
         estimator = PredictionFactory.get_estimator(uncertainty_method, model, device)
 
         # ── 4b. Apply Preprocessing Pipeline si existe ──────────────────────
-        self.update_state(state="PROGRESS", meta={"status": "Aplicando preprocesamiento..."})
+        self.update_state(
+            state="PROGRESS", meta={"status": "Aplicando preprocesamiento..."}
+        )
         if ml_model.preprocessing_pipeline_path:
             from app.core_ml.preprocessing import load_pipeline, apply_pipeline
+
             try:
                 pipeline = load_pipeline(ml_model.preprocessing_pipeline_path)
                 # target_column in inference is usually not present, apply_pipeline handles it
@@ -142,12 +150,22 @@ def run_heavy_inference(
         results: dict = estimator.estimate_uncertainty(input_data)
         inference_time_s = time.perf_counter() - t_start
 
-        pred_array = results["prediction"]       # Array format depends on data (B, C, H, W) or (N,)
-        unc_array = results["uncertainty"]       # Array format depends on data (B, H, W) or (N,)
+        pred_array = results[
+            "prediction"
+        ]  # Array format depends on data (B, C, H, W) or (N,)
+        unc_array = results[
+            "uncertainty"
+        ]  # Array format depends on data (B, H, W) or (N,)
 
         # ── 5. Guardar resultados en disco (TODO: también subir a StorageService si se desea) ──
         self.update_state(state="PROGRESS", meta={"status": "Guardando resultados..."})
-        results_dir = Path(settings.DATA_DIR) / "tenants" / tenant_id / "predictions" / prediction_id
+        results_dir = (
+            Path(settings.DATA_DIR)
+            / "tenants"
+            / tenant_id
+            / "predictions"
+            / prediction_id
+        )
         results_dir.mkdir(parents=True, exist_ok=True)
 
         result_path = str(results_dir / "prediction.npy")
@@ -163,6 +181,7 @@ def run_heavy_inference(
         if not ml_model.is_torchscript and ml_model.mlflow_run_id:
             try:
                 from app.services.mlflow_service import MLFlowService
+
                 mlflow_svc = MLFlowService()
                 with mlflow_svc.start_inference_run(
                     model_run_id=ml_model.mlflow_run_id,
@@ -171,20 +190,29 @@ def run_heavy_inference(
                     prediction_id=prediction_id,
                 ) as run:
                     import mlflow
+
                     mlflow.log_params(estimator_params)
                     mlflow.log_metric("inference_time_s", inference_time_s)
 
-                    mlflow.log_metrics({
-                        "mean_uncertainty": float(np.mean(unc_array)),
-                        "max_uncertainty": float(np.max(unc_array)),
-                    })
+                    mlflow.log_metrics(
+                        {
+                            "mean_uncertainty": float(np.mean(unc_array)),
+                            "max_uncertainty": float(np.max(unc_array)),
+                        }
+                    )
                     mlflow.log_artifact(result_path, artifact_path="results")
                     mlflow.log_artifact(uncertainty_path, artifact_path="results")
 
                     mlflow_inference_run_id = run.info.run_id
-                    print(f"[{method}] Inferencia en MLFlow registrada, Run ID: {mlflow_inference_run_id}")
+                    logger.info(
+                        "[%s] Inferencia en MLFlow registrada, Run ID: %s",
+                        method,
+                        mlflow_inference_run_id,
+                    )
             except Exception as mlflow_exc:
-                logger.warning("MLFlow inference tracking falló (no crítico): %s", mlflow_exc)
+                logger.warning(
+                    "MLFlow inference tracking falló (no crítico): %s", mlflow_exc
+                )
 
         # ── 7. Actualizar registro en BD ────────────────────────────────────
         prediction.status = "COMPLETED"
@@ -192,7 +220,7 @@ def run_heavy_inference(
         prediction.uncertainty_path = uncertainty_path
         prediction.input_image_path = input_data_path
         prediction.mlflow_inference_run_id = mlflow_inference_run_id
-        prediction.completed_at = datetime.utcnow()
+        prediction.completed_at = datetime.now(timezone.utc)
         db.commit()
 
         logger.info("Inferencia completada para prediction_id=%s", prediction_id)
@@ -212,7 +240,7 @@ def run_heavy_inference(
             if "prediction" in dir():
                 prediction.status = "FAILED"
                 prediction.error_message = str(exc)
-                prediction.completed_at = datetime.utcnow()
+                prediction.completed_at = datetime.now(timezone.utc)
                 db.commit()
         except Exception:
             pass

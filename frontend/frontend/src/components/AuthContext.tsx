@@ -9,6 +9,7 @@ interface AuthState {
     user: any | null;
     tenant: any | null;
     isLoading: boolean;
+    userRole: string;
     login: (token: string) => void;
     logout: () => void;
     setTenant: (tenant: any) => void;
@@ -19,6 +20,7 @@ const AuthContext = createContext<AuthState>({
     user: null,
     tenant: null,
     isLoading: true,
+    userRole: "viewer",
     login: () => { },
     logout: () => { },
     setTenant: () => { },
@@ -29,6 +31,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<any | null>(null);
     const [tenant, setTenantState] = useState<any | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [userRole, setUserRole] = useState<string>("viewer");
 
     // Initialize from LocalStorage
     useEffect(() => {
@@ -48,7 +51,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 headers: { Authorization: `Bearer ${currentToken}` },
             });
             if (userRes.ok) {
-                setUser(await userRes.json());
+                const userData = await userRes.json();
+                setUser(userData);
+                setUserRole(userData.role || "viewer");
             } else {
                 throw new Error("Invalid token");
             }
@@ -80,6 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setToken(null);
         setUser(null);
         setTenantState(null);
+        setUserRole("viewer");
         setIsLoading(false);
     };
 
@@ -88,7 +94,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ token, user, tenant, isLoading, login, logout, setTenant }}>
+        <AuthContext.Provider value={{ token, user, tenant, isLoading, userRole, login, logout, setTenant }}>
             {children}
         </AuthContext.Provider>
     );

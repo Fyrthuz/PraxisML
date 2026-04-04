@@ -218,6 +218,7 @@ def create_app() -> FastAPI:
         profiling,
         streaming,
         drift,
+        users,
     )
 
     app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
@@ -248,6 +249,9 @@ def create_app() -> FastAPI:
         streaming.router, prefix=f"{settings.API_V1_STR}", tags=["Streaming"]
     )
     app.include_router(drift.router, prefix=f"{settings.API_V1_STR}", tags=["Drift"])
+    app.include_router(
+        users.router, prefix=f"{settings.API_V1_STR}/users", tags=["Users"]
+    )
 
     return app
 

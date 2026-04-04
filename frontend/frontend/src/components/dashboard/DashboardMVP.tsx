@@ -13,6 +13,7 @@ import DataRegistryTab from "./tabs/DataRegistryTab";
 import PredictionsTab from "./tabs/PredictionsTab";
 import TrainingTab from "./tabs/TrainingTab";
 import PreprocessingTab from "./tabs/PreprocessingTab";
+import UsersTab from "./tabs/UsersTab";
 import PredictionResultsModal from "@/components/modals/PredictionResultsModal";
 import StreamingInference from "./StreamingInference";
 
@@ -24,7 +25,7 @@ import { useTraining } from "@/hooks/useTraining";
 import { Prediction } from "@/lib/api";
 import { config } from '@/lib/config';
 
-type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming";
+type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming" | "users";
 
 const API = config.getFullApiUrl("");
 
@@ -43,7 +44,7 @@ function fileTypeBadgeColor(ft?: string) {
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export default function DashboardMVP() {
-    const { token, tenant, setTenant, logout } = useAuth();
+    const { token, tenant, setTenant, logout, userRole } = useAuth();
 
     const [activeView, setActiveView] = useState<View>("datasets");
     const [isLoading, setIsLoading] = useState(true);
@@ -159,6 +160,7 @@ export default function DashboardMVP() {
                 }}
                 currentTenantId={tenant?.id}
                 onLogout={logout}
+                userRole={userRole}
             />
 
             {/* ── Main ── */}
@@ -285,6 +287,15 @@ export default function DashboardMVP() {
                         <StreamingInference
                             models={modelHook.models}
                             token={token}
+                        />
+                    )}
+
+                    {activeView === "users" && (
+                        <UsersTab
+                            token={token}
+                            currentUserRole={userRole}
+                            tenantId={tenant?.id || ""}
+                            onRefreshUsers={() => {}}
                         />
                     )}
                 </div>

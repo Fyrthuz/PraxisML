@@ -1,6 +1,6 @@
 from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.base import Base
 from enum import Enum as PyEnum
 import uuid
@@ -28,7 +28,7 @@ class MLModel(Base):
     id = Column(String, primary_key=True, default=generate_uuid, index=True)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # ID del run en MLFlow para cargarlo vía mlflow.pytorch.load_model(f"runs:/{run_id}/model")
     mlflow_run_id = Column(String, nullable=False, unique=True, index=True)

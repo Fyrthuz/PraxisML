@@ -19,7 +19,7 @@ Uso:
     _ = Depends(check_training_quota)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -34,7 +34,9 @@ from app.core.exceptions import QuotaExceededError
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+def get_current_user(
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+) -> User:
     """Valida el JWT y retorna el User activo de la BD."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -101,6 +103,7 @@ def require_role(minimum_role: str):
         def train(..., user: User = Depends(require_role("editor"))):
             ...
     """
+
     def checker(current_user: User = Depends(get_current_user)) -> User:
         user_level = _ROLE_HIERARCHY.get(current_user.role, 0)
         required_level = _ROLE_HIERARCHY.get(minimum_role, 99)
@@ -110,6 +113,7 @@ def require_role(minimum_role: str):
                 detail=f"Se requiere rol '{minimum_role}' o superior. Tu rol actual es '{current_user.role}'.",
             )
         return current_user
+
     return checker
 
 
@@ -121,6 +125,7 @@ require_viewer = require_role(UserRole.VIEWER)
 
 # ── Quota Limiting ────────────────────────────────────────────────────────────
 
+
 def check_dataset_quota(
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
@@ -128,9 +133,12 @@ def check_dataset_quota(
     """Verifica que el tenant no haya excedido su cuota de datasets."""
     if tenant.max_datasets is not None:
         from app.models.dataset import Dataset
-        current_count = db.query(func.count(Dataset.id)).filter(
-            Dataset.tenant_id == tenant.id
-        ).scalar()
+
+        current_count = (
+            db.query(func.count(Dataset.id))
+            .filter(Dataset.tenant_id == tenant.id)
+            .scalar()
+        )
         if current_count >= tenant.max_datasets:
             raise QuotaExceededError(
                 resource="datasets",
@@ -147,9 +155,12 @@ def check_model_quota(
     """Verifica que el tenant no haya excedido su cuota de modelos."""
     if tenant.max_models is not None:
         from app.models.ml_model import MLModel
-        current_count = db.query(func.count(MLModel.id)).filter(
-            MLModel.tenant_id == tenant.id
-        ).scalar()
+
+        current_count = (
+            db.query(func.count(MLModel.id))
+            .filter(MLModel.tenant_id == tenant.id)
+            .scalar()
+        )
         if current_count >= tenant.max_models:
             raise QuotaExceededError(
                 resource="modelos",
@@ -166,11 +177,18 @@ def check_prediction_quota(
     """Verifica que el tenant no haya excedido su cuota diaria de predicciones."""
     if tenant.max_predictions_per_day is not None:
         from app.models.prediction import Prediction
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_count = db.query(func.count(Prediction.id)).filter(
-            Prediction.tenant_id == tenant.id,
-            Prediction.created_at >= today_start,
-        ).scalar()
+
+        today_start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        today_count = (
+            db.query(func.count(Prediction.id))
+            .filter(
+                Prediction.tenant_id == tenant.id,
+                Prediction.created_at >= today_start,
+            )
+            .scalar()
+        )
         if today_count >= tenant.max_predictions_per_day:
             raise QuotaExceededError(
                 resource="predicciones diarias",
@@ -187,11 +205,18 @@ def check_training_quota(
     """Verifica que el tenant no haya excedido su cuota diaria de entrenamientos."""
     if tenant.max_training_jobs_per_day is not None:
         from app.models.ml_model import MLModel
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-        today_count = db.query(func.count(MLModel.id)).filter(
-            MLModel.tenant_id == tenant.id,
-            MLModel.created_at >= today_start,
-        ).scalar()
+
+        today_start = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        today_count = (
+            db.query(func.count(MLModel.id))
+            .filter(
+                MLModel.tenant_id == tenant.id,
+                MLModel.created_at >= today_start,
+            )
+            .scalar()
+        )
         if today_count >= tenant.max_training_jobs_per_day:
             raise QuotaExceededError(
                 resource="entrenamientos diarios",

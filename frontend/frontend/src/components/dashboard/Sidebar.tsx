@@ -1,13 +1,14 @@
 "use client";
-import { BarChart3, Database, Filter, Cpu, Clock, FlaskConical, Settings, Plus, BookMarked, GitBranch, Wifi } from "lucide-react";
+import { BarChart3, Database, Filter, Cpu, Clock, FlaskConical, Settings, Plus, BookMarked, GitBranch, Wifi, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming";
+type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming" | "users";
 
 interface NavItem {
     id: View;
     label: string;
     icon: React.ReactNode;
+    adminOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -19,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
     { id: "predictions", label: "Predictions", icon: <Clock className="w-5 h-5" /> },
     { id: "training", label: "Training", icon: <FlaskConical className="w-5 h-5" /> },
     { id: "streaming", label: "Streaming", icon: <Wifi className="w-5 h-5" /> },
+    { id: "users", label: "Users", icon: <Users className="w-5 h-5" />, adminOnly: true },
 ];
 
 interface SidebarProps {
@@ -32,6 +34,7 @@ interface SidebarProps {
     onCreateTenant: () => void;
     currentTenantId?: string;
     onLogout: () => void;
+    userRole?: string;
 }
 
 export default function Sidebar({
@@ -45,7 +48,9 @@ export default function Sidebar({
     onCreateTenant,
     currentTenantId,
     onLogout,
+    userRole = "viewer",
 }: SidebarProps) {
+    const visibleNavItems = NAV_ITEMS.filter(item => !item.adminOnly || userRole === "admin");
     return (
         <aside className="w-72 border-r border-neutral-900 bg-neutral-950 p-8 flex flex-col shrink-0">
             {/* Logo */}
@@ -58,7 +63,7 @@ export default function Sidebar({
 
             {/* Navigation */}
             <nav className="space-y-1.5 flex-1">
-                {NAV_ITEMS.map((item) => (
+                {visibleNavItems.map((item) => (
                     <button
                         key={item.id}
                         onClick={() => onNavigate(item.id)}

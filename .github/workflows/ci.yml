@@ -100,4 +100,4 @@ jobs:
       - name: Instalar ruff
         run: uv add --dev ruff
       - name: Ejecutar ruff
-        run: uv run ruff check app/ --select=E,F,W --ignore=E501
+        run: uv run ruff check app/ --select=E,F,W,S,B,C,I --ignore=E501

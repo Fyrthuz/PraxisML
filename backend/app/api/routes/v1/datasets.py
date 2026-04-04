@@ -1,4 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+    UploadFile,
+    File,
+    Form,
+    Query,
+)
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -12,6 +21,7 @@ from app.models.dataset import Dataset
 from app.models.user import User
 from app.models.tenant import Tenant
 from app.schemas.dataset import DatasetResponse, DatasetPreviewResponse
+from app.schemas.pagination import PaginatedResponse
 from app.api.deps import (
     get_current_tenant,
     require_editor,
@@ -28,6 +38,7 @@ from app.core_ml.tabular_parser import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
 
 @router.get("/{dataset_id}/download")
 def download_dataset(
@@ -64,16 +75,21 @@ def download_dataset(
         data_bytes = storage.download(dataset.file_path)
     except Exception as e:
         logger.error(f"Error downloading dataset from storage: {e}")
-        raise HTTPException(status_code=404, detail="Archivo no encontrado en el storage")
+        raise HTTPException(
+            status_code=404, detail="Archivo no encontrado en el storage"
+        )
 
     import io
+
     return StreamingResponse(
         io.BytesIO(data_bytes),
         media_type="application/octet-stream",
         headers={
             "Content-Disposition": f"attachment; filename={os.path.basename(dataset.file_path)}"
-        }
+        },
     )
+
+
 # Extensiones aceptadas
 _ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".parquet", ".zip")
 
@@ -136,7 +152,9 @@ async def upload_dataset(
         if not config_file.filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Config file must be a JSON")
 
-        config_storage_key = f"tenants/{tenant.id}/datasets/{name}_config_{config_file.filename}"
+        config_storage_key = (
+            f"tenants/{tenant.id}/datasets/{name}_config_{config_file.filename}"
+        )
         try:
             config_content = await config_file.read()
             storage.upload(config_storage_key, config_content)
@@ -147,7 +165,7 @@ async def upload_dataset(
             )
 
     file_size = len(content)
-    file_path = storage_key # Guardamos la storage key en file_path
+    file_path = storage_key  # Guardamos la storage key en file_path
 
     # ── Extraer metadata tabular ─────────────────────────────────────────────
     num_rows = None
@@ -161,6 +179,7 @@ async def upload_dataset(
             # or we might need a slight refactor if it only accepts paths.
             # Assuming tabular_parser can work with BytesIO or we save temporarily.
             from io import BytesIO
+
             meta = extract_metadata(BytesIO(content), file_type)
             num_rows = meta["num_rows"]
             num_columns = meta["num_columns"]
@@ -216,7 +235,7 @@ async def upload_dataset(
         name=name,
         description=description,
         file_path=file_path,
-        config_path=config_storage_key, # Usamos la storage key
+        config_path=config_storage_key,  # Usamos la storage key
         file_size_bytes=file_size,
         file_type=file_type,
         num_rows=num_rows,
@@ -240,15 +259,31 @@ async def upload_dataset(
 # ──────────────────────────────────────────────────────────────────────────────
 # GET  /datasets/  — Listar datasets del tenant
 # ──────────────────────────────────────────────────────────────────────────────
-@router.get("/", response_model=List[DatasetResponse])
+@router.get("/", response_model=PaginatedResponse[DatasetResponse])
 def get_datasets(
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
-    """Obtiene todos los datasets del tenant (multi-tenant RLS). Requiere rol **viewer** o superior."""
-    datasets = db.query(Dataset).filter(Dataset.tenant_id == tenant.id).all()
-    return datasets
+    """Obtiene los datasets del tenant con paginación. Requiere rol **viewer** o superior."""
+    query = db.query(Dataset).filter(Dataset.tenant_id == tenant.id)
+
+    total = query.count()
+    total_pages = (total + page_size - 1) // page_size if total > 0 else 0
+
+    datasets = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    return PaginatedResponse(
+        items=datasets,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        has_next=page < total_pages,
+        has_prev=page > 1,
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -285,6 +320,7 @@ def preview_dataset(
         storage = get_storage()
         data_bytes = storage.download(dataset.file_path)
         from io import BytesIO
+
         preview_df, meta = get_preview(
             BytesIO(data_bytes), dataset.file_type, max_rows=max_rows
         )
@@ -338,7 +374,9 @@ def delete_dataset(
             storage.delete(dataset.file_path)
             logger.info("Archivo eliminado del storage: %s", dataset.file_path)
         except Exception as e:
-            logger.warning("No se pudo eliminar archivo del storage: %s — %s", dataset.file_path, e)
+            logger.warning(
+                "No se pudo eliminar archivo del storage: %s — %s", dataset.file_path, e
+            )
 
     # Eliminación DVC (opcional)
     if dataset.is_dvc_tracked:
@@ -355,7 +393,9 @@ def delete_dataset(
             storage.delete(dataset.config_path)
         except Exception as e:
             logger.warning(
-                "No se pudo eliminar config del storage: %s — %s", dataset.config_path, e
+                "No se pudo eliminar config del storage: %s — %s",
+                dataset.config_path,
+                e,
             )
 
     # Borrar registro de BD
@@ -394,7 +434,7 @@ def list_dataset_registries(
             if reg_name not in registries:
                 display_name = reg_name
                 if reg_name.startswith(tenant_prefix):
-                    display_name = reg_name[len(tenant_prefix):]
+                    display_name = reg_name[len(tenant_prefix) :]
 
                 registries[reg_name] = {
                     "name": reg_name,

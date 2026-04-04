@@ -59,6 +59,8 @@ class Settings(BaseSettings):
 
     # Proveedor externo opcional (Clerk / Auth0)
     EXTERNAL_AUTH_JWKS_URL: Optional[str] = None
+    EXTERNAL_AUTH_AUDIENCE: Optional[str] = None
+    EXTERNAL_AUTH_ISSUER: Optional[str] = None
 
     # ── Rate Limiting (slowapi) ────────────────────────────────────────────────
     # Formato: "N/period" donde period ∈ {second, minute, hour, day}
@@ -93,7 +95,12 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
-        allowed_prefixes = ("postgresql://", "postgresql+asyncpg://", "sqlite://", "sqlite+aiosqlite://")
+        allowed_prefixes = (
+            "postgresql://",
+            "postgresql+asyncpg://",
+            "sqlite://",
+            "sqlite+aiosqlite://",
+        )
         if not any(v.startswith(p) for p in allowed_prefixes):
             raise ValueError(
                 f"DATABASE_URL debe comenzar con un prefijo válido (postgresql:// o sqlite://) — recibido: '{v[:30]}...'"
@@ -116,9 +123,7 @@ class Settings(BaseSettings):
     def validate_environment(cls, v: str) -> str:
         allowed = {"development", "staging", "production", "testing"}
         if v not in allowed:
-            raise ValueError(
-                f"ENVIRONMENT debe ser uno de {allowed} — recibido: '{v}'"
-            )
+            raise ValueError(f"ENVIRONMENT debe ser uno de {allowed} — recibido: '{v}'")
         return v
 
     @field_validator("STORAGE_BACKEND")
@@ -149,7 +154,10 @@ class Settings(BaseSettings):
         env_file=[
             os.path.join(
                 os.path.dirname(__file__),  # app/core/
-                "..", "..", "..", "..",      # → proyecto raíz
+                "..",
+                "..",
+                "..",
+                "..",  # → proyecto raíz
                 ".env",
             ),
             ".env",  # fallback: CWD (útil en CI y Docker)
