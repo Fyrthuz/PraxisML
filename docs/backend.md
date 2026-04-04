@@ -31,7 +31,7 @@ El backend expone una API REST asíncrona robusta y maneja el motor de Machine L
 ## 3. Entidades Core
 
 1. **Tenant**: Unidad lógica para suscripciones u organizaciones. Aloja las cuotas.
-2. **User**: Entidad autenticada (AuthN). Pertenece a un Tenant.
+2. **User**: Entidad autenticada (AuthN). Pertenece a un Tenant. Soporta distintos roles (`admin`, `editor`, `viewer`) y eliminación lógica (soft delete).
 3. **Dataset**: Binario ZIP junto con un `config.json` o subida declarativa.
 4. **MLModel**: Referencia en BD local del modelo. Su binario real está en MLflow y su tracker UUID (`run_id`) está asignado de MLflow.
 5. **Prediction**: Registro de ejecución e inferencia con resultados, tiempos y métricas de incertidumbre (ej. varianzas epistémicas).
@@ -87,7 +87,7 @@ El sistema abstrae el acceso a archivos mediante un `StorageService` que soporta
 ## 7. Control de Acceso y Rate Limiting
 
 - **Endpoints Exigentes (Train/Pred)**: Decorador `@limiter.limit` (ej. `30/minute`). Extrae la IP de la petición limitando abuso.
-- **RBAC**: Las dependencias inyectadas resuelven si un usuario tiene la facultad. El primer usuario de un Tenant adquiere cargo de `ADMIN`. Existen los roles `admin`, `editor`, `viewer`.
+- **RBAC**: Las dependencias inyectadas resuelven si un usuario tiene la facultad. El primer usuario de un Tenant adquiere cargo de `ADMIN`. Existen los roles `admin`, `editor`, `viewer`. Los `admin` pueden gestionar al resto de usuarios de su Tenant (invitación, cambio de roles, y desactivación/soft delete).
 
 ```python
 # Ejemplo inyección RBAC Pydantic

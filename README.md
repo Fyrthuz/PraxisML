@@ -366,6 +366,15 @@ Documentación interactiva en **`http://localhost:8000/docs`**
 | GET | `/api/v1/tenants/` | viewer | Listar tenants |
 | PATCH | `/api/v1/tenants/{id}/quotas` | admin | Actualizar quotas del tenant |
 
+### Usuarios
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| GET | `/api/v1/users/` | admin | Listar todos los usuarios del tenant |
+| POST | `/api/v1/users/` | admin | Crear nuevo usuario en el tenant |
+| GET | `/api/v1/users/{id}` | admin | Obtener detalles de un usuario |
+| PATCH | `/api/v1/users/{id}/role` | admin | Cambiar el rol de un usuario |
+| DELETE | `/api/v1/users/{id}` | admin | Desactivar un usuario (soft delete) |
+
 ### Datasets
 | Método | Path | Rol | Descripción |
 |--------|------|-----|-------------|
