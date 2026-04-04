@@ -58,7 +58,8 @@ PraxisML/
 │   │   │   ├── preprocessing.py # Pipelines de preprocesamiento
 │   │   │   ├── profiling.py    # Profiling de datasets
 │   │   │   ├── drift.py        # Monitorización de data drift
-│   │   │   └── streaming.py    # Inferencia en tiempo real via WebSockets
+│   │   │   ├── streaming.py    # Inferencia en tiempo real via WebSockets
+│   │   │   └──  users.py       # Creación/eliminación de usuarios
 │   │   ├── core/               # Seguridad / Config / JWT / Rate Limiting
 │   │   │   ├── config.py       # Configuración centralizada con validadores
 │   │   │   ├── exceptions.py   # Jerarquía de excepciones de dominio
