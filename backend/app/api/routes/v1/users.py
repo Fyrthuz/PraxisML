@@ -1,7 +1,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_tenant, require_admin
@@ -28,9 +28,9 @@ class UserResponse(BaseModel):
 
 class CreateUserRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8)
     full_name: str | None = None
-    role: str = "viewer"
+    role: str = Field(default="viewer", pattern="^(admin|editor|viewer)$")
 
 
 class UpdateUserRoleRequest(BaseModel):
