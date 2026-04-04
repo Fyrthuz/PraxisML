@@ -22,16 +22,34 @@ def mock_db_session():
     session = MagicMock()
     return session
 
+@pytest.fixture(scope="session")
+def engine():
+    from sqlalchemy import create_engine
+    from app.models.base import Base
+    eng = create_engine("sqlite:///./test_integration.db", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=eng)
+    yield eng
+    Base.metadata.drop_all(bind=eng)
 
 @pytest.fixture
-def client():
+def test_db_session(engine):
+    from sqlalchemy.orm import sessionmaker
+    Session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    session = Session()
+    try:
+        yield session
+    finally:
+        session.rollback()
+        session.close()
+
+@pytest.fixture
+def client(test_db_session):
     """Cliente de test para la API con bypass de auth."""
     from app.api.deps import get_current_user, get_current_tenant
+    from app.database import get_db
     from app.models.user import User, UserRole
     from app.models.tenant import Tenant
-    from app.models.base import Base
-    from app.database import engine, SessionLocal
-
+    
     # Mock user for bypass
     mock_user = MagicMock(spec=User)
     mock_user.id = "test-user-id"
@@ -43,21 +61,20 @@ def client():
     
     mock_tenant = Tenant(id="test-tenant-id", name="Test Tenant")
     app.dependency_overrides[get_current_tenant] = lambda: mock_tenant
+    app.dependency_overrides[get_db] = lambda: test_db_session
 
-    # Initialize database tables for SQLite
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-
-    # Create default tenant and user
-    db = SessionLocal()
-    from app.models.tenant import Tenant
-    from app.models.user import User
-    tenant = Tenant(id="test-tenant-id", name="Test Tenant")
-    user = User(id="test-user-id", email="test@example.com", hashed_password="fake", tenant_id="test-tenant-id", role=UserRole.ADMIN)
-    db.add(tenant)
-    db.add(user)
-    db.commit()
-    db.close()
+    from app.models.tenant import Tenant as DBTenant
+    from app.models.user import User as DBUser
+    
+    # Clear matching user/tenant if exist from previous runs
+    test_db_session.query(DBUser).filter_by(id="test-user-id").delete()
+    test_db_session.query(DBTenant).filter_by(id="test-tenant-id").delete()
+    
+    tenant = DBTenant(id="test-tenant-id", name="Test Tenant")
+    user = DBUser(id="test-user-id", email="test@example.com", hashed_password="fake", tenant_id="test-tenant-id", role=UserRole.ADMIN)
+    test_db_session.add(tenant)
+    test_db_session.add(user)
+    test_db_session.commit()
 
     with TestClient(app) as c:
         yield c
@@ -117,31 +134,31 @@ class TestModelPromoteEndpoint:
         from app.database import get_db
         from unittest.mock import patch as mock_patch
 
-        from app.database import SessionLocal
-        db_session = SessionLocal()
-        try:
-            # Need to detach from mock or use a real object for DB
-            from app.models.ml_model import MLModel
-            db_model = MLModel(
-                id="test-model-id",
-                name="test-model",
-                tenant_id="test-tenant-id",
-                mlflow_run_id="test-run-id",
-                version="1.0.0",
-                stage="Staging",
-                metrics_metadata={},
-            )
-            db_session.add(db_model)
-            db_session.commit()
-            
-            response = client.post(
-                "/api/v1/models/test-model-id/promote",
-                data={"target_stage": "Production"},
-            )
+        # Use the overridden test db session instead of importing SessionLocal globally
+        dependency_overrides = client.app.dependency_overrides
+        db_session = dependency_overrides[get_db]()
+        
+        # Need to detach from mock or use a real object for DB
+        from app.models.ml_model import MLModel
+        db_model = MLModel(
+            id="test-model-id",
+            name="test-model",
+            tenant_id="test-tenant-id",
+            mlflow_run_id="test-run-id",
+            version="1.0.0",
+            stage="Staging",
+            metrics_metadata={},
+        )
+        db_session.query(MLModel).filter_by(id="test-model-id").delete()
+        db_session.add(db_model)
+        db_session.commit()
+        
+        response = client.post(
+            "/api/v1/models/test-model-id/promote",
+            data={"target_stage": "Production"},
+        )
 
-            assert response.status_code == 200
-        finally:
-            db_session.close()
+        assert response.status_code == 200
 
     @patch("app.api.deps.get_current_tenant")
     @patch("app.api.deps.require_editor")
@@ -157,32 +174,32 @@ class TestModelPromoteEndpoint:
         mock_require_editor.return_value = MagicMock()
         mock_get_tenant.return_value = mock_tenant
 
+        from app.database import get_db
         from unittest.mock import patch as mock_patch
 
-        from app.database import SessionLocal
-        db_session = SessionLocal()
-        try:
-            from app.models.ml_model import MLModel
-            db_model = MLModel(
-                id="test-model-id",
-                name="test-model",
-                tenant_id="test-tenant-id",
-                mlflow_run_id="test-run-id",
-                version="1.0.0",
-                stage="Staging",
-                metrics_metadata={},
-            )
-            db_session.add(db_model)
-            db_session.commit()
+        dependency_overrides = client.app.dependency_overrides
+        db_session = dependency_overrides[get_db]()
+        
+        from app.models.ml_model import MLModel
+        db_model = MLModel(
+            id="test-model-id-invalid",
+            name="test-model-invalid",
+            tenant_id="test-tenant-id",
+            mlflow_run_id="test-run-id-invalid",
+            version="1.0.0",
+            stage="Staging",
+            metrics_metadata={},
+        )
+        db_session.query(MLModel).filter_by(id="test-model-id-invalid").delete()
+        db_session.add(db_model)
+        db_session.commit()
 
-            response = client.post(
-                "/api/v1/models/test-model-id/promote",
-                data={"target_stage": "Invalid"},
-            )
+        response = client.post(
+            "/api/v1/models/test-model-id-invalid/promote",
+            data={"target_stage": "Invalid"},
+        )
 
-            assert response.status_code == 400
-        finally:
-            db_session.close()
+        assert response.status_code == 400
 
 
 class TestModelArchiveEndpoint:

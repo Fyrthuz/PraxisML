@@ -10,6 +10,7 @@ Aquí se usa una DB SQLite en memoria para aislar los tests.
 """
 
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -53,7 +54,7 @@ def override_db(db_session):
     app.dependency_overrides.clear()
 
 
-@pytest.fixture()
+@pytest_asyncio.fixture()
 async def client(override_db):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
@@ -89,7 +90,6 @@ def _create_test_user(db_session, tenant: Tenant, role: str, email_suffix: str =
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 async def test_health_check(client):
     response = await client.get("/health")
     assert response.status_code == 200
@@ -99,7 +99,6 @@ async def test_health_check(client):
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 async def test_register_creates_admin_user(client, db_session):
     """El primer usuario registrado debe obtener rol 'admin'."""
     response = await client.post(
@@ -116,7 +115,6 @@ async def test_register_creates_admin_user(client, db_session):
     assert data["role"] == "admin"
 
 
-@pytest.mark.asyncio
 async def test_login_invalid_credentials(client):
     """Login con credenciales incorrectas debe devolver error."""
     response = await client.post(
@@ -128,14 +126,12 @@ async def test_login_invalid_credentials(client):
 
 # ── RBAC: Models ──────────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 async def test_list_models_unauthenticated(client):
     """Sin token la API debe devolver 401."""
     response = await client.get("/api/v1/models/")
     assert response.status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_list_models_viewer_allowed(client, db_session):
     """Viewer puede listar modelos (lectura)."""
     tenant = _create_test_tenant(db_session, "Models Viewer Tenant")
@@ -147,7 +143,6 @@ async def test_list_models_viewer_allowed(client, db_session):
     assert response.status_code == 200
 
 
-@pytest.mark.asyncio
 async def test_register_model_viewer_forbidden(client, db_session):
     """Viewer NO puede registrar modelos (requiere editor)."""
     tenant = _create_test_tenant(db_session, "Models Viewer Forbidden")
@@ -163,7 +158,6 @@ async def test_register_model_viewer_forbidden(client, db_session):
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
 async def test_delete_model_editor_forbidden(client, db_session):
     """Editor NO puede borrar modelos (requiere admin)."""
     tenant = _create_test_tenant(db_session, "Models Editor Forbidden")
@@ -177,7 +171,6 @@ async def test_delete_model_editor_forbidden(client, db_session):
 
 # ── RBAC: Datasets ────────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 async def test_list_datasets_viewer_ok(client, db_session):
     """Viewer puede listar datasets."""
     tenant = _create_test_tenant(db_session, "DS Viewer Tenant")
@@ -189,7 +182,6 @@ async def test_list_datasets_viewer_ok(client, db_session):
     assert response.status_code == 200
 
 
-@pytest.mark.asyncio
 async def test_delete_dataset_editor_forbidden(client, db_session):
     """Editor NO puede borrar datasets (requiere admin)."""
     tenant = _create_test_tenant(db_session, "DS Editor Forbidden")
@@ -203,14 +195,12 @@ async def test_delete_dataset_editor_forbidden(client, db_session):
 
 # ── RBAC: Predictions ─────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 async def test_list_predictions_unauthenticated(client):
     """Sin token la API debe devolver 401."""
     response = await client.get("/api/v1/predictions")
     assert response.status_code == 401
 
 
-@pytest.mark.asyncio
 async def test_list_predictions_viewer_ok(client, db_session):
     """Viewer puede listar predicciones."""
     tenant = _create_test_tenant(db_session, "Pred Viewer Tenant")
@@ -224,14 +214,12 @@ async def test_list_predictions_viewer_ok(client, db_session):
 
 # ── RBAC: Training ────────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 async def test_training_unauthenticated(client):
     """Sin token el endpoint de entrenamiento debe devolver 401."""
     response = await client.post("/api/v1/training/train", json={})
     assert response.status_code in (401, 422)
 
 
-@pytest.mark.asyncio
 async def test_training_viewer_forbidden(client, db_session):
     """Viewer NO puede lanzar entrenamientos (requiere editor)."""
     tenant = _create_test_tenant(db_session, "Training Viewer Forbidden")
@@ -248,7 +236,6 @@ async def test_training_viewer_forbidden(client, db_session):
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
 async def test_algorithms_viewer_ok(client, db_session):
     """Viewer puede ver la lista de algoritmos."""
     tenant = _create_test_tenant(db_session, "Algo Viewer Tenant")
@@ -262,7 +249,6 @@ async def test_algorithms_viewer_ok(client, db_session):
 
 # ── RBAC: Tenants ─────────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 async def test_create_tenant_viewer_forbidden(client, db_session):
     """Viewer NO puede crear tenants (requiere admin)."""
     tenant = _create_test_tenant(db_session, "Tenant Viewer Forbidden")
@@ -275,7 +261,6 @@ async def test_create_tenant_viewer_forbidden(client, db_session):
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
 async def test_create_tenant_editor_forbidden(client, db_session):
     """Editor NO puede crear tenants (requiere admin)."""
     tenant = _create_test_tenant(db_session, "Tenant Editor Forbidden")
@@ -290,7 +275,6 @@ async def test_create_tenant_editor_forbidden(client, db_session):
 
 # ── Error handler ─────────────────────────────────────────────────────────────
 
-@pytest.mark.asyncio
 async def test_404_returns_json(client):
     """Las rutas no existentes deben devolver JSON, no HTML."""
     response = await client.get("/ruta-que-no-existe")
