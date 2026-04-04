@@ -228,10 +228,10 @@ Sistema de gestión de versiones de modelos con stages:
 
 ### Flujo de uso
 
-3.  **Gestionar versiones**: Inspeccionar cada versión para ver métricas, parámetros y tags asociados. Promover a Production o archivar.
-4.  **Descargar modelos**: Botón de descarga directa en cada versión del registry para obtener un ZIP con el modelo, pipeline y metadatos.
-5.  **CI/CD**: Workflow automático (`model_ci.yml`) para validar métricas antes de promoción.
-6.  **Multi-tenant isolation**: Los nombres en el Registry se prefijan automáticamente con `tenant_{id}_` para garantizar aislamiento y visibilidad correcta en la UI.
+1.  **Gestionar versiones**: Inspeccionar cada versión para ver métricas, parámetros y tags asociados. Promover a Production o archivar.
+2.  **Descargar modelos**: Botón de descarga directa en cada versión del registry para obtener un ZIP con el modelo, pipeline y metadatos.
+3.  **CI/CD**: Workflow automático (`model_ci.yml`) para validar métricas antes de promoción.
+4.  **Multi-tenant isolation**: Los nombres en el Registry se prefijan automáticamente con `tenant_{id}_` para garantizar aislamiento y visibilidad correcta en la UI.
 
 ### Campos del modelo
 
