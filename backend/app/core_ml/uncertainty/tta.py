@@ -1,9 +1,10 @@
 import math
 import random
-import torch
-import torch.nn.functional as F
-import torch.nn as nn
 from typing import Tuple
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 from app.core_ml.uncertainty.base import BaseUncertaintyEstimator
 

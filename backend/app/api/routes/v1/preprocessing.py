@@ -2,30 +2,31 @@
 API route para configurar y aplicar pipelines de preprocesamiento en datasets tabulares.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List, Optional
-from pydantic import BaseModel
-import os
 import logging
+import os
 import tempfile
 from io import BytesIO
+from typing import List, Optional
 
-from app.database import get_db
-from app.models.dataset import Dataset
-from app.models.user import User
-from app.models.tenant import Tenant
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.api.deps import (
     get_current_tenant,
     require_editor,
     require_viewer,
 )
-from app.core_ml.tabular_parser import read_tabular, is_tabular
 from app.core_ml.preprocessing import (
-    build_pipeline,
     apply_pipeline,
+    build_pipeline,
     save_pipeline,
 )
+from app.core_ml.tabular_parser import is_tabular, read_tabular
+from app.database import get_db
+from app.models.dataset import Dataset
+from app.models.tenant import Tenant
+from app.models.user import User
 from app.services.storage_service import get_storage
 
 logger = logging.getLogger(__name__)
@@ -188,7 +189,7 @@ def apply_preprocessing(
         new_file_path = storage_key # La ruta en BD será la storage key
 
         # ── Registrar en DVC (opcional si está configurado) ──────────────────
-        from app.services.dvc_service import track_dataset_with_dvc, DVCService
+        from app.services.dvc_service import DVCService, track_dataset_with_dvc
 
         registry_name = dataset.dvc_registry_name or dataset.name
         dvc_info = {}
@@ -282,6 +283,7 @@ def get_dataset_pipeline_config(
     if dataset.pipeline_path.startswith("runs:/"):
         try:
             from mlflow.tracking import MlflowClient
+
             from app.services.mlflow_service import MLFlowService
 
             run_id = dataset.pipeline_path.split("/")[1]

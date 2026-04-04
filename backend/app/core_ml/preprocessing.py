@@ -3,28 +3,29 @@ Pipeline de preprocesamiento configurable para datasets tabulares.
 Soporta: escalado, imputación y encoding, con serialización vía joblib.
 El preprocessor se guarda como artefacto MLFlow para reproducibilidad en inferencia.
 """
+import json
 import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import joblib
-import json
+import mlflow
+import mlflow.sklearn
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import (
+    FunctionTransformer,
+    KBinsDiscretizer,
     MinMaxScaler,
     OneHotEncoder,
     OrdinalEncoder,
+    PolynomialFeatures,
     RobustScaler,
     StandardScaler,
-    FunctionTransformer,
-    PolynomialFeatures,
-    KBinsDiscretizer,
 )
-import mlflow
-import mlflow.sklearn
+
 from app.services.mlflow_service import MLFlowService
 
 logger = logging.getLogger(__name__)

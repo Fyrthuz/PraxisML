@@ -4,8 +4,8 @@ Consolida la lógica de inferencia de predict.py, single_predict.py y streaming.
 """
 
 import logging
-from typing import Optional, Dict, Any, Tuple
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch

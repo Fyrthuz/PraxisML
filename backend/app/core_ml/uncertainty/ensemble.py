@@ -11,14 +11,15 @@ Estrategia:
   3. La incertidumbre final es un promedio ponderado de las entropías de cada método
      más la varianza entre las predicciones de los métodos (desacuerdo epistémico).
 """
+from typing import Dict, List, Optional, Tuple
+
 import torch
 import torch.nn as nn
-from typing import Tuple, Dict, List, Optional
 
 from app.core_ml.uncertainty.base import BaseUncertaintyEstimator
 from app.core_ml.uncertainty.mc_dropout import MCDropoutEstimator
-from app.core_ml.uncertainty.tta import TTAEstimator
 from app.core_ml.uncertainty.noise_inference import NoisyInferenceEstimator
+from app.core_ml.uncertainty.tta import TTAEstimator
 
 EPS = 1e-6
 

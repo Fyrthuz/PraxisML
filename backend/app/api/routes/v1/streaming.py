@@ -2,19 +2,20 @@
 Endpoint WebSocket para predicciones en tiempo real.
 """
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 import json
 import logging
 import os
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
+import torch
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+
+from app.core.security import decode_token
 from app.database import SessionLocal
 from app.models.ml_model import MLModel
 from app.models.user import User
-from app.core.security import decode_token
-from app.services.model_cache import get_model_cache
 from app.services.background_cache import get_background_cache
-import torch
+from app.services.model_cache import get_model_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -27,25 +28,17 @@ active_connections: Dict[str, Dict[str, WebSocket]] = {}
 async def websocket_predict(
     websocket: WebSocket,
     model_id: str,
+    token: str = Query(..., description="JWT token for authentication"),
     explain: bool = Query(False, description="Incluir explicabilidad SHAP"),
 ):
     """
     Endpoint WebSocket para predicciones en tiempo real.
-    Autenticación JWT via primer mensaje JSON: {"token": "..."}
+    Autenticación JWT via query param: ?token=<jwt>
     """
     await websocket.accept()
 
-    try:
-        auth_message = await websocket.receive_json()
-        token = auth_message.get("token")
-        if not token:
-            await websocket.close(code=1008, reason="Missing token in auth message")
-            return
-    except Exception:
-        await websocket.close(code=1008, reason="Invalid auth message format")
-        return
-
     logger.info(f"WebSocket connection attempt for model {model_id}")
+
     # Validar JWT
     try:
         payload = decode_token(token)
@@ -59,7 +52,6 @@ async def websocket_predict(
         return
 
     user_id = payload.get("sub")
-    # No tenemos DB inyectada por Depends, usamos SessionLocal temporalmente si falta tenant_id
     tenant_id = payload.get("tenant_id")
 
     if not tenant_id and user_id:
@@ -78,7 +70,6 @@ async def websocket_predict(
         return
 
     # Verificar cuota de conexiones WebSocket (simplificado)
-    # En producción, consultar base de datos
     if tenant_id not in active_connections:
         active_connections[tenant_id] = {}
 
@@ -86,9 +77,6 @@ async def websocket_predict(
     if current_connections >= 10:  # Cuota fija de 10 conexiones
         await websocket.close(code=1008, reason="WebSocket quota exceeded")
         return
-
-    # Conectar
-    await websocket.accept()
 
     # Almacenar conexión
     connection_id = f"{model_id}_{len(active_connections[tenant_id])}"
@@ -270,10 +258,12 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
             )
             return cached_data
 
+        from io import BytesIO
+
+        import pandas as pd
+
         from app.models.dataset import Dataset
         from app.services.storage_service import get_storage
-        from io import BytesIO
-        import pandas as pd
 
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if not dataset:
@@ -378,8 +368,9 @@ async def process_row_real(
     Procesa una fila individual usando el modelo real y devuelve predicción con SHAP.
     """
     try:
-        import pandas as pd
         import numpy as np
+        import pandas as pd
+
         from app.core_ml.factory import PredictionFactory, UncertaintyMethod
         from app.core_ml.preprocessing import apply_pipeline
 

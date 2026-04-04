@@ -1,14 +1,14 @@
 from .base import BaseUncertaintyEstimator
-from .mc_dropout import MCDropoutEstimator, CalibratedMCDropoutEstimator
-from .tta import TTAEstimator
-from .noise_inference import NoisyInferenceEstimator
 from .ensemble import EnsembleUncertaintyEstimator
+from .mc_dropout import CalibratedMCDropoutEstimator, MCDropoutEstimator
+from .noise_inference import NoisyInferenceEstimator
 from .sklearn_uncertainty import (
     BaseSklearnEstimator,
+    ConformalEstimator,
     SklearnEntropyEstimator,
     TreeVarianceEstimator,
-    ConformalEstimator,
 )
+from .tta import TTAEstimator
 
 __all__ = [
     # PyTorch estimators

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, UserCog, Shield, Users, AlertCircle, Plus, X, Mail } from "lucide-react";
+import { Loader2, Shield, Users, Plus, X, Mail, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import { config } from '@/lib/config';
+import { useAuth } from "@/components/AuthContext";
 
 interface User {
   id: string;
@@ -35,6 +36,7 @@ const ROLE_LABELS = {
 };
 
 export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUsers }: UsersTabProps) {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
@@ -42,6 +44,8 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newUser, setNewUser] = useState({ email: "", password: "", full_name: "", role: "viewer" });
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     fetchUsers();
@@ -49,7 +53,6 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
 
   const fetchUsers = async () => {
     if (!token || !tenantId) return;
-
     setIsLoading(true);
     try {
       const res = await fetch(config.getFullApiUrl("/users/"), {
@@ -70,10 +73,9 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     if (!token) return;
-
     setIsUpdating(userId);
     try {
-      const res = await fetch(config.getFullApiUrl("/users/${userId}/role"), {
+      const res = await fetch(config.getFullApiUrl(`/users/${userId}/role`), {
         method: "PATCH",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -81,20 +83,43 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
         },
         body: JSON.stringify({ role: newRole }),
       });
-
       if (res.ok) {
         toast.success("Role updated successfully");
         setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
         setSelectedRoleChange(null);
-        if (onRefreshUsers) onRefreshUsers();
+        onRefreshUsers?.();
       } else {
         const data = await res.json();
         toast.error(data.detail || "Failed to update role");
       }
-    } catch (err) {
+    } catch {
       toast.error("Error updating role");
     } finally {
       setIsUpdating(null);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!token || !deletingUserId) return;
+    setIsDeleting(true);
+    try {
+      const res = await fetch(config.getFullApiUrl(`/users/${deletingUserId}`), {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok || res.status === 204) {
+        toast.success("User deactivated successfully");
+        setUsers(users.map(u => u.id === deletingUserId ? { ...u, is_active: false } : u));
+        setDeletingUserId(null);
+        onRefreshUsers?.();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.detail || "Failed to deactivate user");
+      }
+    } catch {
+      toast.error("Error deactivating user");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -103,7 +128,6 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
       toast.error("Email and password are required");
       return;
     }
-
     setIsCreating(true);
     try {
       const res = await fetch(config.getFullApiUrl("/users/"), {
@@ -114,18 +138,17 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
         },
         body: JSON.stringify(newUser),
       });
-
       if (res.ok) {
         toast.success("User created successfully");
         setShowCreateModal(false);
         setNewUser({ email: "", password: "", full_name: "", role: "viewer" });
         fetchUsers();
-        if (onRefreshUsers) onRefreshUsers();
+        onRefreshUsers?.();
       } else {
         const data = await res.json();
         toast.error(data.detail || "Failed to create user");
       }
-    } catch (err) {
+    } catch {
       toast.error("Error creating user");
     } finally {
       setIsCreating(false);
@@ -149,6 +172,8 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
       </div>
     );
   }
+
+  const deletingUser = users.find(u => u.id === deletingUserId);
 
   return (
     <div className="space-y-6">
@@ -191,63 +216,89 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-800">
-            {users.map((user) => (
-              <tr key={user.id} className="hover:bg-neutral-800/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-medium">
-                      {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+            {users.map((user) => {
+              const isSelf = currentUser?.id === user.id;
+              return (
+                <tr
+                  key={user.id}
+                  className={`hover:bg-neutral-800/50 transition-colors ${!user.is_active ? "opacity-50" : ""}`}
+                >
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-medium shrink-0">
+                        {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium text-white flex items-center gap-2">
+                          {user.full_name || "No name"}
+                          {isSelf && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                              You
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-sm text-neutral-400">{user.email}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-white">{user.full_name || "No name"}</p>
-                      <p className="text-sm text-neutral-400">{user.email}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium border ${ROLE_COLORS[user.role as keyof typeof ROLE_COLORS] || ROLE_COLORS.viewer}`}>
-                    {ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] || user.role}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`text-sm ${user.is_active ? "text-emerald-400" : "text-neutral-500"}`}>
-                    {user.is_active ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-sm text-neutral-400">
-                  {user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}
-                </td>
-                <td className="px-6 py-4 text-right">
-                  {selectedRoleChange === user.id ? (
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${ROLE_COLORS[user.role as keyof typeof ROLE_COLORS] || ROLE_COLORS.viewer}`}>
+                      {ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] || user.role}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`text-sm ${user.is_active ? "text-emerald-400" : "text-neutral-500"}`}>
+                      {user.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-neutral-400">
+                    {user.created_at ? new Date(user.created_at).toLocaleDateString() : "-"}
+                  </td>
+                  <td className="px-6 py-4 text-right">
                     <div className="flex items-center gap-2 justify-end">
-                      <select
-                        className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white"
-                        defaultValue={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                        disabled={isUpdating === user.id}
-                      >
-                        <option value="admin">Admin</option>
-                        <option value="editor">Editor</option>
-                        <option value="viewer">Viewer</option>
-                      </select>
-                      <button
-                        onClick={() => setSelectedRoleChange(null)}
-                        className="px-3 py-1.5 text-sm text-neutral-400 hover:text-white"
-                      >
-                        Cancel
-                      </button>
+                      {selectedRoleChange === user.id ? (
+                        <>
+                          <select
+                            className="bg-neutral-800 border border-neutral-700 rounded-lg px-3 py-1.5 text-sm text-white"
+                            defaultValue={user.role}
+                            onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                            disabled={isUpdating === user.id}
+                          >
+                            <option value="admin">Admin</option>
+                            <option value="editor">Editor</option>
+                            <option value="viewer">Viewer</option>
+                          </select>
+                          <button
+                            onClick={() => setSelectedRoleChange(null)}
+                            className="px-3 py-1.5 text-sm text-neutral-400 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setSelectedRoleChange(user.id)}
+                            disabled={isSelf}
+                            className="px-3 py-1.5 text-sm bg-neutral-800 hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+                          >
+                            Change Role
+                          </button>
+                          <button
+                            onClick={() => setDeletingUserId(user.id)}
+                            disabled={isSelf || !user.is_active}
+                            title={isSelf ? "Cannot deactivate yourself" : !user.is_active ? "Already inactive" : "Deactivate user"}
+                            className="p-1.5 text-neutral-500 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => setSelectedRoleChange(user.id)}
-                      className="px-3 py-1.5 text-sm bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors"
-                    >
-                      Change Role
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
@@ -259,16 +310,54 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
         )}
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {deletingUserId && deletingUser && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 w-full max-w-sm shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/10 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-white">Deactivate User?</h3>
+                <p className="text-xs text-neutral-400">This action can be reversed by an admin</p>
+              </div>
+            </div>
+            <div className="bg-neutral-800 rounded-lg px-4 py-3 mb-4">
+              <p className="text-sm font-medium text-white">{deletingUser.full_name || "No name"}</p>
+              <p className="text-xs text-neutral-400">{deletingUser.email}</p>
+            </div>
+            <p className="text-xs text-neutral-500 mb-5">
+              The user will no longer be able to log in. Their data and activity history are preserved.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeletingUserId(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm text-neutral-400 hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-2"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Deactivate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Create User Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-neutral-900 rounded-xl border border-neutral-800 p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-semibold">Add New User</h3>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-neutral-400 hover:text-white"
-              >
+              <button onClick={() => setShowCreateModal(false)} className="text-neutral-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -326,10 +415,7 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
             </div>
 
             <div className="flex justify-end gap-3 mt-6">
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-sm text-neutral-400 hover:text-white"
-              >
+              <button onClick={() => setShowCreateModal(false)} className="px-4 py-2 text-sm text-neutral-400 hover:text-white">
                 Cancel
               </button>
               <button

@@ -2,29 +2,30 @@
 Endpoints para Data Drift
 """
 
+import logging
+import os
+from datetime import datetime
+from io import BytesIO
+from typing import Optional
+
+import numpy as np
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
-from datetime import datetime
 
+from app.api.deps import get_current_tenant, require_viewer
 from app.database import get_db
 from app.models.dataset import Dataset
 from app.models.ml_model import MLModel
-from app.models.user import User
 from app.models.tenant import Tenant
-from app.api.deps import get_current_tenant, require_viewer
-import logging
-import os
-import pandas as pd
-import numpy as np
-from io import BytesIO
+from app.models.user import User
 from app.services.storage_service import get_storage
 
 # Evidently imports
 try:
     from evidently import ColumnMapping
-    from evidently.report import Report
     from evidently.metric_preset import DataDriftPreset
+    from evidently.report import Report
 
     EVIDENTLY_AVAILABLE = True
 except ImportError:
@@ -306,7 +307,10 @@ def get_model_drift_report(
 
                     # Si el dataset tiene pipeline, aplicarlo para tener los datos post-procesados
                     if model.preprocessing_pipeline_path:
-                        from app.core_ml.preprocessing import load_pipeline, apply_pipeline
+                        from app.core_ml.preprocessing import (
+                            apply_pipeline,
+                            load_pipeline,
+                        )
                         try:
                             pipeline = load_pipeline(model.preprocessing_pipeline_path)
                             df_reference, _ = apply_pipeline(pipeline, df_reference)

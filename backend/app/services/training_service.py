@@ -6,6 +6,7 @@ cross-validation, entrenamiento con MLFlow autologging, evaluación y persistenc
 
 import importlib
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import joblib
@@ -13,28 +14,25 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from sklearn.model_selection import (
-    train_test_split,
-    StratifiedKFold,
-    KFold,
-)
-
-from app.services.training_utils import prepare_features
-    cross_validate,
-)
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
-    precision_score,
-    recall_score,
-    mean_squared_error,
     mean_absolute_error,
+    mean_squared_error,
+    precision_score,
     r2_score,
+    recall_score,
+)
+from sklearn.model_selection import (
+    KFold,
+    StratifiedKFold,
+    cross_validate,
+    train_test_split,
 )
 
 from app.core.config import settings
 from app.core_ml.hyperparams import get_algorithm_info, get_default_hyperparams
+from app.services.training_utils import prepare_features
 
 logger = logging.getLogger(__name__)
 
@@ -565,10 +563,10 @@ class PyTorchTrainer:
         Pipeline de entrenamiento PyTorch completo para datos tabulares.
         Soporta holdout y cross-validation.
         """
+        import mlflow.pytorch
         import torch
         import torch.nn as nn
         from torch.utils.data import DataLoader, TensorDataset
-        import mlflow.pytorch
 
         hyperparams = hyperparams or {}
         vc = validation_config or {}
@@ -853,10 +851,10 @@ class PyTorchTrainer:
         model_name=None,
     ) -> Dict[str, Any]:
         """k-fold cross-validation para PyTorch."""
+        import mlflow.pytorch
         import torch
         import torch.nn as nn
         from torch.utils.data import DataLoader, TensorDataset
-        import mlflow.pytorch
 
         input_dim = X_np.shape[1]
         batch_size = hyperparams.get("batch_size", 64)
@@ -930,7 +928,7 @@ class PyTorchTrainer:
                     weight_decay=hyperparams.get("weight_decay", 0.0),
                 )
 
-                for epoch in range(epochs):
+                for _epoch in range(epochs):
                     fold_model.train()
                     for X_b, y_b in train_loader:
                         X_b, y_b = X_b.to(self.device), y_b.to(self.device)
@@ -979,7 +977,7 @@ class PyTorchTrainer:
             full_ds = TensorDataset(torch.from_numpy(X_np), torch.from_numpy(y_np))
             full_loader = DataLoader(full_ds, batch_size=batch_size, shuffle=True)
 
-            for epoch in range(epochs):
+            for _epoch in range(epochs):
                 final_model.train()
                 for X_b, y_b in full_loader:
                     X_b, y_b = X_b.to(self.device), y_b.to(self.device)

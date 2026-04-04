@@ -1,8 +1,10 @@
-from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
-from app.models.base import Base
 import uuid
+from datetime import datetime, timezone
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String
+from sqlalchemy.orm import relationship
+
+from app.models.base import Base
 
 
 def generate_uuid():

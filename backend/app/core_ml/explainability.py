@@ -3,11 +3,12 @@ Módulo de explicabilidad para modelos tabulares usando SHAP.
 Soporta KernelExplainer para todos los modelos (árboles, lineales, SVM, KNN, PyTorch MLP).
 """
 
-import shap
-import numpy as np
-import pandas as pd
 import logging
 from typing import Any, Dict, List, Optional, Union
+
+import numpy as np
+import pandas as pd
+import shap
 
 logger = logging.getLogger(__name__)
 

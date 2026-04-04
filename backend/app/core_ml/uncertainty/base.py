@@ -1,10 +1,12 @@
-import torch
-import torch.nn as nn
 from abc import abstractmethod
-import numpy as np
 from typing import Dict, Tuple
 
+import numpy as np
+import torch
+import torch.nn as nn
+
 from app.core_ml.interfaces import IUncertaintyAlgorithm
+
 
 class BaseUncertaintyEstimator(IUncertaintyAlgorithm):
     """

@@ -15,7 +15,9 @@ export function useModels(token: string | null) {
         });
         if (res.ok) {
             const data = await res.json();
-            setModels(Array.isArray(data) ? data : []);
+            // API returns a paginated envelope { items: [...], total, page, ... }
+            const items = Array.isArray(data) ? data : (data.items ?? []);
+            setModels(items);
         }
     }, [token]);
 

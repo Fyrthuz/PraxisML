@@ -11,7 +11,6 @@ JSON estructuradas con { code, message, detail }.
 
 from typing import Any
 
-
 # ── Base ──────────────────────────────────────────────────────────────────────
 
 class PraxisMLError(Exception):

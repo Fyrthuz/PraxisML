@@ -8,8 +8,8 @@ import logging
 from celery import Task
 from sqlalchemy.orm import Session
 
-from app.worker.celery_app import celery_app
 from app.core.config import settings
+from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -36,11 +36,11 @@ def run_training(
         4. Registrar modelo en la tabla ml_model
         5. Devolver métricas y run_id
     """
+    from app.core_ml.hyperparams import get_algorithm_info
+    from app.core_ml.tabular_parser import read_tabular
     from app.database import SessionLocal
     from app.models.dataset import Dataset
     from app.models.ml_model import MLModel
-    from app.core_ml.tabular_parser import read_tabular
-    from app.core_ml.hyperparams import get_algorithm_info
 
     db: Session = SessionLocal()
 
@@ -59,8 +59,9 @@ def run_training(
         if not dataset:
             raise ValueError(f"Dataset {dataset_id} no encontrado.")
 
-        from app.services.storage_service import get_storage
         from io import BytesIO
+
+        from app.services.storage_service import get_storage
         storage = get_storage()
         data_bytes = storage.download(dataset.file_path)
         df = read_tabular(BytesIO(data_bytes), dataset.file_type)

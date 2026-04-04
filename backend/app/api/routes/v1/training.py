@@ -2,23 +2,24 @@
 API route para entrenamiento de modelos sklearn.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-from typing import Any, Dict, Optional
-from pydantic import BaseModel
 import logging
+from typing import Any, Dict, Optional
 
-from app.database import get_db
-from app.models.user import User
-from app.models.tenant import Tenant
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
 from app.api.deps import (
+    check_training_quota,
     require_editor,
     require_viewer,
-    check_training_quota,
 )
-from app.core_ml.hyperparams import get_all_algorithms, get_algorithm_info
-from app.core.rate_limit import limiter
 from app.core.config import settings
+from app.core.rate_limit import limiter
+from app.core_ml.hyperparams import get_algorithm_info, get_all_algorithms
+from app.database import get_db
+from app.models.tenant import Tenant
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -175,6 +176,7 @@ def get_training_status(
     Requiere rol **viewer** o superior.
     """
     from celery.result import AsyncResult
+
     from app.worker.celery_app import celery_app
 
     result = AsyncResult(task_id, app=celery_app)

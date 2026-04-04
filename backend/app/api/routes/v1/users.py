@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from typing import List
-from pydantic import BaseModel, EmailStr
 
-from app.database import get_db
-from app.models.user import User, UserRole, VALID_ROLES
-from app.models.tenant import Tenant
-from app.api.deps import get_current_user, get_current_tenant, require_admin
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, EmailStr
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_tenant, require_admin
 from app.core import security
+from app.database import get_db
+from app.models.tenant import Tenant
+from app.models.user import VALID_ROLES, User
 
 router = APIRouter()
 

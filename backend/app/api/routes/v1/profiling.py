@@ -1,13 +1,15 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.api.deps import get_current_tenant, require_viewer
+from app.core_ml.tabular_parser import is_tabular, read_tabular
 from app.database import get_db
-from app.models.user import User
-from app.models.tenant import Tenant
 from app.models.dataset import Dataset
-from app.core_ml.tabular_parser import read_tabular, is_tabular
+from app.models.tenant import Tenant
+from app.models.user import User
 from app.services.data_profiler import profile_dataset
-import logging
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,8 +40,9 @@ def get_dataset_profile(
         )
 
     try:
-        from app.services.storage_service import get_storage
         from io import BytesIO
+
+        from app.services.storage_service import get_storage
         storage = get_storage()
         data_bytes = storage.download(dataset.file_path)
         df = read_tabular(BytesIO(data_bytes), dataset.file_type)

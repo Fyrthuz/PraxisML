@@ -14,9 +14,9 @@ import logging
 from pathlib import Path
 from typing import BinaryIO
 
-from app.services.storage_service import StorageService
-from app.core.exceptions import StorageError, StorageObjectNotFoundError
 from app.core.config import settings
+from app.core.exceptions import StorageError, StorageObjectNotFoundError
+from app.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 

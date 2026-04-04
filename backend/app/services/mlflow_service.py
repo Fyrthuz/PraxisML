@@ -1,11 +1,12 @@
+import os
+from pathlib import Path
+from typing import Dict, List, Optional
+
 import mlflow
 import mlflow.pytorch
 import mlflow.sklearn
 import torch
 import torch.nn as nn
-import os
-from pathlib import Path
-from typing import Optional, Dict, List
 
 from app.core.config import settings
 
@@ -205,6 +206,9 @@ class MLFlowService:
         """
         experiment_name = f"tenant_{tenant_id}_models"
         mlflow.set_experiment(experiment_name)
+        import logging
+
+        logger = logging.getLogger(__name__)
 
         with mlflow.start_run(run_name=model_name) as run:
             # Tags estructurados para facilitar filtrado en la UI

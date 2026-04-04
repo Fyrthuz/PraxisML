@@ -1,40 +1,40 @@
+import io
+import logging
+import os
+import shutil
+
+import numpy as np
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
-    Request,
-    status,
-    Form,
     File,
-    UploadFile,
+    Form,
+    HTTPException,
     Query,
+    Request,
+    UploadFile,
+    status,
 )
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List, Optional
 
-from app.database import get_db
-from app.models.prediction import Prediction
-from app.models.dataset import Dataset
-from app.models.ml_model import MLModel
-from app.models.user import User
-from app.models.tenant import Tenant
-from app.schemas.prediction import PredictionResponse
-from app.schemas.pagination import PaginatedResponse
 from app.api.deps import (
+    check_prediction_quota,
     get_current_tenant,
     require_editor,
     require_viewer,
-    check_prediction_quota,
 )
-from app.core.rate_limit import limiter
 from app.core.config import settings
-from pydantic import BaseModel
-import os
-import shutil
-import numpy as np
-import io
-from fastapi.responses import StreamingResponse
-import logging
+from app.core.rate_limit import limiter
+from app.database import get_db
+from app.models.dataset import Dataset
+from app.models.ml_model import MLModel
+from app.models.prediction import Prediction
+from app.models.tenant import Tenant
+from app.models.user import User
+from app.schemas.pagination import PaginatedResponse
+from app.schemas.prediction import PredictionResponse
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +129,9 @@ def request_single_prediction(
 
     Requiere rol **editor** o superior. Rate limited a {RATE_LIMIT_INFERENCE}.
     """
-    from app.worker.tasks.single_predict import run_single_tabular_inference
     import json
+
+    from app.worker.tasks.single_predict import run_single_tabular_inference
 
     try:
         features_dict = json.loads(features)
@@ -254,6 +255,7 @@ def get_prediction_status(
     Requiere rol **viewer** o superior.
     """
     from celery.result import AsyncResult
+
     from app.worker.celery_app import celery_app
 
     task_result = AsyncResult(task_id, app=celery_app)

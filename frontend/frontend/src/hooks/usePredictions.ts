@@ -24,7 +24,9 @@ export function usePredictions(
         });
         if (res.ok) {
             const data = await res.json();
-            setPredictions(Array.isArray(data) ? data : []);
+            // API returns a paginated envelope { items: [...], total, page, ... }
+            const items = Array.isArray(data) ? data : (data.items ?? []);
+            setPredictions(items);
         }
     }, [token]);
 
@@ -38,9 +40,10 @@ export function usePredictions(
                 const res = await fetch(`${API}/predictions`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
-                const updatedPreds: Prediction[] = await res.json();
+                const pollData = await res.json();
+                const updatedPreds: Prediction[] = Array.isArray(pollData) ? pollData : (pollData.items ?? []);
 
-                if (Array.isArray(updatedPreds)) {
+                if (updatedPreds.length >= 0) {
                     setPredictions((prevPreds) => {
                         updatedPreds.forEach((updated) => {
                             const prev = prevPreds.find((p) => p.id === updated.id);

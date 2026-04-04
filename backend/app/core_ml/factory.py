@@ -1,17 +1,18 @@
 from enum import Enum
 from typing import Any, Tuple
+
 import torch
 import torch.nn as nn
 
 from app.core_ml.interfaces import IUncertaintyAlgorithm
 from app.core_ml.uncertainty import (
-    MCDropoutEstimator,
-    TTAEstimator,
-    NoisyInferenceEstimator,
+    ConformalEstimator,
     EnsembleUncertaintyEstimator,
+    MCDropoutEstimator,
+    NoisyInferenceEstimator,
     SklearnEntropyEstimator,
     TreeVarianceEstimator,
-    ConformalEstimator,
+    TTAEstimator,
 )
 
 
@@ -158,8 +159,11 @@ class PredictionFactory:
                 return NoUncertaintyEstimator(model, device)
             else:
                 # Sklearn model: predicción directa sin incertidumbre
-                from app.core_ml.uncertainty.sklearn_uncertainty import BaseSklearnEstimator
                 import numpy as np
+
+                from app.core_ml.uncertainty.sklearn_uncertainty import (
+                    BaseSklearnEstimator,
+                )
 
                 class NoUncertaintySklearn(BaseSklearnEstimator):
                     def estimate_uncertainty(self, input_data, **kw):

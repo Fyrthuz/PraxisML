@@ -2,10 +2,10 @@
 Utilidades para parsear archivos tabulares (.csv, .xlsx, .parquet).
 Extrae metadata (schema, filas, columnas) y ofrece preview.
 """
-import os
 import logging
+import os
 from pathlib import Path
-from typing import Optional, Dict, Any, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 

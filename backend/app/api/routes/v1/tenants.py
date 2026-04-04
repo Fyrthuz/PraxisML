@@ -1,16 +1,18 @@
+import os
+from typing import List
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models.tenant import Tenant
-from app.models.user import User
-from app.schemas.tenant import TenantCreate, TenantResponse, TenantUpdate
-from typing import List
+
 from app.api.deps import (
     get_current_tenant,
     require_admin,
     require_viewer,
 )
-import os
+from app.database import get_db
+from app.models.tenant import Tenant
+from app.models.user import User
+from app.schemas.tenant import TenantCreate, TenantResponse, TenantUpdate
 
 router = APIRouter()
 

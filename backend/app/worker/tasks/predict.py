@@ -4,19 +4,19 @@ incertidumbre, trackea la inferencia en MLFlow y guarda el resultado en disco
 y en la base de datos.
 """
 
-import time
 import logging
-import numpy as np
+import time
 from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 
+import numpy as np
 from celery import Task
 from sqlalchemy.orm import Session
 
-from app.worker.celery_app import celery_app
 from app.core.config import settings
 from app.services.storage_service import get_storage
+from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +37,12 @@ def run_heavy_inference(
     log MLFlow inference run → save results → update DB.
     """
     # Lazy imports to avoid circular dependencies at module load time
+    from app.core_ml.factory import PredictionFactory, UncertaintyMethod
     from app.database import SessionLocal
     from app.models.dataset import Dataset
     from app.models.ml_model import MLModel
     from app.models.prediction import Prediction
     from app.services.mlflow_service import MLFlowService
-    from app.core_ml.factory import PredictionFactory, UncertaintyMethod
 
     db: Session = SessionLocal()
     storage = get_storage()
@@ -118,7 +118,7 @@ def run_heavy_inference(
             state="PROGRESS", meta={"status": "Aplicando preprocesamiento..."}
         )
         if ml_model.preprocessing_pipeline_path:
-            from app.core_ml.preprocessing import load_pipeline, apply_pipeline
+            from app.core_ml.preprocessing import apply_pipeline, load_pipeline
 
             try:
                 pipeline = load_pipeline(ml_model.preprocessing_pipeline_path)

@@ -1,7 +1,9 @@
-import torch.nn as nn
 from typing import Dict, Type
 
+import torch.nn as nn
+
 from app.core_ml.models.unet import UNet
+
 
 class ModelFactory:
     """

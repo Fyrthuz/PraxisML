@@ -1,9 +1,11 @@
-from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, JSON
-from sqlalchemy.orm import relationship
-from datetime import datetime, timezone
-from app.models.base import Base
-from enum import Enum as PyEnum
 import uuid
+from datetime import datetime, timezone
+from enum import Enum as PyEnum
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String
+from sqlalchemy.orm import relationship
+
+from app.models.base import Base
 
 
 class ModelStage(str, PyEnum):

@@ -1,7 +1,8 @@
+from typing import List, Optional, Tuple
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Tuple, Optional
 from tqdm import tqdm
 
 from app.core_ml.uncertainty.base import BaseUncertaintyEstimator
@@ -95,8 +96,10 @@ class MCDropoutEstimator(BaseUncertaintyEstimator):
 
 class CalibratedMCDropoutEstimator(BaseUncertaintyEstimator):
     def __init__(self, model: nn.Module, device: torch.device, data_loader: torch.utils.data.DataLoader,
-                 p_values: List[float] = [0.1, 0.3, 0.5], mc_samples: int = 5, num_classes: int = 2,
+                 p_values: List[float] = None, mc_samples: int = 5, num_classes: int = 2,
                  calib_tolerance: float = 0.02, scale_entropy: bool = False):
+        if p_values is None:
+            p_values = [0.1, 0.3, 0.5]
         super().__init__(model, device)
         self.data_loader = data_loader
         self.p_values = p_values

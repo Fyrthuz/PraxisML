@@ -5,7 +5,6 @@ y por el backend para validación.
 """
 from typing import Any, Dict, List
 
-
 # Definición de cada hiperparámetro:
 #   name: nombre del parámetro (coincide con el kwarg de sklearn)
 #   label: nombre legible para la UI

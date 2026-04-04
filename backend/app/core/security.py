@@ -1,9 +1,10 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Union, Dict, Optional
-from jose import jwt, JWTError
-from passlib.context import CryptContext
-import requests
 import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, Union
+
+import requests
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 from app.core.config import settings
 

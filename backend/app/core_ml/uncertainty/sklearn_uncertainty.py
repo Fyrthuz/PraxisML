@@ -4,7 +4,7 @@ Implementan `IUncertaintyAlgorithm` al igual que los estimadores de PyTorch,
 pero trabajan directamente con arrays NumPy y modelos sklearn.
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 import numpy as np
 

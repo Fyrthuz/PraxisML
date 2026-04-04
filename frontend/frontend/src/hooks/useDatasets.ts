@@ -17,7 +17,9 @@ export function useDatasets(token: string | null) {
         });
         if (res.ok) {
             const data = await res.json();
-            setDatasets(Array.isArray(data) ? data : []);
+            // API returns a paginated envelope { items: [...], total, page, ... }
+            const items = Array.isArray(data) ? data : (data.items ?? []);
+            setDatasets(items);
         }
     }, [token]);
 

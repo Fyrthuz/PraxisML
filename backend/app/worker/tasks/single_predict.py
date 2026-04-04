@@ -1,11 +1,12 @@
 import logging
-import torch
-from celery import Task
 from pathlib import Path
 
-from app.worker.celery_app import celery_app
+import torch
+from celery import Task
+
 from app.core_ml.factory import PredictionFactory, UncertaintyMethod
 from app.services.inference_service import get_inference_service
+from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,12 @@ def run_single_tabular_inference(
     3. Pasa por el Estimator.
     4. Guarda resultado y actualiza DB.
     """
-    from app.database import SessionLocal
-    from app.models.prediction import Prediction
-    from app.models.ml_model import MLModel
-    from app.services.mlflow_service import MLFlowService
     import numpy as np
+
     from app.core.config import settings
+    from app.database import SessionLocal
+    from app.models.ml_model import MLModel
+    from app.models.prediction import Prediction
 
     logger.info(f"[{prediction_id}] Iniciando Single Tabular Inference: {method}")
     db = SessionLocal()
@@ -55,7 +56,6 @@ def run_single_tabular_inference(
 
         # 3. Process features
         if features is not None:
-            import pandas as pd
 
             feature_names = ml_model.metrics_metadata.get("feature_names", [])
             pipeline = None

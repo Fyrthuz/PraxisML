@@ -1,42 +1,42 @@
-import shutil
-import mlflow
-import os
-import tempfile
-import zipfile
 import csv
 import logging
+import os
+import shutil
+import tempfile
+import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
+import mlflow
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
-    UploadFile,
     File,
     Form,
-    status,
+    HTTPException,
     Query,
+    UploadFile,
+    status,
 )
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from datetime import datetime, timezone
 
-from app.database import get_db
-from app.models.ml_model import MLModel
-from app.models.user import User
-from app.models.tenant import Tenant
-from app.schemas.ml_model import MLModelCreate, MLModelResponse
-from app.schemas.pagination import PaginatedResponse
 from app.api.deps import (
+    check_model_quota,
     get_current_tenant,
+    require_admin,
     require_editor,
     require_viewer,
-    require_admin,
-    check_model_quota,
 )
-from app.services.mlflow_service import MLFlowService
 from app.core.config import settings
+from app.database import get_db
+from app.models.ml_model import MLModel
+from app.models.tenant import Tenant
+from app.models.user import User
+from app.schemas.ml_model import MLModelCreate, MLModelResponse
+from app.schemas.pagination import PaginatedResponse
+from app.services.mlflow_service import MLFlowService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -440,7 +440,7 @@ def _create_model_zip_response(
         # Nota: Usamos zip_path en temp_dir para evitar conflictos
         zip_path = tempfile.mktemp(suffix=".zip", prefix=f"{name.replace(' ', '_')}_")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-            for root, dirs, files in os.walk(temp_dir):
+            for root, _dirs, files in os.walk(temp_dir):
                 for file in files:
                     full_path = os.path.join(root, file)
                     arcname = os.path.relpath(full_path, temp_dir)

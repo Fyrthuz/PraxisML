@@ -19,9 +19,9 @@ from typing import BinaryIO
 import boto3
 from botocore.exceptions import ClientError
 
-from app.services.storage_service import StorageService
 from app.core.exceptions import StorageError, StorageObjectNotFoundError
 from app.core.logging import get_logger
+from app.services.storage_service import StorageService
 
 logger = get_logger(__name__)
 

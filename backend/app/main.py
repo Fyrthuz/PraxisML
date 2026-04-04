@@ -1,22 +1,22 @@
+import logging
+import os
 import subprocess
 import sys
-import os
-import logging
 from contextlib import asynccontextmanager
 
 os.environ["GIT_PYTHON_REFRESH"] = "quiet"
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from prometheus_client import Counter
+from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from prometheus_fastapi_instrumentator import Instrumentator
-from prometheus_client import Counter
 
 from app.core.config import settings
-from app.core.logging import setup_logging
 from app.core.exceptions import PraxisMLError
+from app.core.logging import setup_logging
 from app.core.rate_limit import limiter
 
 # ── Logging estructurado ───────────────────────────────────────────────────────
@@ -209,15 +209,15 @@ def create_app() -> FastAPI:
     # ── Routers ───────────────────────────────────────────────────────────────
     from app.api.routes.v1 import (
         auth,
-        tenants,
         datasets,
+        drift,
         models,
         predictions,
         preprocessing,
-        training,
         profiling,
         streaming,
-        drift,
+        tenants,
+        training,
         users,
     )
 

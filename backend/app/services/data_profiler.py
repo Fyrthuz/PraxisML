@@ -1,6 +1,8 @@
-import pandas as pd
+from typing import Any, Dict
+
 import numpy as np
-from typing import Dict, Any
+import pandas as pd
+
 
 def detect_column_types(df: pd.DataFrame) -> Dict[str, str]:
     """
