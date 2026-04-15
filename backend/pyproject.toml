@@ -8,7 +8,7 @@ dependencies = [
     # ── Web Framework ──────────────────────────────────────────────────
     "fastapi>=0.133.1",
     "uvicorn>=0.41.0",
-    "python-multipart>=0.0.22",
+    "python-multipart>=0.0.26",
     # ── Base de datos ──────────────────────────────────────────────────
     "sqlalchemy>=2.0.47",
     "alembic>=1.18.4",
