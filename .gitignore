@@ -46,6 +46,12 @@ out/
 # Los volúmenes de datos de contenedores no se versionan
 backend/data/
 
+# ── MLflow (local) ─────────────────────────────────────────────────
+# mlflow.db se crea cuando se corre MLflow con backend SQLite local
+# (modo desarrollo sin Docker). Los runs en producción/container van a PostgreSQL.
+backend/mlflow.db
+backend/mlruns/
+
 # ── IDE ───────────────────────────────────────────────────────────
 .vscode/settings.json
 .idea/

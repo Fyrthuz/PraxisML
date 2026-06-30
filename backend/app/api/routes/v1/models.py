@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     check_model_quota,
     get_current_tenant,
+    get_storage_service,
     require_admin,
     require_editor,
     require_viewer,
@@ -37,6 +38,7 @@ from app.models.user import User
 from app.schemas.ml_model import MLModelCreate, MLModelResponse
 from app.schemas.pagination import PaginatedResponse
 from app.services.mlflow_service import MLFlowService
+from app.services.storage_service import StorageService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -122,6 +124,7 @@ def upload_and_register_model(
     _user: User = Depends(require_editor),
     tenant: Tenant = Depends(check_model_quota),
     db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Sube un fichero .pth, lo registra en MLFlow automáticamente y crea el
@@ -141,12 +144,17 @@ def upload_and_register_model(
 
     is_torchscript = file.filename.endswith((".pt", ".ts"))
 
-    # ── Guardar en disco ────────────────────────────────────────────────────
+    # ── Guardar en disco temporal y StorageService ──────────────────────────
     models_dir = Path(settings.DATA_DIR) / "tenants" / tenant.id / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
     pth_path = models_dir / file.filename
     with pth_path.open("wb") as f:
         shutil.copyfileobj(file.file, f)
+
+    # Subir a StorageService
+    storage_key = f"tenants/{tenant.id}/models/{file.filename}"
+    with open(pth_path, "rb") as f:
+        storage.upload(storage_key, f)
 
     # ── Registrar en MLFlow (Si NO es TorchScript) ──────────────────────────
     run_id = None
@@ -245,7 +253,7 @@ def get_models(
     Requiere rol **viewer** o superior.
     """
     query = db.query(MLModel).filter(
-        (MLModel.tenant_id == tenant.id) | (MLModel.is_public is True)
+        (MLModel.tenant_id == tenant.id) | MLModel.is_public.is_(True)
     )
 
     total = query.count()
@@ -275,6 +283,7 @@ def delete_model(
     _user: User = Depends(require_admin),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Elimina un modelo de la base de datos que pertenezca al tenant actual.
@@ -292,13 +301,13 @@ def delete_model(
             status_code=404, detail="Model no encontrado o sin permisos."
         )
 
-    # Opcional: Eliminar archivos .pth/.pt de disco si existen
-    if model.torchscript_path and os.path.exists(model.torchscript_path):
+    # Eliminar artefactos via StorageService
+    if model.torchscript_path:
         try:
-            os.remove(model.torchscript_path)
+            storage.delete(model.torchscript_path)
         except Exception as e:
             logger.warning(
-                "Could not delete torchscript file %s: %s",
+                "Could not delete torchscript key %s: %s",
                 model.torchscript_path,
                 str(e),
             )
@@ -321,21 +330,16 @@ def delete_model(
 
     predictions = db.query(Prediction).filter(Prediction.model_id == model_id).all()
     for pred in predictions:
-        # Borrar archivos .npy asociados si existen
         if pred.result_path:
-            full_result_path = os.path.join(settings.DATA_DIR, pred.result_path)
-            if os.path.exists(full_result_path):
-                try:
-                    os.remove(full_result_path)
-                except Exception:
-                    pass
+            try:
+                storage.delete(pred.result_path)
+            except Exception:
+                pass
         if pred.uncertainty_path:
-            full_uncert_path = os.path.join(settings.DATA_DIR, pred.uncertainty_path)
-            if os.path.exists(full_uncert_path):
-                try:
-                    os.remove(full_uncert_path)
-                except Exception:
-                    pass
+            try:
+                storage.delete(pred.uncertainty_path)
+            except Exception:
+                pass
         db.delete(pred)
 
     db.delete(model)
@@ -462,8 +466,8 @@ def _create_model_zip_response(
 @router.get("/{model_id}/download", response_class=FileResponse)
 def download_model(
     model_id: str,
-    tenant_id: str,
     _user: User = Depends(require_viewer),
+    tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
 ):
     """
@@ -477,7 +481,7 @@ def download_model(
         db.query(MLModel)
         .filter(
             MLModel.id == model_id,
-            (MLModel.tenant_id == tenant_id) | (MLModel.is_public is True),
+            (MLModel.tenant_id == tenant.id) | MLModel.is_public.is_(True),
         )
         .first()
     )

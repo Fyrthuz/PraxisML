@@ -430,7 +430,8 @@ def get_prediction_visualization(
         }
         media_type = media_types.get(ext, "image/png")
 
-        return StreamingResponse(open(original_path, "rb"), media_type=media_type)
+        f = open(original_path, "rb")
+        return StreamingResponse(f, media_type=media_type, headers={"Content-Disposition": f"inline; filename={os.path.basename(original_path)}"})
 
     path_to_load = (
         prediction.result_path if img_type == "result" else prediction.uncertainty_path

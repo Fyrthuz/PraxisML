@@ -50,26 +50,38 @@ class TestPreprocessing:
         from app.core_ml import preprocessing
         assert preprocessing is not None
 
-    def test_normalize_image_shape(self):
-        """La normalización debe preservar el shape de la imagen."""
+    def test_build_pipeline(self):
+        """Construir pipeline con pasos básicos de imputación y escalado."""
         try:
-            from app.core_ml.preprocessing import normalize_image
-            img = np.random.randint(0, 255, (256, 256, 3), dtype=np.uint8)
-            result = normalize_image(img)
-            assert result.shape == img.shape
-            assert result.dtype == np.float32 or result.max() <= 1.0
+            from app.core_ml.preprocessing import build_pipeline
+            config = {
+                "steps": [
+                    {"type": "impute", "columns": ["age", "income"], "strategy": "median"},
+                    {"type": "scale", "columns": ["age", "income"], "strategy": "standard"},
+                ]
+            }
+            pipeline = build_pipeline(config, column_names=["age", "income", "target"])
+            assert pipeline is not None
         except (ImportError, AttributeError):
-            pytest.skip("normalize_image no disponible")
+            pytest.skip("build_pipeline no disponible")
 
-    def test_resize_image(self):
-        """El resize debe producir la forma objetivo."""
+    def test_apply_pipeline(self):
+        """Aplicar pipeline transforma el DataFrame correctamente."""
         try:
-            from app.core_ml.preprocessing import resize_image
-            img = np.zeros((512, 512, 3), dtype=np.uint8)
-            result = resize_image(img, target_size=(256, 256))
-            assert result.shape[:2] == (256, 256)
+            from app.core_ml.preprocessing import build_pipeline, apply_pipeline
+            import pandas as pd
+            df = pd.DataFrame({"age": [1.0, 2.0, 3.0], "income": [100.0, 200.0, 300.0], "target": [0, 1, 0]})
+            config = {
+                "steps": [
+                    {"type": "impute", "columns": ["age", "income"], "strategy": "median"},
+                ]
+            }
+            pipeline = build_pipeline(config, column_names=["age", "income", "target"])
+            X, y = apply_pipeline(pipeline, df, target_column="target")
+            assert X.shape[1] == 2
+            assert len(y) == 3
         except (ImportError, AttributeError):
-            pytest.skip("resize_image no disponible")
+            pytest.skip("apply_pipeline no disponible")
 
 
 # ── uncertainty ───────────────────────────────────────────────────────────────
@@ -88,28 +100,18 @@ class TestUncertaintyEstimators:
         except ImportError:
             pytest.skip("mc_dropout no disponible")
 
-    def test_entropy_calculation(self):
-        """La entropía de predicciones uniformes debe ser máxima."""
+    def test_base_uncertainty_has_entropy(self):
+        """BaseUncertaintyEstimator debe exponer _compute_entropy."""
         try:
-            from app.core_ml.uncertainty.base import compute_entropy
-            # Distribución uniforme → entropía máxima
-            probs = np.ones((10, 5)) / 5  # 10 muestras, 5 clases
-            entropy = compute_entropy(probs)
-            assert entropy.shape == (10,) or entropy.ndim >= 0
-            assert np.all(entropy >= 0)
-        except (ImportError, AttributeError):
-            pytest.skip("compute_entropy no disponible")
+            import torch
+            from app.core_ml.uncertainty.base import BaseUncertaintyEstimator
 
-    def test_variance_from_samples(self):
-        """La varianza de muestras idénticas debe ser cero."""
-        try:
-            from app.core_ml.uncertainty.base import compute_variance
-            # Todas las muestras iguales → varianza 0
-            samples = np.ones((5, 3, 64, 64))  # 5 muestras MC idénticas
-            variance = compute_variance(samples)
-            assert np.allclose(variance, 0.0)
+            batch = torch.ones(10, 5) / 5
+            entropy = BaseUncertaintyEstimator._compute_entropy(batch)
+            assert entropy.shape == (10,)
+            assert torch.all(entropy >= 0)
         except (ImportError, AttributeError):
-            pytest.skip("compute_variance no disponible")
+            pytest.skip("BaseUncertaintyEstimator no disponible")
 
 
 # ── exceptions ────────────────────────────────────────────────────────────────

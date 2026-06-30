@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     check_dataset_quota,
     get_current_tenant,
+    get_storage_service,
     require_admin,
     require_editor,
     require_viewer,
@@ -35,7 +36,7 @@ from app.models.user import User
 from app.schemas.dataset import DatasetPreviewResponse, DatasetResponse
 from app.schemas.pagination import PaginatedResponse
 from app.services.dvc_service import DVCService
-from app.services.storage_service import get_storage
+from app.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -47,6 +48,7 @@ def download_dataset(
     _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Descarga un dataset específico. Si está trackeado con DVC, asegura que esté en disco local.
@@ -72,7 +74,6 @@ def download_dataset(
             logger.warning(f"Failed to pull dataset from DVC before download: {e}")
 
     try:
-        storage = get_storage()
         data_bytes = storage.download(dataset.file_path)
     except Exception as e:
         logger.error(f"Error downloading dataset from storage: {e}")
@@ -109,6 +110,7 @@ async def upload_dataset(
     _user: User = Depends(require_editor),
     tenant: Tenant = Depends(check_dataset_quota),
     db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Sube un dataset en formato .csv, .xlsx, .parquet o .zip (imágenes).
@@ -131,7 +133,6 @@ async def upload_dataset(
     file_type = detect_file_type(file.filename)
 
     # ── Guardar en Storage ───────────────────────────────────────────────────
-    storage = get_storage()
 
     # Key format: tenants/{tenant_id}/datasets/{filename}
     storage_key = f"tenants/{tenant.id}/datasets/{file.filename}"
@@ -226,7 +227,8 @@ async def upload_dataset(
             dvc_result = dvc_service.add_dataset(str(local_path), dvc_registry)
             _is_actually_tracked = True
             dvc_hash = dvc_result.get("hash")
-            dvc_remote = "minio"
+            from app.core.config import settings as praxisml_settings
+            dvc_remote = praxisml_settings.DVC_REMOTE_NAME
             logger.info(f"Dataset {name} tracked with DVC, hash: {dvc_hash}")
         except Exception as e:
             logger.warning(f"Failed to track dataset with DVC: {e}")
@@ -297,6 +299,7 @@ def preview_dataset(
     _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Devuelve las primeras N filas de un dataset tabular como JSON.
@@ -318,7 +321,6 @@ def preview_dataset(
         )
 
     try:
-        storage = get_storage()
         data_bytes = storage.download(dataset.file_path)
         from io import BytesIO
 
@@ -354,6 +356,7 @@ def delete_dataset(
     _user: User = Depends(require_admin),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Elimina un dataset: borra el archivo de disco, el config file si existe,
@@ -369,7 +372,6 @@ def delete_dataset(
         raise HTTPException(status_code=404, detail="Dataset no encontrado.")
 
     # Borrar de Storage
-    storage = get_storage()
     if dataset.file_path:
         try:
             storage.delete(dataset.file_path)

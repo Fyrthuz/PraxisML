@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import (
     get_current_tenant,
+    get_storage_service,
     require_editor,
     require_viewer,
 )
@@ -27,7 +28,7 @@ from app.database import get_db
 from app.models.dataset import Dataset
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.services.storage_service import get_storage
+from app.services.storage_service import StorageService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -71,6 +72,7 @@ def preview_preprocessing(
     _user: User = Depends(require_editor),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Recibe la configuración de preprocesamiento, la aplica al dataset,
@@ -81,7 +83,6 @@ def preview_preprocessing(
     """
     dataset = _get_tabular_dataset(config.dataset_id, tenant, db)
 
-    storage = get_storage()
     try:
         data_bytes = storage.download(dataset.file_path)
         df = read_tabular(BytesIO(data_bytes), dataset.file_type)
@@ -123,6 +124,7 @@ def apply_preprocessing(
     _user: User = Depends(require_editor),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Aplica el pipeline de preprocesamiento al dataset, guarda:
@@ -136,7 +138,6 @@ def apply_preprocessing(
     """
     dataset = _get_tabular_dataset(dataset_id, tenant, db)
 
-    storage = get_storage()
     try:
         data_bytes = storage.download(dataset.file_path)
         df = read_tabular(BytesIO(data_bytes), dataset.file_type)

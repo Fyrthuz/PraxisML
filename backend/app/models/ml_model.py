@@ -1,4 +1,3 @@
-import uuid
 from datetime import datetime, timezone
 from enum import Enum as PyEnum
 
@@ -6,16 +5,13 @@ from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, String
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base
+from app.utils.uuid import generate_uuid
 
 
 class ModelStage(str, PyEnum):
     STAGING = "Staging"
     PRODUCTION = "Production"
     ARCHIVED = "Archived"
-
-
-def generate_uuid():
-    return str(uuid.uuid4())
 
 
 class MLModel(Base):

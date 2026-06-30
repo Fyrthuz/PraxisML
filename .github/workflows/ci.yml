@@ -84,7 +84,7 @@ jobs:
           SECRET_KEY: test_secret_key_ci
           STORAGE_BACKEND: local
           CORS_ORIGINS: "http://localhost:3000"
-        run: uv run pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=30
+        run: uv run pytest tests/ --cov=app --cov-report=term-missing --cov-fail-under=50 --ignore=app/migrations
 
   lint:
     name: Lint

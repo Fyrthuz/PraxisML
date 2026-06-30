@@ -823,6 +823,13 @@ class PyTorchTrainer:
             metrics,
         )
 
+        # Mover modelo a CPU y liberar memoria GPU
+        model = model.cpu()
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         return {
             "model": model,
             "metrics": metrics,

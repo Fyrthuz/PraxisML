@@ -120,13 +120,6 @@ def start_training(
             detail="El entrenamiento solo es posible con datasets tabulares (.csv, .xlsx, .parquet).",
         )
 
-    # Validar que tiene preprocesamiento asociado
-    if not dataset.pipeline_path:
-        raise HTTPException(
-            status_code=400,
-            detail="El dataset seleccionado no tiene un preprocesamiento (pipeline) asociado. Por favor, aplica un preprocesamiento antes de entrenar.",
-        )
-
     # Validar que target_column existe en el dataset
     if dataset.column_names and req.target_column not in dataset.column_names:
         raise HTTPException(

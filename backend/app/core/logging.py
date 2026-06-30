@@ -21,6 +21,8 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from app.core.middleware import get_request_id
+
 PRAXISML_FIELDS = ("tenant_id", "model_id", "task_id", "request_id", "user_id")
 
 
@@ -40,6 +42,11 @@ class JsonFormatter(logging.Formatter):
             value = getattr(record, field, None)
             if value is not None:
                 log_entry[field] = value
+        # Auto-inyectar request_id desde contextvars si no se pasó explícitamente
+        if "request_id" not in log_entry:
+            rid = get_request_id()
+            if rid:
+                log_entry["request_id"] = rid
 
         # Añadir información de excepción si existe
         if record.exc_info:

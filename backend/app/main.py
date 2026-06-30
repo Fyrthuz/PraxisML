@@ -17,6 +17,7 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.core.exceptions import PraxisMLError
 from app.core.logging import setup_logging
+from app.core.middleware import RequestIDMiddleware
 from app.core.rate_limit import limiter
 
 # ── Logging estructurado ───────────────────────────────────────────────────────
@@ -109,6 +110,9 @@ def create_app() -> FastAPI:
     # ── Rate Limiter state ────────────────────────────────────────────────────
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    # ── Request ID — inyecta X-Request-ID en cada request/response ──────────
+    app.add_middleware(RequestIDMiddleware)
 
     # ── CORS — restringido al dominio del frontend por entorno ────────────────
     # Para desarrollo, permitir todos los orígenes si es necesario

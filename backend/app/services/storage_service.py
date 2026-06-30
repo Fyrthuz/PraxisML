@@ -15,9 +15,10 @@ Uso:
 
 from __future__ import annotations
 
-import os
 from abc import ABC, abstractmethod
 from typing import BinaryIO
+
+from app.core.config import settings
 
 
 class StorageService(ABC):
@@ -62,7 +63,7 @@ def get_storage() -> StorageService:
     Retorna la implementación de StorageService según STORAGE_BACKEND.
     Se instancia como singleton ligero (sin lru_cache para permitir override en tests).
     """
-    backend = os.getenv("STORAGE_BACKEND", "local").lower()
+    backend = settings.STORAGE_BACKEND.lower()
 
     if backend == "minio":
         from app.services.storage_minio import MinIOStorageService

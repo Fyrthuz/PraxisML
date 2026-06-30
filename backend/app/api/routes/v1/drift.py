@@ -13,19 +13,18 @@ import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_tenant, require_viewer
+from app.api.deps import get_current_tenant, get_storage_service, require_viewer
 from app.database import get_db
 from app.models.dataset import Dataset
 from app.models.ml_model import MLModel
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.services.storage_service import get_storage
+from app.services.storage_service import StorageService
 
-# Evidently imports
+# Evidently imports (compatible con v0.7+)
 try:
-    from evidently import ColumnMapping
-    from evidently.metric_preset import DataDriftPreset
-    from evidently.report import Report
+    from evidently import Report
+    from evidently.presets import DataDriftPreset
 
     EVIDENTLY_AVAILABLE = True
 except ImportError:
@@ -42,6 +41,7 @@ def get_dataset_drift_report(
     db: Session = Depends(get_db),
     current_tenant: Tenant = Depends(get_current_tenant),
     _: User = Depends(require_viewer),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Genera un reporte de drift para un dataset específico.
@@ -52,19 +52,13 @@ def get_dataset_drift_report(
     )
 
     if not EVIDENTLY_AVAILABLE:
-        logger.warning("Evidently no está instalado, devolviendo datos simulados")
-        # Devolver datos simulados si Evidently no está disponible
-        return {
-            "dataset_id": dataset_id,
-            "timestamp": datetime.now().isoformat(),
-            "metrics": {
-                "dataset_drift": False,
-                "drift_by_columns": {},
-                "psi_threshold": 0.2,
-                "ks_threshold": 0.05,
-            },
-            "simulated": True,
-        }
+        logger.error("Evidently no está instalado — no es posible calcular drift")
+        raise HTTPException(
+            status_code=503,
+            detail="Evidently AI no está instalado en este entorno. "
+            "El cálculo de drift no está disponible. "
+            "Ejecuta: pip install evidently",
+        )
 
     # Obtener dataset
     dataset = (
@@ -80,7 +74,6 @@ def get_dataset_drift_report(
     # Calcular drift real usando Evidently
     try:
         # Descargar dataset actual desde MinIO/S3/Local
-        storage = get_storage()
         logger.info(f"Descargando dataset desde storage: {dataset.file_path}")
 
         try:
@@ -132,34 +125,16 @@ def get_dataset_drift_report(
             df_reference = df_current.sample(frac=0.8, random_state=42)
             df_current = df_current.drop(df_reference.index)
 
-        # Configurar column mapping (asumimos que todas las columnas son features)
-        column_mapping = ColumnMapping()
-
-        # Identificar columnas categóricas (si las hay)
-        categorical_columns = df_current.select_dtypes(
-            include=["object", "category"]
-        ).columns.tolist()
-        if categorical_columns:
-            column_mapping.categorical_features = categorical_columns
-
-        # Identificar columnas numéricas
-        numerical_columns = df_current.select_dtypes(
-            include=[np.number]
-        ).columns.tolist()
-        if numerical_columns:
-            column_mapping.numerical_features = numerical_columns
-
-        # Generar reporte de drift
+        # Generar reporte de drift (Evidently 0.7+ detecta tipos automáticamente)
         logger.info("Generando reporte de drift con Evidently")
         report = Report(metrics=[DataDriftPreset()])
-        report.run(
+        snapshot = report.run(
             reference_data=df_reference,
             current_data=df_current,
-            column_mapping=column_mapping,
         )
 
         # Extraer resultados
-        result_dict = report.as_dict()
+        result_dict = snapshot.dict()
 
         logger.info(f"Estructura de resultado Evidently: {list(result_dict.keys())}")
 
@@ -169,74 +144,40 @@ def get_dataset_drift_report(
         drift_by_columns = {}
 
         try:
-            # Estructura típica de Evidently
-            if "metrics" in result_dict:
-                for metric_name, metric_data in result_dict["metrics"].items():
-                    if (
-                        "DataDrift" in metric_name
-                        or "data_drift" in metric_name.lower()
-                    ):
-                        if "result" in metric_data:
-                            result_data = metric_data["result"]
+            # Formato Evidently 0.7+: snapshot.dict() → {metrics: [{id, metric_name, config, value}]}
+            metrics_list = result_dict.get("metrics", [])
+            for metric in metrics_list:
+                metric_name = metric.get("metric_name", "")
+                value = metric.get("value")
 
-                            # Drift detectado a nivel de dataset
-                            if "dataset_drift" in result_data:
-                                drift_detected = result_data["dataset_drift"]
+                # DriftedColumnsCount: {"count": N, "share": N}
+                if "DriftedColumnsCount" in metric_name and isinstance(value, dict):
+                    drift_detected = bool(value.get("share", 0) > 0)
 
-                            # Drift por columnas
-                            if "drift_by_columns" in result_data:
-                                drift_by_columns = result_data["drift_by_columns"]
-                            elif "drifted_columns" in result_data:
-                                for col in result_data["drifted_columns"]:
-                                    drift_by_columns[col] = {"drift_detected": True}
-
-                            # Alternativa: column_drift
-                            if "column_drift" in result_data:
-                                for col_name, col_data in result_data[
-                                    "column_drift"
-                                ].items():
-                                    drift_by_columns[col_name] = {
-                                        "drift_detected": col_data.get(
-                                            "drift_detected", False
-                                        ),
-                                        "psi": col_data.get("psi", None),
-                                        "ks": col_data.get("ks", None),
-                                    }
-
-                            break
-
-            # Si no encontramos datos de drift, intentar con columnas separadas
-            if not drift_by_columns and "metrics" in result_dict:
-                for metric_name, metric_data in result_dict["metrics"].items():
-                    if "ColumnDrift" in metric_name:
-                        # Extraer nombre de columna del nombre de la métrica
-                        # Formato típico: "ColumnDrift for column_name"
-                        col_name = metric_name.replace("ColumnDrift for ", "").replace(
-                            "ColumnDrift_", ""
-                        )
-                        if "result" in metric_data:
-                            col_result = metric_data["result"]
-                            drift_by_columns[col_name] = {
-                                "drift_detected": col_result.get(
-                                    "drift_detected", False
-                                ),
-                                "psi": col_result.get("psi_score", None),
-                                "ks": col_result.get("ks_score", None),
-                            }
+                # ValueDrift(column=COL, ...): p_value as float
+                elif "ValueDrift" in metric_name and isinstance(value, (int, float)):
+                    import re as _re
+                    col_match = _re.search(r"column=([^,)]+)", metric_name)
+                    col_name = col_match.group(1) if col_match else metric_name
+                    drift_by_columns[col_name] = {
+                        "drift_detected": bool(value < 0.05),
+                        "p_value": float(value),
+                    }
 
         except Exception as e:
             logger.error(f"Error procesando resultados de Evidently: {e}")
-            # En caso de error, usar valores por defecto
             drift_detected = False
             drift_by_columns = {}
 
-        # Formatear resultado
         result = {
             "dataset_id": dataset_id,
             "timestamp": datetime.now().isoformat(),
             "metrics": {
-                "dataset_drift": drift_detected,
-                "drift_by_columns": drift_by_columns,
+                "dataset_drift": bool(drift_detected),
+                "drift_by_columns": {
+                    k: {"drift_detected": bool(v["drift_detected"]), "p_value": float(v["p_value"])}
+                    for k, v in drift_by_columns.items()
+                },
                 "psi_threshold": psi_threshold,
                 "ks_threshold": ks_threshold,
             },
@@ -265,6 +206,7 @@ def get_model_drift_report(
     db: Session = Depends(get_db),
     current_tenant: Tenant = Depends(get_current_tenant),
     _: User = Depends(require_viewer),
+    storage: StorageService = Depends(get_storage_service),
 ):
     """
     Genera un reporte de drift para un modelo específico.
@@ -286,7 +228,6 @@ def get_model_drift_report(
     try:
         from app.models.prediction import Prediction as PredictionModel
 
-        storage = get_storage()
         metadata = model.metrics_metadata or {}
 
         # 1. Obtener dataset de referencia (entrenamiento)
@@ -370,31 +311,37 @@ def get_model_drift_report(
         df_current = pd.DataFrame(inference_data_list, columns=feature_names)
 
         # 3. Calcular Drift con Evidently
-        column_mapping = ColumnMapping()
-        # Intentar alinear columnas si es necesario (df_reference puede tener target, df_current no)
+        # Alinear columnas (df_reference puede tener target, df_current no)
         common_cols = [c for c in feature_names if c in df_reference.columns]
         df_reference_subset = df_reference[common_cols]
         df_current_subset = df_current[common_cols]
 
         report = Report(metrics=[DataDriftPreset()])
-        report.run(
+        snapshot = report.run(
             reference_data=df_reference_subset,
             current_data=df_current_subset,
-            column_mapping=column_mapping
         )
 
-        result_dict = report.as_dict()
+        result_dict = snapshot.dict()
 
-        # Extraer métricas resumen
+        # Extraer métricas resumen (Evidently 0.7+ formato)
         drift_detected = False
         drift_by_columns = {}
 
         try:
+            import re as _re
             for metric in result_dict.get("metrics", []):
-                if metric.get("metric") == "DatasetDriftMetric":
-                    drift_detected = metric.get("result", {}).get("dataset_drift", False)
-                elif metric.get("metric") == "DataDriftTable":
-                    drift_by_columns = metric.get("result", {}).get("drift_by_columns", {})
+                metric_name = metric.get("metric_name", "")
+                value = metric.get("value")
+                if "DriftedColumnsCount" in metric_name and isinstance(value, dict):
+                    drift_detected = bool(value.get("share", 0) > 0)
+                elif "ValueDrift" in metric_name and isinstance(value, (int, float)):
+                    col_match = _re.search(r"column=([^,)]+)", metric_name)
+                    col_name = col_match.group(1) if col_match else metric_name
+                    drift_by_columns[col_name] = {
+                        "drift_detected": bool(value < 0.05),
+                        "p_value": float(value),
+                    }
         except Exception as e:
             logger.error(f"Error parseando resultado Evidently: {e}")
 
@@ -402,8 +349,11 @@ def get_model_drift_report(
             "model_id": model_id,
             "timestamp": datetime.now().isoformat(),
             "metrics": {
-                "dataset_drift": drift_detected,
-                "drift_by_columns": drift_by_columns,
+                "dataset_drift": bool(drift_detected),
+                "drift_by_columns": {
+                    k: {"drift_detected": bool(v["drift_detected"]), "p_value": float(v["p_value"])}
+                    for k, v in drift_by_columns.items()
+                },
                 "psi_threshold": metadata.get("drift_psi_threshold", 0.2),
                 "ks_threshold": metadata.get("drift_ks_threshold", 0.05),
             },

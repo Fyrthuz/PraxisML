@@ -25,6 +25,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _INSECURE_SECRET = "super_secret_key_change_me_in_production"
 
 
+def _env_file_candidates() -> list[str]:
+    env_file = os.getenv("PRAXISML_ENV_FILE")
+    if env_file:
+        return [env_file, ".env"]
+    # Buscar en el directorio del proyecto (3 niveles arriba desde app/core/)
+    project_root = os.path.join(os.path.dirname(__file__), "..", "..", "..")
+    project_env = os.path.abspath(os.path.join(project_root, ".env"))
+    return [project_env, ".env"]
+
+
 class Settings(BaseSettings):
     """Configuración principal de la aplicación — leída desde variables de entorno."""
 
@@ -147,20 +157,13 @@ class Settings(BaseSettings):
                 )
         return self
 
+    # ── DVC ────────────────────────────────────────────────────────────────────
+    DVC_REMOTE_NAME: str = "minio"
+
     # ── Pydantic Settings Config ───────────────────────────────────────────────
 
     model_config = SettingsConfigDict(
-        env_file=[
-            os.path.join(
-                os.path.dirname(__file__),  # app/core/
-                "..",
-                "..",
-                "..",
-                "..",  # → proyecto raíz
-                ".env",
-            ),
-            ".env",  # fallback: CWD (útil en CI y Docker)
-        ],
+        env_file=_env_file_candidates(),
         env_file_encoding="utf-8",
         extra="ignore",
     )

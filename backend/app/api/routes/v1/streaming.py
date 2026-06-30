@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 import torch
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
+from app.core.redis import create_redis_client
 from app.core.security import decode_token
 from app.database import SessionLocal
 from app.models.ml_model import MLModel
@@ -20,8 +21,58 @@ from app.services.model_cache import get_model_cache
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Almacenar conexiones activas por tenant
+# Almacenar conexiones activas por tenant (necesariamente en memoria para WebSocket objects)
 active_connections: Dict[str, Dict[str, WebSocket]] = {}
+
+# Límite fijo de conexiones WebSocket simultáneas por tenant
+MAX_WS_CONNECTIONS_PER_TENANT = 10
+
+# Prefijo para contadores en Redis
+WS_REDIS_KEY_PREFIX = "ws:tenant:"
+
+
+async def _get_ws_count(tenant_id: str) -> int:
+    """Obtiene el número de conexiones activas para un tenant desde Redis."""
+    redis = create_redis_client()
+    if redis is None:
+        return len(active_connections.get(tenant_id, {}))
+    try:
+        count = await redis.get(f"{WS_REDIS_KEY_PREFIX}{tenant_id}:count")
+        return int(count) if count else 0
+    except Exception:
+        return len(active_connections.get(tenant_id, {}))
+    finally:
+        await redis.aclose()
+
+
+async def _increment_ws_count(tenant_id: str) -> None:
+    """Incrementa el contador de conexiones activas en Redis."""
+    redis = create_redis_client()
+    if redis is None:
+        return
+    try:
+        await redis.incr(f"{WS_REDIS_KEY_PREFIX}{tenant_id}:count")
+        await redis.expire(f"{WS_REDIS_KEY_PREFIX}{tenant_id}:count", 3600)
+    except Exception:
+        pass
+    finally:
+        await redis.aclose()
+
+
+async def _decrement_ws_count(tenant_id: str) -> None:
+    """Decrementa el contador de conexiones activas en Redis."""
+    redis = create_redis_client()
+    if redis is None:
+        return
+    try:
+        key = f"{WS_REDIS_KEY_PREFIX}{tenant_id}:count"
+        val = await redis.decr(key)
+        if val <= 0:
+            await redis.delete(key)
+    except Exception:
+        pass
+    finally:
+        await redis.aclose()
 
 
 @router.websocket("/streaming/predict/{model_id}")
@@ -69,18 +120,18 @@ async def websocket_predict(
         await websocket.close(code=1008, reason="Tenant not found in token or db")
         return
 
-    # Verificar cuota de conexiones WebSocket (simplificado)
+    # Verificar cuota de conexiones WebSocket (Redis + in-memory)
     if tenant_id not in active_connections:
         active_connections[tenant_id] = {}
-
-    current_connections = len(active_connections[tenant_id])
-    if current_connections >= 10:  # Cuota fija de 10 conexiones
+    current_count = await _get_ws_count(tenant_id)
+    if current_count >= MAX_WS_CONNECTIONS_PER_TENANT:
         await websocket.close(code=1008, reason="WebSocket quota exceeded")
         return
 
     # Almacenar conexión
     connection_id = f"{model_id}_{len(active_connections[tenant_id])}"
     active_connections[tenant_id][connection_id] = websocket
+    await _increment_ws_count(tenant_id)
 
     try:
         db = SessionLocal()
@@ -231,12 +282,13 @@ async def websocket_predict(
         logger.error(f"WebSocket error: {e}")
         await websocket.close(code=1011, reason=str(e))
     finally:
-        # Limpiar conexión
+        # Limpiar conexión (Redis + in-memory)
         if (
             tenant_id in active_connections
             and connection_id in active_connections[tenant_id]
         ):
             del active_connections[tenant_id][connection_id]
+        await _decrement_ws_count(tenant_id)
 
 
 async def _load_background_data(db, metadata, preprocessing_pipeline, feature_names):

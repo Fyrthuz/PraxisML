@@ -31,6 +31,7 @@ from app.core.exceptions import QuotaExceededError
 from app.database import get_db
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
+from app.services.storage_service import StorageService, get_storage
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -197,6 +198,11 @@ def check_prediction_quota(
                 limit=tenant.max_predictions_per_day,
             )
     return tenant
+
+
+def get_storage_service() -> StorageService:
+    """FastAPI dependency que retorna la instancia de StorageService."""
+    return get_storage()
 
 
 def check_training_quota(

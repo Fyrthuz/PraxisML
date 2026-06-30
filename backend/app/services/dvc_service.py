@@ -59,8 +59,9 @@ class DVCService:
             logger.error(f"Failed to init DVC repository: {e}")
             return False
 
-    def configure_remote(self, remote_name: str = "minio") -> bool:
+    def configure_remote(self, remote_name: Optional[str] = None) -> bool:
         """Configure the DVC remote (MinIO/S3)."""
+        remote_name = remote_name or settings.DVC_REMOTE_NAME
         try:
             # Check if remote already exists
             remotes = self._run_command(["dvc", "remote", "list"]).stdout
@@ -233,14 +234,14 @@ def track_dataset_with_dvc(
 
     # Initialize if needed
     service.init_repository()
-    service.configure_remote()
+    service.configure_remote(settings.DVC_REMOTE_NAME)
 
     # Add to DVC
     result = service.add_dataset(file_path, registry_name)
 
     return {
         "is_dvc_tracked": True,
-        "dvc_remote": "minio",
+        "dvc_remote": settings.DVC_REMOTE_NAME,
         "dvc_hash": result.get("hash"),
         "dvc_registry_name": registry_name,
         "dvc_version": 1,

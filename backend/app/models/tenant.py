@@ -1,14 +1,10 @@
-import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base
-
-
-def generate_uuid():
-    return str(uuid.uuid4())
+from app.utils.uuid import generate_uuid
 
 
 class Tenant(Base):

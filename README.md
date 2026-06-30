@@ -124,7 +124,7 @@ Toda la configuración se gestiona mediante variables de entorno. El archivo `ba
 ### Orden de precedencia (mayor → menor)
 
 1.  **Variables de entorno del sistema** (Docker, CI, shell export)
-2.  **Archivo `.env`** (raíz del proyecto o CWD)
+2.  **Archivo `.env`** (definido por `PRAXISML_ENV_FILE` o CWD)
 3.  **Defaults en `config.py`** (solo válidos para desarrollo local)
 
 ### Variables principales
@@ -135,6 +135,8 @@ Toda la configuración se gestiona mediante variables de entorno. El archivo `ba
 | `DATABASE_URL` | `postgresql://...localhost...` | Debe empezar con `postgresql://` | Conexión PostgreSQL |
 | `SECRET_KEY` | *(default inseguro)* | **Bloqueado en production** si no se cambia | Clave JWT — generar con `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
 | `STORAGE_BACKEND` | `local` | `{local, minio, s3}` | Backend de almacenamiento |
+| `PRAXISML_ENV_FILE` | `.env` | Ruta a archivo `.env` | Path personalizado al archivo de entorno |
+| `DVC_REMOTE_NAME` | `minio` | Cualquier string | Nombre del remote DVC para dataset versioning |
 | `RATE_LIMIT_TRAINING` | `10/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de entrenamiento |
 | `RATE_LIMIT_INFERENCE` | `30/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de inferencia |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | URL completa | URL de la API para el frontend (WebSocket se convierte automáticamente a ws://) |
@@ -287,9 +289,14 @@ cp .env.example .env
 # Editar .env con tus valores (SECRET_KEY es crítico para producción)
 ```
 
-### 2. Levantar todos los servicios
+### 2. Levantar todos los servicios (infraestructura + API + worker)
 ```bash
-docker-compose up --build
+docker compose up --build
+```
+
+Para levantar solo infraestructura (sin API/worker, para desarrollo local):
+```bash
+docker compose up -d db redis mlflow minio minio-init
 ```
 
 ### 3. Levantar frontend (desarrollo)
@@ -300,14 +307,18 @@ npm run dev
 ```
 
 ### 4. Servicios disponibles
-| Servicio | URL |
-|----------|-----|
-| **Frontend** | `http://localhost:3000` |
-| **API (Swagger)** | `http://localhost:8000/docs` |
-| **MLflow UI** | `http://localhost:5000` |
-| **MinIO Console** | `http://localhost:9001` |
-| **Prometheus** | `http://localhost:9090` |
-| **Grafana** | `http://localhost:3001` (admin/admin) |
+| Servicio | URL | Descripción |
+|----------|-----|-------------|
+| **API (FastAPI)** | `http://localhost:8000` | Backend REST |
+| **Swagger UI** | `http://localhost:8000/docs` | Documentación interactiva |
+| **Celery Worker** | *(interno)* | Procesamiento asíncrono |
+| **MLflow UI** | `http://localhost:5000` | Experiment tracking |
+| **MLflow UI local** | `http://localhost:5001` | Alternativa (solo dev) |
+| **MinIO Console** | `http://localhost:9001` | Almacenamiento objetos |
+| **PostgreSQL** | `localhost:5432` | Base de datos |
+| **Redis** | `localhost:6379` | Cache + message broker |
+| **Prometheus** | `http://localhost:9090` | Métricas |
+| **Grafana** | `http://localhost:3001` (admin/admin) | Dashboards |
 
 ---
 
@@ -323,7 +334,7 @@ cp .env.example .env
 
 ### 2. Levantar servicios de soporte
 ```bash
-docker-compose up -d db redis mlflow minio minio-init
+docker compose up -d db redis mlflow minio minio-init
 ```
 
 ### 3. Arrancar backend
@@ -343,7 +354,7 @@ uv run celery -A app.worker.celery_app worker --loglevel=info --pool=solo
 ### 5. Ejecutar tests
 ```bash
 cd backend
-uv run pytest tests/ -v --cov=app --cov-fail-under=30
+uv run pytest tests/ -v --cov=app --cov-fail-under=50
 ```
 
 ---
@@ -453,7 +464,7 @@ Automatizado con GitHub Actions (`.github/workflows/`):
 | **Lint** | `ruff check app/ --select=E,F,W --ignore=E501` |
 | **Tests unitarios** | `pytest tests/unit/ -v` |
 | **Tests de integración** | `pytest tests/integration/ -v` |
-| **Cobertura** | `pytest tests/ --cov=app --cov-fail-under=30` |
+| **Cobertura** | `pytest tests/ --cov=app --cov-fail-under=50` |
 
 ### Model CI (`model_ci.yml`)
 

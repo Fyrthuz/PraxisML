@@ -2,9 +2,11 @@
 # IA & Innovación (Q1 2027 → Q4 2027)
 
 > **Autor:** CTO & AI Solutions Architect  
-> **Fecha:** 2026-04-04  
+> **Fecha:** 2026-04-04 (Actualizado 2026-06-30: añadida Fase 0 — Observabilidad)  
 > **Base:** Análisis exhaustivo del repositorio PraxisML (~9,800 LOC backend, Next.js frontend, 9 servicios Docker)  
 > **Arquitectura actual:** FastAPI monolito modular + Celery workers + MLflow + PostgreSQL + MinIO + Redis + Prometheus/Grafana
+
+> 📁 **Documentos detallados por fase:** consulte la carpeta [`roadmap/`](roadmap/) para especificaciones técnicas completas de cada fase, especialmente [Fase 0 — Observabilidad](roadmap/phase-0-observability.md) y el [Catálogo completo de métricas](roadmap/metrics-catalog.md).
 
 ---
 
@@ -19,6 +21,13 @@ graph LR
         D[Data Drift<br/>Evidently PSI/KS]
         E[Preprocessing<br/>ColumnTransformer]
         F[Streaming WS<br/>Tabular real-time]
+    end
+    subgraph "Fase 0 — Observabilidad (Transversal)"
+        O0[UsageCollector]
+        O1[CostCalculator]
+        O2[Prometheus Custom]
+        O3[Grafana Dashboards]
+        O4[Alertas + Budget]
     end
     subgraph "Q4 2027 — PraxisML v2.x"
         G[NLP Engine<br/>BERT + LLM + Embeddings]
@@ -35,6 +44,14 @@ graph LR
     C --> K
     D --> K
     E --> L
+
+    A -.-> O0
+    B -.-> O0
+    G -.-> O1
+    H -.-> O2
+    I -.-> O3
+    J -.-> O4
+    K -.-> O4
 ```
 
 ## 🏗️ Arquitectura de Rutas por Dominio
@@ -101,7 +118,73 @@ app.include_router(ts_forecast.router, prefix=f"{API}/timeseries", tags=["Time S
 
 ---
 
+## Fase 0 — Observabilidad, Trazabilidad y Cost Tracking
+
+**Carácter:** Transversal. Se construye incrementalmente en paralelo a las Fases 1-4.
+**Duración estimada:** Continuo (sub-fases 0.1→0.7 a lo largo de Q1-Q2 2027)
+**Dependencias:** Ninguna
+
+> 📖 Documentación detallada en: [`roadmap/phase-0-observability.md`](roadmap/phase-0-observability.md)
+> Catálogo completo de ~200 métricas en: [`roadmap/metrics-catalog.md`](roadmap/metrics-catalog.md)
+
+### 🎯 Objetivo
+
+Construir un sistema unificado de observabilidad multi-tenant que permita:
+- **Saber cuánto cuesta cada modelo** (cómputo, almacenamiento, tokens, API externas)
+- **Detectar anomalías** antes de que impacten al usuario (drift predictivo, degradación de latencia)
+- **Facturar por uso real** a los tenants
+- **Hacer forecasting** de costes y recursos
+- **Alertar proactivamente** basado en ~200 métricas por modelo y tipo
+
+### 📍 Componentes Clave
+
+| Componente | Descripción | Documentación |
+|-----------|-------------|---------------|
+| **UsageCollector** | Middleware asíncrono que captura métricas de cada inferencia/entrenamiento | [phase-0-observability.md](roadmap/phase-0-observability.md#01-usagemetrics--usagecollector) |
+| **CostCalculator** | Motor de estimación de costes con tablas por tipo de GPU/recurso/API LLM | [phase-0-observability.md](roadmap/phase-0-observability.md#02-costcalculator) |
+| **Prometheus custom metrics** | 12 métricas nuevas (latencia, tokens, coste, drift, cuotas) | [phase-0-observability.md](roadmap/phase-0-observability.md#03-prometheus-custom-metrics) |
+| **6 Grafana dashboards** | Cost Center, Model Performance, Tenant Usage, LLM Spend, Training, Drift Timeline | [phase-0-observability.md](roadmap/phase-0-observability.md#04-grafana-dashboards) |
+| **Sistema de alertas** | 15 alertas predefinidas con webhooks, email, dashboard badges | [phase-0-observability.md](roadmap/phase-0-observability.md#05-alertas-y-notificaciones) |
+| **Budget por tenant** | `monthly_budget_usd`, billing cycle, forecast de coste, reportes | [phase-0-observability.md](roadmap/phase-0-observability.md#07-budget-por-tenant) |
+
+### 📊 Métricas por Tipo de Modelo
+
+| Modelo | Lo más caro | Métricas clave |
+|--------|-------------|----------------|
+| **Tabular sklearn** | CPU-hours | latency, throughput, prediction drift, model size |
+| **Tabular MLP** | GPU-hours | latency, uncertainty metrics, GPU utilization |
+| **NLP BERT** | GPU-hours + tokens | tokens/sec, perplexity, TTFT, seq_length |
+| **LLM API** | **$ tokens** | tokens in/out, cost/request, TTFT, hallucination rate, budget burn |
+| **CV Classification** | GPU-hours | images/sec, confidence distribution, class balance |
+| **CV Segmentation** | GPU-hours | IoU/Dice, mask size, uncertainty heatmap |
+| **Time Series** | CPU-hours | forecast horizon, CI width, seasonal period |
+
+### 🧠 Early Warning System
+
+| Señal | Detecta | Ventana |
+|-------|---------|---------|
+| ↑ uncertainty + ↑ entropy + ↑ feature_volatility | Drift inminente | 3-7 días antes |
+| ↑ p99 + ↑ stddev + ↑ queue_depth | Degradación de latencia | 1-2 horas antes |
+| ↑ tokens/output_ratio + cost_daily_avg 3 días | Coste fuera de control | 2-3 días antes |
+| ↓ predictions + ↓ logins + 0 trainings en 14d | Abandono del tenant | 14-30 días antes |
+
+### 🏗️ Plan de Implementación
+
+| Sub-fase | Contenido | Esfuerzo | Prioridad |
+|----------|-----------|----------|-----------|
+| **0.1** | Tablas SQL, `UsageCollector`, migraciones Alembic | 🟡 1-2 sem | P0 |
+| **0.2** | 12 Prometheus metrics, integración training + inference | 🟡 2 sem | P0 |
+| **0.3** | `CostCalculator`, registro automático de costes | 🟡 1-2 sem | P0 |
+| **0.4** | 5 API endpoints REST (usage, costs, drift, alerts, health) | 🟡 2 sem | P1 |
+| **0.5** | 6 Grafana dashboards nuevos | 🔴 2-3 sem | P1 |
+| **0.6** | Sistema de alertas con webhooks + Celery Beat | 🔴 3 sem | P1 |
+| **0.7** | Budget por tenant, billing, forecast, reportes PDF | 🟢 1 sem | P2 |
+
+---
+
 ## Fase 1 — Q1 2027: NLP Engine (Clásico + Generativo)
+
+> 📖 Documentación detallada en: [`roadmap/phase-1-nlp.md`](roadmap/phase-1-nlp.md)
 
 ### 🎯 Objetivo
 
@@ -259,6 +342,8 @@ Post-hook en `POST /api/v1/datasets/` que detecta automáticamente columnas de t
 ---
 
 ## Fase 2 — Q2 2027: Computer Vision & Time Series
+
+> 📖 Documentación detallada en: [`roadmap/phase-2-cv-timeseries.md`](roadmap/phase-2-cv-timeseries.md)
 
 ### 🎯 Objetivo
 
@@ -454,6 +539,8 @@ Detecta puntos anómalos via residuos del modelo + thresholds estadísticos (Z-s
 
 ## Fase 3 — Q3 2027: Recommendation Engine & Predictive Analytics
 
+> 📖 Documentación detallada en: [`roadmap/phase-3-smart-platform.md`](roadmap/phase-3-smart-platform.md)
+
 ### 🎯 Objetivo
 
 Convertir PraxisML de una herramienta de ML **reactiva** (el usuario pide, la plataforma ejecuta) a una plataforma **proactiva** que sugiere, predice y optimiza automáticamente:
@@ -637,6 +724,8 @@ def scheduled_drift_check():
 
 ## Fase 4 — Q4 2027: AI-Powered DevOps & Platform Intelligence
 
+> 📖 Documentación detallada en: [`roadmap/phase-4-ai-devops.md`](roadmap/phase-4-ai-devops.md)
+
 ### 🎯 Objetivo
 
 Cerrar el ciclo de madurez de la plataforma transformando la operación en un sistema **autoregulado**:
@@ -799,6 +888,14 @@ gantt
     title PraxisML v2.x — AI Evolution Roadmap
     dateFormat  YYYY-MM
     axisFormat  %b %Y
+
+    section Fase 0 — Observabilidad
+    UsageCollector + DB Schema   :f0a, 2027-01, 1M
+    Prometheus Custom Metrics    :f0b, 2027-01, 1M
+    CostCalculator               :f0c, 2027-02, 1M
+    API Endpoints                :f0d, 2027-02, 1M
+    Grafana Dashboards           :f0e, 2027-03, 1M
+    Alertas + Budget             :f0f, 2027-03, 1M
     
     section Q1 — NLP Engine
     NLP Trainer (BERT/RoBERTa)  :a1, 2027-01, 2M
@@ -837,14 +934,16 @@ gantt
 | **Computer Vision** | `/api/v1/cv/*` | training, segmentation, detection | Q2 |
 | **Time Series** | `/api/v1/timeseries/*` | training, forecast, anomalies | Q2 |
 | **Plataforma** | `/api/v1/*` | datasets, models, auth, tenants, users, profiling | Existente |
+| **Observabilidad** | `/api/v1/observability/*` | usage, costs, drift/history, alerts, health-reports | **Fase 0** |
 
 ### Inversión Tecnológica Acumulativa
 
 | Fase | Nuevos Servicios | Nuevas Tablas | Nuevas Dependencias | Infra |
 |------|-----------------|--------------|--------------------|----|
+| **Fase 0** | 3 (usage_collector, cost_calculator, alert_engine) | 4 (usage_metrics, cost_records, drift_history, alert_config) | prometheus_client (ya presente), redis (ya presente) | — |
 | Q1 | 3 (nlp_trainer, embedding_svc, nlp_profiler) | 1 (model_embeddings) | transformers, sentence-transformers, langchain, spaCy, optimum, pgvector | pgvector ext, Ollama opcional |
 | Q2 | 3 (vision_trainer, timeseries_trainer, document_intelligence) | 0 | albumentations, ultralytics, docTR, statsforecast, mlforecast, neuralforecast | GPU worker opcional |
-| Q3 | 3 (recommendation_engine, drift_predictor, anomaly_detector) | 1 (drift_history) | pyod | Celery Beat scheduler |
+| Q3 | 3 (recommendation_engine, drift_predictor, anomaly_detector) | 1 (drift_history) + reutiliza F0 | pyod | Celery Beat scheduler |
 | Q4 | 1 (copilot_service) | 1 (audit_log) | langchain-agents, langgraph, fairlearn | — |
 
 ---
@@ -867,4 +966,8 @@ gantt
 6. **Time Series — Modelos DL:** ¿Incluir neuralforecast (N-BEATS, TFT) desde el inicio o empezar solo con clásicos (ARIMA, ETS) + ML (LightGBM)?
 
 7. **Backwards compatibility:** ¿Mantener los endpoints actuales (`/api/v1/training/*`) como alias de `/api/v1/tabular/*`, o migración hard con deprecation notice?
+
+8. **Modelo de facturación (Fase 0):** ¿Facturar por usage real (coste + markup), por suscripción plana (tiers), o híbrido? Esto determina el diseño de `cost_records` y la integración con Stripe.
+
+9. **Presupuesto de infraestructura para observabilidad:** ¿Mantener Prometheus/Grafana on-premise o migrar a Datadog/Grafana Cloud? On-premise es más barato pero requiere mantenimiento. La Fase 0 añade ~12 nuevas métricas + 6 dashboards.
 
