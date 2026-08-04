@@ -345,6 +345,14 @@ def get_model_drift_report(
         except Exception as e:
             logger.error(f"Error parseando resultado Evidently: {e}")
 
+        from app.observability.metrics import drift_score
+        drift_score.labels(model_id=model_id, metric="psi").set(
+            metadata.get("drift_psi_threshold", 0.2)
+        )
+        drift_score.labels(model_id=model_id, metric="drift_detected").set(
+            float(drift_detected)
+        )
+
         return {
             "model_id": model_id,
             "timestamp": datetime.now().isoformat(),

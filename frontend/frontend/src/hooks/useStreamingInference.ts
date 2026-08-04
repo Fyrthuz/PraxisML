@@ -44,7 +44,7 @@ export function useStreamingInference(
         setIsConnecting(true);
         setError(null);
 
-        const wsUrl = `${config.WS_BASE_URL}/api/v1/streaming/predict/${modelId}?token=${encodeURIComponent(token)}&explain=${explain}`;
+        const wsUrl = `${config.WS_BASE_URL}/api/v1/tabular/streaming/predict/${modelId}?token=${encodeURIComponent(token)}&explain=${explain}`;
         
         try {
             const ws = new WebSocket(wsUrl);

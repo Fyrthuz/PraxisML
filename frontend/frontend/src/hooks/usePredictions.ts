@@ -19,7 +19,7 @@ export function usePredictions(
 
     const fetchPredictions = useCallback(async () => {
         if (!token) return;
-        const res = await fetch(`${API}/predictions`, {
+        const res = await fetch(`${API}/tabular/predictions`, {
             headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
@@ -37,7 +37,7 @@ export function usePredictions(
 
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`${API}/predictions`, {
+                const res = await fetch(`${API}/tabular/predictions`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
                 const pollData = await res.json();
@@ -83,13 +83,13 @@ export function usePredictions(
                     formData.append("file", batchFile);
                     formData.append("model_id", selectedModel);
                     formData.append("uncertainty_method", uncertaintyMethod);
-                    res = await fetch(`${API}/predictions/predict/batch`, {
+                    res = await fetch(`${API}/tabular/predictions/predict/batch`, {
                         method: "POST",
                         headers: { Authorization: `Bearer ${token}` },
                         body: formData,
                     });
                 } else {
-                    res = await fetch(`${API}/predictions/predict`, {
+                    res = await fetch(`${API}/tabular/predictions/predict`, {
                         method: "POST",
                         headers: {
                             Authorization: `Bearer ${token}`,

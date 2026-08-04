@@ -53,6 +53,8 @@ async def _increment_ws_count(tenant_id: str) -> None:
     try:
         await redis.incr(f"{WS_REDIS_KEY_PREFIX}{tenant_id}:count")
         await redis.expire(f"{WS_REDIS_KEY_PREFIX}{tenant_id}:count", 3600)
+        from app.observability.metrics import ws_connections_active
+        ws_connections_active.labels(tenant_id=tenant_id).inc()
     except Exception:
         pass
     finally:
@@ -69,6 +71,8 @@ async def _decrement_ws_count(tenant_id: str) -> None:
         val = await redis.decr(key)
         if val <= 0:
             await redis.delete(key)
+        from app.observability.metrics import ws_connections_active
+        ws_connections_active.labels(tenant_id=tenant_id).dec()
     except Exception:
         pass
     finally:

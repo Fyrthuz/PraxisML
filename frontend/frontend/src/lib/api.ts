@@ -87,6 +87,119 @@ export interface SHAPResult {
     feature_names: string[];
 }
 
+// ── Observability Types (Fase 0) ──────────────────────────────────────────
+
+export interface UsageMetrics {
+    tenant_id: string;
+    model_id?: string;
+    metrics: UsagePoint[];
+    aggregation?: UsageAggregation;
+}
+
+export interface UsagePoint {
+    recorded_at: string;
+    metric_name: string;
+    metric_value: number;
+    tags: Record<string, string>;
+}
+
+export interface UsageAggregation {
+    metric: string;
+    avg: number;
+    p50: number;
+    p95: number;
+    p99: number;
+    min: number;
+    max: number;
+    count: number;
+}
+
+export interface CostBreakdown {
+    tenant_id: string;
+    period: string;
+    total_cost_usd: number;
+    records: CostRecord[];
+}
+
+export interface CostRecord {
+    id: string;
+    cost_type: string;
+    amount: number;
+    currency: string;
+    source: string;
+    model_id: string;
+    period_start: string;
+    period_end: string;
+}
+
+export interface CostForecast {
+    projected_month_end_usd: number | null;
+    budget_usd: number | null;
+    overrun_risk_pct: number | null;
+    daily_trend_usd: number | null;
+}
+
+export interface Alert {
+    id: string;
+    tenant_id: string;
+    alert_type: string;
+    metric_name: string;
+    threshold: number;
+    comparison: string;
+    cooldown_min: number;
+    channels: any[];
+    enabled: boolean;
+    created_at: string;
+}
+
+export interface AlertCreate {
+    alert_type: string;
+    metric_name: string;
+    threshold: number;
+    comparison: string;
+    cooldown_min?: number;
+    channels: { type: string; url?: string; to?: string }[];
+}
+
+export interface DriftPoint {
+    recorded_at: string;
+    drift_type: string;
+    psi: number | null;
+    ks: number | null;
+    is_anomaly: boolean;
+}
+
+export interface DriftHistory {
+    model_id: string;
+    drift_points: DriftPoint[];
+}
+
+export interface HealthComponent {
+    name: string;
+    score: number;
+    status: string;
+}
+
+export interface HealthScore {
+    model_id: string;
+    health_score: number;
+    components: HealthComponent[];
+}
+
+export interface ResourcePricing {
+    id: string;
+    resource_category: string;
+    resource_id: string;
+    pricing_unit: string;
+    price_per_unit: number;
+    currency: string;
+    metadata: Record<string, string> | null;
+    effective_from: string;
+    effective_to: string | null;
+    created_at: string;
+}
+
+
 export interface PredictionExplainResult {
     shap_values: number[];
     expected_value: number;
@@ -366,25 +479,25 @@ export const api = {
     },
 
     async getPredictionStatus(taskId: string): Promise<PredictionStatusResponse> {
-        const res = await fetchAuth(`${API_BASE_URL}/predictions/status/${taskId}`);
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/predictions/status/${taskId}`);
         if (!res.ok) throw new Error("Failed to fetch prediction status");
         return res.json();
     },
 
     async getPredictionResult(predictionId: string): Promise<Prediction> {
-        const res = await fetchAuth(`${API_BASE_URL}/predictions/${predictionId}`);
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/predictions/${predictionId}`);
         if (!res.ok) throw new Error("Failed to fetch prediction result");
         return res.json();
     },
 
     async listPredictions(tenantId: string): Promise<Prediction[]> {
-        const res = await fetchAuth(`${API_BASE_URL}/predictions?tenant_id=${tenantId}`);
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/predictions?tenant_id=${tenantId}`);
         if (!res.ok) throw new Error("Failed to list predictions");
         return res.json();
     },
 
     async getPredictionExplain(predictionId: string): Promise<PredictionExplainResult> {
-        const res = await fetchAuth(`${API_BASE_URL}/predictions/${predictionId}/explain`);
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/predictions/${predictionId}/explain`);
         if (!res.ok) throw new Error("Failed to fetch SHAP values");
         return res.json();
     },
@@ -394,7 +507,7 @@ export const api = {
         config: PreprocessingConfig,
         tenantId: string,
     ): Promise<PreprocessingPreviewResponse> {
-        const res = await fetchAuth(`${API_BASE_URL}/preprocessing/preview?tenant_id=${tenantId}`, {
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/preprocessing/preview?tenant_id=${tenantId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(config),
@@ -408,7 +521,7 @@ export const api = {
         config: PreprocessingConfig,
         tenantId: string,
     ): Promise<{ message: string; new_dataset_id: string; new_dataset_name: string; pipeline_path: string; transformed_shape: number[] }> {
-        const res = await fetchAuth(`${API_BASE_URL}/preprocessing/apply/${datasetId}?tenant_id=${tenantId}`, {
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/preprocessing/apply/${datasetId}?tenant_id=${tenantId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(config),
@@ -418,14 +531,14 @@ export const api = {
     },
 
     async getDatasetPipeline(datasetId: string, tenantId: string): Promise<{ steps: PreprocessingStep[]; target_column?: string; message?: string }> {
-        const res = await fetchAuth(`${API_BASE_URL}/preprocessing/pipeline/${datasetId}?tenant_id=${tenantId}`);
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/preprocessing/pipeline/${datasetId}?tenant_id=${tenantId}`);
         if (!res.ok) throw new Error("Failed to fetch dataset pipeline");
         return res.json();
     },
 
     // ── Training (Fase 2) ───────────────────────────────────────────────────
     async getAlgorithms(): Promise<AlgorithmInfo[]> {
-        const res = await fetchAuth(`${API_BASE_URL}/training/algorithms`);
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/training/algorithms`);
         if (!res.ok) throw new Error("Failed to fetch algorithms");
         return res.json();
     },
@@ -434,7 +547,7 @@ export const api = {
         req: TrainRequest,
         tenantId: string,
     ): Promise<TrainResponse> {
-        const res = await fetchAuth(`${API_BASE_URL}/training/train?tenant_id=${tenantId}`, {
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/training/train?tenant_id=${tenantId}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(req),
@@ -444,7 +557,7 @@ export const api = {
     },
 
     async getTrainingStatus(taskId: string): Promise<TrainingStatus> {
-        const res = await fetchAuth(`${API_BASE_URL}/training/status/${taskId}`);
+        const res = await fetchAuth(`${API_BASE_URL}/tabular/training/status/${taskId}`);
         if (!res.ok) throw new Error("Failed to fetch training status");
         return res.json();
     },

@@ -36,7 +36,40 @@ def create_tenant(
     user.tenant_id = new_tenant.id
     db.commit()
 
-    # 3. Crear carpeta local para almacenar sus archivos privados
+    # 3. Sembrar alertas por defecto para el nuevo tenant
+    from app.observability.models import AlertConfig
+    from datetime import datetime, timezone
+
+    default_alerts = [
+        ("cost_spike", "inference_cost_usd", 2.0, "pct_change", 60),
+        ("budget_near_limit", "cost_budget_remaining", 80.0, "lt", 60),
+        ("budget_exceeded", "cost_budget_remaining", 0.0, "lt", 1440),
+        ("latency_degradation", "inference_latency_ms", 2.0, "pct_change", 30),
+        ("latency_spike", "inference_latency_ms", 5.0, "pct_change", 15),
+        ("drift_warning", "drift_score", 0.15, "gt", 120),
+        ("drift_critical", "drift_score", 0.3, "gt", 60),
+        ("token_spike_llm", "inference_tokens_total", 3.0, "pct_change", 60),
+        ("throughput_drop", "predictions_total", 0.5, "pct_change", 30),
+        ("error_rate_spike", "errors_total", 0.05, "gt", 10),
+        ("training_failed", "errors_total", 0.0, "gt", 60),
+        ("quota_imminent", "quota_usage_pct", 90.0, "gt", 1440),
+        ("model_zombie", "predictions_total", 0.0, "lt", 1440),
+        ("gpu_underutilized", "training_duration_seconds", 20.0, "lt", 120),
+    ]
+    for alert_type, metric, threshold, comparison, cooldown in default_alerts:
+        db.add(AlertConfig(
+            tenant_id=new_tenant.id,
+            alert_type=alert_type,
+            metric_name=metric,
+            threshold=threshold,
+            comparison=comparison,
+            cooldown_min=cooldown,
+            channels=[{"type": "webhook", "url": ""}],
+            enabled=True,
+        ))
+    db.commit()
+
+    # 4. Crear carpeta local para almacenar sus archivos privados
     from app.core.config import settings
     tenant_dir = os.path.join(settings.DATA_DIR, "tenants", new_tenant.id, "datasets")
     os.makedirs(tenant_dir, exist_ok=True)

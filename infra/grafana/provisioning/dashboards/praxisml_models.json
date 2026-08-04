@@ -274,6 +274,83 @@
             ],
             "title": "Errores Detallados (api_errors_total)",
             "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "displayMode": "gradient",
+                        "orientation": "horizontal"
+                    },
+                    "unit": "bytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 24
+            },
+            "id": 102,
+            "options": {
+                "displayMode": "gradient",
+                "orientation": "horizontal",
+                "showUnfilled": true
+            },
+            "targets": [
+                {
+                    "expr": "praxisml_model_storage_bytes",
+                    "legendFormat": "{{model_id}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Almacenamiento por Modelo (bytes)",
+            "type": "bargauge"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "short"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 24
+            },
+            "id": 103,
+            "options": {
+                "sortBy": [
+                    {
+                        "desc": true,
+                        "displayName": "Last"
+                    }
+                ]
+            },
+            "targets": [
+                {
+                    "expr": "praxisml_drift_score",
+                    "format": "table",
+                    "legendFormat": "{{model_id}} - {{metric}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Últimas Drift Scores",
+            "type": "table"
         }
     ],
     "refresh": "10s",

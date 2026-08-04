@@ -1,8 +1,8 @@
 "use client";
-import { BarChart3, Database, Filter, Cpu, Clock, FlaskConical, Settings, Plus, BookMarked, GitBranch, Wifi, Users } from "lucide-react";
+import { BarChart3, Database, Filter, Cpu, Clock, FlaskConical, Settings, Plus, BookMarked, GitBranch, Wifi, Users, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming" | "users";
+type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming" | "users" | "observability";
 
 interface NavItem {
     id: View;
@@ -20,6 +20,7 @@ const NAV_ITEMS: NavItem[] = [
     { id: "predictions", label: "Predictions", icon: <Clock className="w-5 h-5" /> },
     { id: "training", label: "Training", icon: <FlaskConical className="w-5 h-5" /> },
     { id: "streaming", label: "Streaming", icon: <Wifi className="w-5 h-5" /> },
+    { id: "observability", label: "Observability", icon: <Activity className="w-5 h-5" /> },
     { id: "users", label: "Users", icon: <Users className="w-5 h-5" />, adminOnly: true },
 ];
 

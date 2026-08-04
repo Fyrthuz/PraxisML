@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base
@@ -19,6 +19,12 @@ class Tenant(Base):
     max_models = Column(Integer, nullable=True, default=20)
     max_predictions_per_day = Column(Integer, nullable=True, default=500)
     max_training_jobs_per_day = Column(Integer, nullable=True, default=10)
+
+    # ── Budget / Facturación (Fase 0) ─────────────────────────────────────────
+    monthly_budget_usd = Column(Float, nullable=True)
+    budget_alert_pct = Column(Float, default=80.0)
+    billing_cycle = Column(String, default='monthly')
+    stripe_customer_id = Column(String, nullable=True)
 
     # Un tenant tiene muchos usuarios y muchos datasets (relaciones)
     users = relationship("User", back_populates="tenant")

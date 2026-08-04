@@ -24,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 
 # ── Cargar settings y modelos ────────────────────────────────────────────────
 from app.core.config import settings          # noqa: E402
-import app.models  # noqa: F401, E402  ← registra todos los modelos en Base.metadata
+import app.models  # noqa: F401, E402  ← registra modelos core en Base.metadata
+import app.observability.models  # noqa: F401, E402  ← registra modelos observabilidad
 from app.models.base import Base             # noqa: E402
 
 # ── Configuración Alembic ────────────────────────────────────────────────────

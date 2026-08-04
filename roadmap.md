@@ -56,7 +56,9 @@ graph LR
 
 ## 🏗️ Arquitectura de Rutas por Dominio
 
-La evolución reorganiza los endpoints actuales (`/api/v1/*`) en **dominios verticales**, cada uno con su propio router, trainer y servicio de inferencia:
+La evolución reorganiza los endpoints actuales (`/api/v1/*`) en **dominios verticales**, cada uno con su propio router, trainer y servicio de inferencia.
+
+**Decisión: Monolito Modular** (no microservicios) — FastAPI único con rutas organizadas por dominio.
 
 ```mermaid
 graph TB
@@ -113,8 +115,100 @@ app.include_router(ts_training.router, prefix=f"{API}/timeseries", tags=["Time S
 app.include_router(ts_forecast.router, prefix=f"{API}/timeseries", tags=["Time Series"])
 ```
 
+### 🔄 Estrategia de Migración para Tabular
+
+**Fase de transición** (implementar después de Fase 0):
+1. Crear carpeta `app/api/routes/v1/tabular/`
+2. Mover archivos tabulares existentes (`training.py`, `predictions.py`, `preprocessing.py`, `streaming.py`)
+3. Mantener aliases de compatibilidad en rutas antiguas con headers de deprecation
+4. Registrar routers con prefijo `/api/v1/tabular/`
+
+```python
+# Aliases de compatibilidad (deprecated)
+app.include_router(
+    tabular_training.router, 
+    prefix=f"{API}/training", 
+    tags=["Tabular (Deprecated)"]
+)
+```
+
+**Backwards compatibility**: Los endpoints antiguos (`/api/v1/training/*`) seguirán funcionando pero marcarán deprecation headers.
+
+### 🏢 Infraestructura por Dominio
+
+| Dominio | Requisitos | Servicios Docker | GPU |
+|---------|-----------|-----------------|-----|
+| **Tabular** | CPU principalmente | api, worker, db, redis, mlflow, minio | Opcional (MLP) |
+| **NLP** | GPU para fine-tuning | + ollama (LLM local) | Requerida para BERT/RoBERTa |
+| **CV** | GPU intensiva | + gpu-worker (separado) | Requerida (clasificación, segmentación) |
+| **Time Series** | CPU principalmente | api, worker | No requerida |
+| **Observability** | Métricas + alertas | prometheus, grafana, celery-beat | No requerida |
+
+**Docker Compose Evolucionado (Fase 2):**
+```yaml
+services:
+  # Core (existente)
+  db, redis, mlflow, minio, api, worker, celery-beat
+  
+  # NLP (Fase 1)
+  ollama:
+    image: ollama/ollama
+    ports: ["11434:11434"]
+    volumes: ["ollama_data:/root/.ollama"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+  
+  # CV (Fase 2)
+  gpu-worker:
+    build: ./backend
+    command: ["celery", "-A", "app.worker.celery_app", "worker", 
+              "--loglevel=info", "--queues=gpu", "--concurrency=1"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+```
+
+### 🎨 Integración Frontend de Observabilidad
+
+**Estado actual**: Observability solo accesible via Grafana dashboards  
+**Objetivo**: Métricas visibles en el frontend Next.js principal
+
+**Estructura frontend a implementar:**
+```
+frontend/src/
+├── components/dashboard/tabs/
+│   ├── ObservabilityTab.tsx          # Tab principal con sub-secciones
+│   ├── UsageMetrics.tsx              # Uso de recursos
+│   ├── CostDashboard.tsx             # Desglose de costes
+│   ├── AlertsPanel.tsx               # Alertas activas
+│   └── DriftTimeline.tsx             # Timeline de drift
+├── hooks/
+│   ├── useObservability.ts           # Hook principal
+│   ├── useUsageMetrics.ts
+│   ├── useCostTracking.ts
+│   └── useAlerts.ts
+└── lib/api.ts                        # Añadir tipos y endpoints observability
+```
+
+**Sidebar.tsx** — Añadir item "Observability":
+```typescript
+type View = "datasets" | "preprocessing" | "models" | "predictions" | 
+            "training" | "registry" | "data_registry" | "streaming" | 
+            "users" | "observability";  // ← NUEVO
+
+const NAV_ITEMS: NavItem[] = [
+  // ... existing items
+  { id: "observability", label: "Observability", icon: <Activity className="w-5 h-5" /> },
+];
+```
+
 > [!NOTE]
-> Los endpoints existentes (`/api/v1/training/*`, `/api/v1/predictions/*`) se mantienen como alias de compatibilidad apuntando a `/api/v1/tabular/*` para no romper clientes existentes.
+> **Decisión de arquitectura**: Mantener monolito FastAPI (no microservicios) con rutas organizadas por dominio. Workers únicos con queues específicas (gpu, cpu) en lugar de workers separados por dominio.
 
 ---
 
@@ -556,7 +650,7 @@ Convertir PraxisML de una herramienta de ML **reactiva** (el usuario pide, la pl
 
 #### 3.1 — Recommendation Engine para Modelos
 
-**Punto de entrada:** [training.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/api/routes/v1/training.py) → `POST /api/v1/training/train`
+**Punto de entrada:** [training.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/api/routes/v1/tabular/training.py) → `POST /api/v1/tabular/training/train`
 
 Actualmente, el usuario elige manualmente `algorithm`, `task_type`, e `hyperparams`. El sistema tiene ya un registry exhaustivo en [hyperparams.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/core_ml/hyperparams.py) con defaults por algoritmo.
 
@@ -948,26 +1042,185 @@ gantt
 
 ---
 
-### Decisiones Clave que Requieren Input del Stakeholder
+### Decisiones Clave Resueltas
+
+> ✅ **Decisiones ya tomadas:**
+
+1. **Arquitectura:** Monolito modular FastAPI (no microservicios) con rutas organizadas por dominio vertical.
+2. **Migración Tabular:** Mantener endpoints actuales como aliases de compatibilidad con headers de deprecation.
+3. **Workers:** Un solo worker con queues específicas (gpu, cpu) en lugar de workers separados por dominio.
+4. **GPU:** Opcional para Tabular (MLP), requerida para NLP (fine-tuning BERT) y CV (segmentación/clasificación).
+5. **Observability Frontend:** Integrar métricas de observabilidad en el frontend Next.js como nuevo tab "Observability".
+6. **LLM Provider:** Decision pendiente (OpenAI vs Ollama) — afecta a Q1 y Q4.
+7. **Presupuesto LLM:** Decision pendiente — determina rate limiting.
+8. **Prioridad CV:** Decision pendiente (clasificación vs segmentación primero).
+9. **Time Series DL:** Decision pendiente (neuralforecast desde inicio o solo clásicos + ML).
+
+---
+
+### 📋 Plan de Ejecución Detallado
+
+#### ✅ Fase 0 — Observability (Completado)
+- [x] 5 modelos ORM (UsageMetric, CostRecord, DriftHistory, AlertConfig, ResourcePricing)
+- [x] 12 métricas Prometheus custom
+- [x] UsageCollector + CostCalculator con precios dinámicos
+- [x] AlertEngine + Celery Beat + scheduled checks
+- [x] 6 dashboards Grafana nuevos + 5 existentes enriquecidos
+- [x] 14 endpoints REST funcionales
+- [x] Tests: 49 unitarios + 24 integración pasando
+- [x] Migración Alembic con seed de precios
+
+#### 🔄 Fase 0.5 — Frontend Observability ✅ COMPLETADO
+**Objetivo:** Integrar métricas de observabilidad en el dashboard Next.js
+
+**Completado:**
+- [x] Crear `useObservability.ts` hook (fetch usage, costs, alerts, pricing, health)
+- [x] Crear `ObservabilityTab.tsx` con 5 sub-tabs (Overview, Usage, Costs, Alerts, Pricing)
+- [x] Añadir "Observability" al Sidebar con icono Activity
+- [x] Integrar en DashboardMVP
+- [x] 12 tipos TypeScript nuevos en api.ts
+- [x] TypeScript compila sin errores
+
+**Endpoints backend a consumir:**
+- `GET /api/v1/observability/usage`
+- `GET /api/v1/observability/costs`
+- `GET /api/v1/observability/costs/forecast`
+- `GET /api/v1/observability/alerts`
+- `GET /api/v1/observability/drift/history/{model_id}`
+
+#### 🔄 Fase 0.6 — Reorganización API Tabular ✅ COMPLETADO
+**Objetivo:** Mover rutas tabulares a dominio `/api/v1/tabular/`
+
+**Completado:**
+- [x] Crear carpeta `app/api/routes/v1/tabular/`
+- [x] Mover `training.py`, `predictions.py`, `preprocessing.py`, `streaming.py`
+- [x] Registrar routers con prefijo `/api/v1/tabular/` en main.py
+- [x] Añadir aliases de compatibilidad con `include_in_schema=False`
+- [x] 10 tests nuevos (rutas dominiales + compatibilidad + OpenAPI)
+- [x] Frontend actualizado a rutas `/tabular/*`
+
+**Estructura resultante:**
+```
+app/api/routes/v1/
+├── tabular/
+│   ├── training.py          → /api/v1/tabular/training/*
+│   ├── predictions.py       → /api/v1/tabular/predictions/*
+│   ├── preprocessing.py     → /api/v1/tabular/preprocessing/*
+│   └── streaming.py         → /api/v1/tabular/streaming/*
+├── observability/           → /api/v1/observability/*
+├── models.py                → /api/v1/models/* (cross-domain)
+├── datasets.py              → /api/v1/datasets/* (cross-domain)
+└── ...                      (otros cross-domain)
+```
+
+#### 📅 Fase 1 — NLP Engine (Q1 2027)
+**Objetivo:** Introducir NLP como vertical completa
+
+**Archivos a crear:**
+- `app/api/routes/v1/nlp/training.py`
+- `app/api/routes/v1/nlp/inference.py`
+- `app/api/routes/v1/nlp/embeddings.py`
+- `app/api/routes/v1/nlp/assistant.py`
+- `app/services/nlp_trainer.py`
+- `app/services/embedding_service.py`
+- `app/services/llm_gateway.py`
+- `app/worker/tasks/train_nlp.py`
+
+**Nuevas dependencias:**
+- `transformers` (HuggingFace)
+- `sentence-transformers`
+- `langchain`
+- `spaCy`
+- `optimum` (ONNX export)
+- PostgreSQL extension: `pgvector`
+
+**Infraestructura:**
+- Servicio opcional `ollama` en docker-compose
+- GPU recomendada para fine-tuning BERT
+
+#### 📅 Fase 2 — CV & Time Series (Q2 2027)
+**Objetivo:** Introducir Computer Vision y Time Series
+
+**Archivos a crear:**
+- `app/api/routes/v1/cv/training.py`
+- `app/api/routes/v1/cv/inference.py`
+- `app/api/routes/v1/cv/segmentation.py`
+- `app/api/routes/v1/cv/detection.py`
+- `app/api/routes/v1/timeseries/training.py`
+- `app/api/routes/v1/timeseries/forecast.py`
+- `app/api/routes/v1/timeseries/anomalies.py`
+- `app/services/vision_trainer.py`
+- `app/services/timeseries_trainer.py`
+
+**Nuevas dependencias:**
+- `torchvision` (CV models)
+- `ultralytics` (YOLO)
+- `albumentations` (augmentation)
+- `statsforecast`, `mlforecast`, `neuralforecast` (Nixtla stack)
+
+**Infraestructura:**
+- Nuevo servicio `gpu-worker` en docker-compose
+- Deploy resources con GPU capabilities
+
+---
+
+### 🗂️ Estructura de Código por Dominio
+
+```
+backend/app/
+├── api/routes/v1/
+│   ├── tabular/                    # Reorganizado (Fase 0.6)
+│   ├── nlp/                        # Fase 1
+│   ├── cv/                         # Fase 2
+│   ├── timeseries/                 # Fase 2
+│   ├── observability/              # ✅ Fase 0 (completado)
+│   ├── auth.py                     # Cross-domain
+│   ├── datasets.py                 # Cross-domain
+│   ├── models.py                   # Cross-domain
+│   ├── tenants.py                  # Cross-domain
+│   ├── users.py                    # Cross-domain
+│   ├── drift.py                    # Cross-domain
+│   └── profiling.py                # Cross-domain
+├── services/
+│   ├── tabular/                    # Fase 0.6 (reorganizar)
+│   ├── nlp/                        # Fase 1
+│   ├── cv/                         # Fase 2
+│   ├── timeseries/                 # Fase 2
+│   ├── observability/              # ✅ Fase 0 (completado)
+│   ├── mlflow_service.py           # Cross-domain
+│   ├── storage_service.py          # Cross-domain
+│   └── dvc_service.py              # Cross-domain
+├── core_ml/                        # Shared utilities
+│   ├── factory.py
+│   ├── interfaces.py
+│   ├── preprocessing.py
+│   └── uncertainty/
+├── worker/tasks/
+│   ├── train.py                    # Tabular
+│   ├── predict.py                  # Tabular
+│   ├── single_predict.py           # Tabular
+│   ├── scheduled_checks.py         # ✅ Observability
+│   └── train_nlp.py                # Fase 1
+└── models/
+    ├── tenant.py                   # ✅ Actualizado (budget fields)
+    ├── user.py
+    ├── dataset.py
+    ├── ml_model.py
+    └── prediction.py
+```
+
+---
+
+### Decisiones Clave Pendientes
 
 > [!WARNING]
 > **Decisiones abiertas que impactan el roadmap:**
 
 1. **LLM Provider:** ¿OpenAI API (más simple, cloud dependency) vs Ollama on-premise (privacidad, más infra)? Esto afecta a Q1 y Q4.
 
-2. **GPU Infrastructure:** ¿Se planea tener GPU en los workers para Q2 (CV segmentación + clasificación)? Sin GPU, fine-tuning es impracticable. ¿Cloud training (SageMaker) como alternativa?
+2. **Presupuesto de API LLM:** ¿Hay un budget mensual estimado para llamadas a LLM? Esto determina si el chatbot puede ser "always-on" o necesita rate limiting agresivo.
 
-3. **Scope del Copilot (Q4):** ¿Read-only assistant vs agente que ejecuta acciones? El agente requiere audit log robusto y RBAC enforcement estricto.
+3. **Prioridad CV:** ¿Clasificación primero, o segmentación primero? La segmentación requiere datasets con máscaras (más complejos de preparar).
 
-4. **Presupuesto de API LLM:** ¿Hay un budget mensual estimado para llamadas a LLM? Esto determina si el chatbot puede ser "always-on" o necesita rate limiting agresivo.
-
-5. **Prioridad CV:** ¿Clasificación primero, o segmentación primero? La segmentación requiere datasets con máscaras (más complejos de preparar).
-
-6. **Time Series — Modelos DL:** ¿Incluir neuralforecast (N-BEATS, TFT) desde el inicio o empezar solo con clásicos (ARIMA, ETS) + ML (LightGBM)?
-
-7. **Backwards compatibility:** ¿Mantener los endpoints actuales (`/api/v1/training/*`) como alias de `/api/v1/tabular/*`, o migración hard con deprecation notice?
-
-8. **Modelo de facturación (Fase 0):** ¿Facturar por usage real (coste + markup), por suscripción plana (tiers), o híbrido? Esto determina el diseño de `cost_records` y la integración con Stripe.
-
-9. **Presupuesto de infraestructura para observabilidad:** ¿Mantener Prometheus/Grafana on-premise o migrar a Datadog/Grafana Cloud? On-premise es más barato pero requiere mantenimiento. La Fase 0 añade ~12 nuevas métricas + 6 dashboards.
+4. **Time Series — Modelos DL:** ¿Incluir neuralforecast (N-BEATS, TFT) desde el inicio o empezar solo con clásicos (ARIMA, ETS) + ML (LightGBM)?
 

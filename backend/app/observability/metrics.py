@@ -1,0 +1,98 @@
+"""
+12 métricas custom de Prometheus para observabilidad.
+
+Todas siguen el prefijo `praxisml_` para facilitar
+la identificación en Grafana y alertas.
+"""
+
+from prometheus_client import Counter, Gauge, Histogram
+
+# ── Inferencia ──────────────────────────────────────────────────────────────────
+
+inference_latency_ms = Histogram(
+    "praxisml_inference_latency_ms",
+    "Latencia de inferencia en milisegundos",
+    ["tenant_id", "domain", "algorithm", "success"],
+    buckets=[10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
+)
+
+inference_tokens_total = Counter(
+    "praxisml_inference_tokens_total",
+    "Tokens procesados en inferencia (input/output)",
+    ["tenant_id", "model_id", "direction"],
+)
+
+inference_cost_usd = Counter(
+    "praxisml_inference_cost_usd",
+    "Coste acumulado de inferencia en USD",
+    ["tenant_id", "model_id", "cost_type"],
+)
+
+predictions_total = Counter(
+    "praxisml_predictions_total",
+    "Total de predicciones ejecutadas",
+    ["tenant_id", "model_id", "status"],
+)
+
+# ── Entrenamiento ───────────────────────────────────────────────────────────────
+
+training_duration_seconds = Histogram(
+    "praxisml_training_duration_seconds",
+    "Duración de entrenamiento en segundos",
+    ["tenant_id", "domain", "algorithm"],
+    buckets=[10, 30, 60, 120, 300, 600, 1800, 3600, 7200],
+)
+
+training_cost_usd = Counter(
+    "praxisml_training_cost_usd",
+    "Coste acumulado de entrenamiento en USD",
+    ["tenant_id", "domain", "algorithm"],
+)
+
+# ── Almacenamiento ──────────────────────────────────────────────────────────────
+
+model_storage_bytes = Gauge(
+    "praxisml_model_storage_bytes",
+    "Tamaño del modelo en almacenamiento (bytes)",
+    ["tenant_id", "model_id"],
+)
+
+# ── WebSocket ───────────────────────────────────────────────────────────────────
+
+ws_connections_active = Gauge(
+    "praxisml_ws_connections_active",
+    "Conexiones WebSocket activas",
+    ["tenant_id"],
+)
+
+# ── Drift ───────────────────────────────────────────────────────────────────────
+
+drift_score = Gauge(
+    "praxisml_drift_score",
+    "Valor de drift por modelo y métrica (PSI/KS/JS)",
+    ["model_id", "metric"],
+)
+
+# ── Cuotas ──────────────────────────────────────────────────────────────────────
+
+quota_usage_pct = Gauge(
+    "praxisml_quota_usage_pct",
+    "Porcentaje de uso de cuota por tenant y recurso",
+    ["tenant_id", "resource"],
+)
+
+# ── Presupuesto ─────────────────────────────────────────────────────────────────
+
+cost_budget_remaining = Gauge(
+    "praxisml_cost_budget_remaining",
+    "Presupuesto mensual restante en USD",
+    ["tenant_id"],
+)
+
+# ── Errores ─────────────────────────────────────────────────────────────────────
+
+errors_total = Counter(
+    "praxisml_errors_total",
+    "Errores capturados por componente y tipo",
+    ["tenant_id", "error_type", "component"],
+)

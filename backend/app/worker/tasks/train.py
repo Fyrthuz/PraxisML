@@ -195,6 +195,47 @@ def run_training(
 
         logger.info("Modelo registrado en BD: id=%s", new_model.id)
 
+        # ── Observability: registrar métricas de uso y coste ─────────────
+        try:
+            from datetime import datetime, timezone
+
+            from app.observability.usage_collector import get_usage_collector
+            from app.observability.cost_calculator import get_cost_calculator
+
+            collector = get_usage_collector()
+            calculator = get_cost_calculator()
+
+            collector.record_training(
+                db=db,
+                tenant_id=tenant_id,
+                model_id=new_model.id,
+                domain="tabular",
+                duration_s=result.get("duration_s", 0),
+                cpu_hours=result.get("duration_s", 0) / 3600 if result.get("duration_s") else 0,
+                metrics=metrics,
+                tags={"algorithm": algorithm, "task_type": task_type, "framework": framework},
+            )
+
+            cost = calculator.estimate_training_cost(
+                db=db,
+                cpu_hours=result.get("duration_s", 0) / 3600 if result.get("duration_s") else 0,
+            )
+            if cost > 0:
+                now = datetime.now(timezone.utc)
+                calculator.record_cost(
+                    db=db, tenant_id=tenant_id, cost_type="training", amount=cost,
+                    source=mlflow_run_id, period_start=now, period_end=now,
+                    model_id=new_model.id,
+                    metadata={"algorithm": algorithm, "domain": "tabular"},
+                )
+            db.commit()
+        except Exception as obs_exc:
+            logger.warning("Observability recording failed (non-critical): %s", obs_exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
         return {
             "status": "COMPLETED",
             "model_id": new_model.id,

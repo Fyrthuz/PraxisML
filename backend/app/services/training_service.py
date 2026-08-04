@@ -6,6 +6,7 @@ cross-validation, entrenamiento con MLFlow autologging, evaluación y persistenc
 
 import importlib
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -148,7 +149,8 @@ class SklearnTrainer:
         mlflow.sklearn.autolog(log_models=True, log_datasets=False)
 
         if strategy == "cross_validation":
-            return self._train_cv(
+            t_start = time.perf_counter()
+            result = self._train_cv(
                 X,
                 y,
                 algorithm,
@@ -161,8 +163,11 @@ class SklearnTrainer:
                 target_column,
                 model_name,
             )
+            result["duration_s"] = time.perf_counter() - t_start
+            return result
         else:
-            return self._train_holdout(
+            t_start = time.perf_counter()
+            result = self._train_holdout(
                 X,
                 y,
                 algorithm,
@@ -175,6 +180,8 @@ class SklearnTrainer:
                 target_column,
                 model_name,
             )
+            result["duration_s"] = time.perf_counter() - t_start
+            return result
 
     def _train_holdout(
         self,

@@ -155,6 +155,34 @@ services:
       - ./backend/migrations:/app/migrations
     restart: always
 
+  # 6b. Celery Beat — planificador de tareas periódicas
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: praxisml_celery_beat
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/praxisml_db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - STORAGE_BACKEND=minio
+      - MINIO_ENDPOINT=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    command: [ "uv", "run", "celery", "-A", "app.worker.celery_app", "beat", "--loglevel=info" ]
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/migrations:/app/migrations
+    restart: always
+
   # 7. Frontend
   frontend:
     build:

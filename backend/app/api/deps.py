@@ -128,6 +128,13 @@ require_viewer = require_role(UserRole.VIEWER)
 # ── Quota Limiting ────────────────────────────────────────────────────────────
 
 
+def _update_quota_gauge(tenant_id: str, resource: str, current: int, limit: int) -> None:
+    from app.observability.metrics import quota_usage_pct
+
+    pct = (current / limit) * 100 if limit > 0 else 0
+    quota_usage_pct.labels(tenant_id=tenant_id, resource=resource).set(pct)
+
+
 def check_dataset_quota(
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
@@ -141,6 +148,7 @@ def check_dataset_quota(
             .filter(Dataset.tenant_id == tenant.id)
             .scalar()
         )
+        _update_quota_gauge(tenant.id, "datasets", current_count, tenant.max_datasets)
         if current_count >= tenant.max_datasets:
             raise QuotaExceededError(
                 resource="datasets",
@@ -163,6 +171,7 @@ def check_model_quota(
             .filter(MLModel.tenant_id == tenant.id)
             .scalar()
         )
+        _update_quota_gauge(tenant.id, "modelos", current_count, tenant.max_models)
         if current_count >= tenant.max_models:
             raise QuotaExceededError(
                 resource="modelos",
@@ -191,6 +200,7 @@ def check_prediction_quota(
             )
             .scalar()
         )
+        _update_quota_gauge(tenant.id, "predicciones", today_count, tenant.max_predictions_per_day)
         if today_count >= tenant.max_predictions_per_day:
             raise QuotaExceededError(
                 resource="predicciones diarias",
@@ -203,6 +213,23 @@ def check_prediction_quota(
 def get_storage_service() -> StorageService:
     """FastAPI dependency que retorna la instancia de StorageService."""
     return get_storage()
+
+
+# ── Observability Dependencies ────────────────────────────────────────────────
+
+
+def get_usage_collector_dep() -> "UsageCollector":
+    """FastAPI dependency que retorna el singleton UsageCollector."""
+    from app.observability.usage_collector import get_usage_collector
+
+    return get_usage_collector()
+
+
+def get_cost_calculator_dep() -> "CostCalculator":
+    """FastAPI dependency que retorna el singleton CostCalculator."""
+    from app.observability.cost_calculator import get_cost_calculator
+
+    return get_cost_calculator()
 
 
 def check_training_quota(
@@ -224,6 +251,7 @@ def check_training_quota(
             )
             .scalar()
         )
+        _update_quota_gauge(tenant.id, "entrenamientos", today_count, tenant.max_training_jobs_per_day)
         if today_count >= tenant.max_training_jobs_per_day:
             raise QuotaExceededError(
                 resource="entrenamientos diarios",

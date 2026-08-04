@@ -9,7 +9,6 @@ os.environ["GIT_PYTHON_REFRESH"] = "quiet"
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
-from prometheus_client import Counter
 from prometheus_fastapi_instrumentator import Instrumentator
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -23,13 +22,6 @@ from app.core.rate_limit import limiter
 # ── Logging estructurado ───────────────────────────────────────────────────────
 setup_logging(level="DEBUG" if settings.ENVIRONMENT == "development" else "INFO")
 logger = logging.getLogger(__name__)
-
-# ── Métricas Custom ────────────────────────────────────────────────────────────
-api_errors_total = Counter(
-    "api_errors_total",
-    "Total de errores capturados por la API",
-    ["error_type", "handler", "status_code"],
-)
 
 # ── MLFlow UI subprocess (local dev only) ─────────────────────────────────────
 _mlflow_proc: subprocess.Popen | None = None
@@ -141,7 +133,7 @@ def create_app() -> FastAPI:
 
         @app.middleware("http")
         async def debug_websocket_middleware(request, call_next):
-            if request.url.path.startswith("/api/v1/streaming"):
+            if request.url.path.startswith("/api/v1/streaming") or request.url.path.startswith("/api/v1/tabular/streaming"):
                 logger.info(
                     f"WebSocket debug: Origin={request.headers.get('origin')}, Host={request.headers.get('host')}, URL={request.url}"
                 )
@@ -158,10 +150,12 @@ def create_app() -> FastAPI:
             exc.message,
             extra={"detail": str(exc.detail) if exc.detail else None},
         )
-        api_errors_total.labels(
-            error_type="PraxisMLError",
-            handler=request.url.path,
-            status_code=exc.status_code,
+        from app.observability.metrics import errors_total
+
+        errors_total.labels(
+            tenant_id=getattr(request.state, "tenant_id", "unknown"),
+            error_type=exc.code,
+            component=request.url.path,
         ).inc()
         return JSONResponse(
             status_code=exc.status_code,
@@ -177,8 +171,12 @@ def create_app() -> FastAPI:
         logger.exception(
             "Error no controlado en %s %s", request.method, request.url.path
         )
-        api_errors_total.labels(
-            error_type="UnhandledException", handler=request.url.path, status_code=500
+        from app.observability.metrics import errors_total
+
+        errors_total.labels(
+            tenant_id=getattr(request.state, "tenant_id", "unknown"),
+            error_type="UnhandledException",
+            component=request.url.path,
         ).inc()
         return JSONResponse(
             status_code=500,
@@ -216,13 +214,16 @@ def create_app() -> FastAPI:
         datasets,
         drift,
         models,
-        predictions,
-        preprocessing,
+        observability,
         profiling,
-        streaming,
         tenants,
-        training,
         users,
+    )
+    from app.api.routes.v1.tabular import (
+        predictions as tabular_predictions,
+        preprocessing as tabular_preprocessing,
+        streaming as tabular_streaming,
+        training as tabular_training,
     )
 
     app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
@@ -238,23 +239,62 @@ def create_app() -> FastAPI:
     app.include_router(
         models.router, prefix=f"{settings.API_V1_STR}/models", tags=["Models"]
     )
-    app.include_router(
-        predictions.router, prefix=f"{settings.API_V1_STR}", tags=["Predictions"]
-    )
-    app.include_router(
-        preprocessing.router,
-        prefix=f"{settings.API_V1_STR}/preprocessing",
-        tags=["Preprocessing"],
-    )
-    app.include_router(
-        training.router, prefix=f"{settings.API_V1_STR}/training", tags=["Training"]
-    )
-    app.include_router(
-        streaming.router, prefix=f"{settings.API_V1_STR}", tags=["Streaming"]
-    )
     app.include_router(drift.router, prefix=f"{settings.API_V1_STR}", tags=["Drift"])
     app.include_router(
         users.router, prefix=f"{settings.API_V1_STR}/users", tags=["Users"]
+    )
+    app.include_router(
+        observability.router,
+        prefix=f"{settings.API_V1_STR}/observability",
+        tags=["Observability"],
+    )
+
+    # ── Tabular Domain (primary routes) ───────────────────────────────────────
+    app.include_router(
+        tabular_predictions.router,
+        prefix=f"{settings.API_V1_STR}/tabular",
+        tags=["Tabular"],
+    )
+    app.include_router(
+        tabular_preprocessing.router,
+        prefix=f"{settings.API_V1_STR}/tabular/preprocessing",
+        tags=["Tabular"],
+    )
+    app.include_router(
+        tabular_training.router,
+        prefix=f"{settings.API_V1_STR}/tabular/training",
+        tags=["Tabular"],
+    )
+    app.include_router(
+        tabular_streaming.router,
+        prefix=f"{settings.API_V1_STR}/tabular",
+        tags=["Tabular"],
+    )
+
+    # ── Tabular Domain (backwards-compat aliases, deprecated) ─────────────────
+    app.include_router(
+        tabular_predictions.router,
+        prefix=f"{settings.API_V1_STR}",
+        tags=["Tabular (Deprecated)"],
+        include_in_schema=False,
+    )
+    app.include_router(
+        tabular_preprocessing.router,
+        prefix=f"{settings.API_V1_STR}/preprocessing",
+        tags=["Tabular (Deprecated)"],
+        include_in_schema=False,
+    )
+    app.include_router(
+        tabular_training.router,
+        prefix=f"{settings.API_V1_STR}/training",
+        tags=["Tabular (Deprecated)"],
+        include_in_schema=False,
+    )
+    app.include_router(
+        tabular_streaming.router,
+        prefix=f"{settings.API_V1_STR}",
+        tags=["Tabular (Deprecated)"],
+        include_in_schema=False,
     )
 
     return app

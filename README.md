@@ -50,16 +50,19 @@ PraxisML/
 │   ├── app/
 │   │   ├── api/routes/v1/      # REST endpoints
 │   │   │   ├── auth.py         # JWT Login / Register (primer usuario = admin)
-│   │   │   ├── tenants.py      # CRUD de tenants + gestión de quotas
+│   │   │   ├── tenants.py      # CRUD de tenants + gestión de quotas + budget
 │   │   │   ├── datasets.py     # Upload de datasets (ZIP + config.json) + DVC
 │   │   │   ├── models.py       # Upload de modelos + MLflow Registry
-│   │   │   ├── predictions.py  # Inferencia async y single-image + XAI
-│   │   │   ├── training.py     # Entrenamiento Sklearn / PyTorch
-│   │   │   ├── preprocessing.py # Pipelines de preprocesamiento
 │   │   │   ├── profiling.py    # Profiling de datasets
 │   │   │   ├── drift.py        # Monitorización de data drift
-│   │   │   ├── streaming.py    # Inferencia en tiempo real via WebSockets
-│   │   │   └── users.py       # Creación/eliminación de usuarios
+│   │   │   ├── users.py        # Creación/eliminación de usuarios
+│   │   │   ├── observability/  # Observability API (Fase 0)
+│   │   │   │   └── observability.py  # Usage, costs, pricing, alerts, health
+│   │   │   └── tabular/        # Tabular ML domain (renombrado desde root)
+│   │   │       ├── training.py       # Entrenamiento Sklearn / PyTorch
+│   │   │       ├── predictions.py    # Inferencia async y single-image + XAI
+│   │   │       ├── preprocessing.py  # Pipelines de preprocesamiento
+│   │   │       └── streaming.py      # Inferencia en tiempo real via WebSockets
 │   │   ├── core/               # Seguridad / Config / JWT / Rate Limiting
 │   │   │   ├── config.py       # Configuración centralizada con validadores
 │   │   │   ├── exceptions.py   # Jerarquía de excepciones de dominio
@@ -75,6 +78,15 @@ PraxisML/
 │   │   │   └── uncertainty/    # Estimadores de incertidumbre
 │   │   ├── models/             # Modelos SQLAlchemy ORM
 │   │   ├── schemas/            # Schemas Pydantic (request/response)
+│   │   │   ├── observability.py  # Schemas de observabilidad (Fase 0)
+│   │   │   └── pricing.py      # Schemas de pricing dinámico (Fase 0)
+│   │   ├── observability/      # Paquete de observabilidad (Fase 0)
+│   │   │   ├── models.py       # ORM: UsageMetric, CostRecord, DriftHistory, AlertConfig, ResourcePricing
+│   │   │   ├── metrics.py      # 12 métricas Prometheus custom
+│   │   │   ├── usage_collector.py  # Captura métricas de uso
+│   │   │   ├── cost_calculator.py  # Estimación de costes con precios dinámicos
+│   │   │   ├── alert_engine.py # Motor de evaluación y despacho de alertas
+│   │   │   └── reports.py      # Generación de reportes PDF/CSV
 │   │   ├── services/           # Lógica de negocio (MLflow, storage, training, DVC)
 │   │   │   ├── mlflow_service.py      # MLflow + Model Registry
 │   │   │   ├── dvc_service.py         # DVC data versioning
@@ -83,7 +95,7 @@ PraxisML/
 │   │   │   ├── data_profiler.py       # Profiling con ydata-profiling
 │   │   │   └── storage_service.py     # Factory de almacenamiento (Local/MinIO/S3)
 │   │   ├── worker/             # Workers Celery
-│   │   │   └── tasks/          # Tareas async (predict, train)
+│   │   │   └── tasks/          # Tareas async (predict, train, scheduled_checks)
 │   │   ├── utils/              # Utilidades
 │   │   │   └── dvc_helper.py   # Helper DVC para CLI
 │   │   ├── database.py
@@ -91,8 +103,21 @@ PraxisML/
 │   ├── migrations/             # Alembic migrations
 │   │   └── versions/           # Versiones de schema
 │   ├── tests/
-│   │   ├── unit/               # Tests unitarios (RBAC, quota, config, ML, registry)
+│   │   ├── unit/               # Tests unitarios (RBAC, quota, config, ML, registry, observability)
+│   │   │   ├── test_observability_models.py
+│   │   │   ├── test_observability_metrics.py
+│   │   │   ├── test_usage_collector.py
+│   │   │   ├── test_cost_calculator.py
+│   │   │   ├── test_alert_engine.py
+│   │   │   ├── test_observability_reports.py
+│   │   │   ├── test_observability_hooks.py
+│   │   │   └── test_services.py
 │   │   └── integration/        # Tests de integración (API endpoints)
+│   │       ├── test_api_endpoints.py
+│   │       ├── test_model_lifecycle.py
+│   │       ├── test_observability_api.py
+│   │       ├── test_tabular_domain.py
+│   │       └── test_deprecated_routes.py
 │   ├── scripts/                # Scripts utilitarios
 │   │   └── validate_model.py   # Validación de modelos para CI/CD
 │   └── pyproject.toml
@@ -274,6 +299,89 @@ Sistema de versionado de datasets con sincronización a MinIO/S3:
 | `dvc_registry_name` | Nombre del registry |
 | `dvc_version` | Versión en DVC |
 | `dvc_remote` | Remote configurado (minio/s3) |
+
+---
+
+## 🏗️ Arquitectura de API (Fase 0.6)
+
+### Rutas Tabulares Reorganizadas
+
+La API tabular ha sido reorganizada bajo el prefijo `/api/v1/tabular/` para preparar la estructura multi-dominio (NLP, CV, Time Series). Las rutas antiguas siguen funcionando como aliases de compatibilidad.
+
+| Dominio | Prefijo | Endpoints |
+|---------|---------|-----------|
+| **Tabular Training** | `/api/v1/tabular/training/` | `GET /algorithms`, `POST /train`, `GET /status/{task_id}` |
+| **Tabular Predictions** | `/api/v1/tabular/` | `POST /predict`, `POST /predictions/predict/single`, `GET /predictions` |
+| **Tabular Preprocessing** | `/api/v1/tabular/preprocessing/` | `POST /preview`, `POST /apply/{dataset_id}`, `GET /pipeline/{dataset_id}` |
+| **Tabular Streaming** | `/api/v1/tabular/` | `WS /streaming/predict/{model_id}` |
+
+> **Compatibilidad**: Las rutas antiguas (`/api/v1/training/`, `/api/v1/predictions/`, etc.) siguen funcionando pero están ocultas del OpenAPI y marcadas como deprecated.
+
+---
+
+## 📊 Observability & Cost Tracking (Fase 0)
+
+Sistema unificado de observabilidad multi-tenant para monitorización de uso, costes y alertas.
+
+### Características
+
+- **Usage Tracking**: Registro automático de cada inferencia y entrenamiento con latencia, dominio, y tags
+- **Dynamic Pricing**: Precios dinámicos para GPU, CPU, storage y tokens LLM (CRUD via API)
+- **Cost Calculator**: Estimación automática de costes con cache Redis (TTL 5min)
+- **Budget Management**: Budget mensual por tenant con alertas de overrun
+- **Alert System**: 15 alertas predefinidas (cost spike, latency degradation, drift, etc.)
+- **Health Score**: Score compuesto (accuracy + drift + latency) por modelo
+- **Reports**: Generación de reportes mensuales en PDF/CSV
+
+### API Endpoints
+
+| Método | Endpoint | Descripción |
+|--------|----------|-------------|
+| `GET` | `/api/v1/observability/usage` | Métricas de uso agregadas |
+| `GET` | `/api/v1/observability/costs` | Desglose de costes por tipo |
+| `GET` | `/api/v1/observability/costs/forecast` | Predicción de coste mensual |
+| `GET` | `/api/v1/observability/pricing` | Precios activos (GPU, CPU, storage, LLM) |
+| `POST` | `/api/v1/observability/pricing` | Crear/actualizar precio (admin) |
+| `GET` | `/api/v1/observability/alerts` | Alertas configuradas |
+| `POST` | `/api/v1/observability/alerts` | Crear nueva alerta |
+| `GET` | `/api/v1/observability/models/{id}/health` | Health score de un modelo |
+| `GET` | `/api/v1/observability/drift/history/{model_id}` | Historial de drift |
+| `GET` | `/api/v1/observability/tenant/{id}/report` | Reporte mensual PDF/CSV |
+
+### Frontend Dashboard
+
+El tab **Observability** en el frontend muestra:
+- **Overview**: 4 stat cards (coste mensual, métricas de uso, alertas activas, forecast)
+- **Usage**: Tabla de métricas atómicas con stats agregadas (avg, p50, p95, p99, min, max)
+- **Costs**: Tabla detallada de cost records por tipo y modelo
+- **Alerts**: CRUD completo de alertas con toggle on/off
+- **Pricing**: Tabla de precios agrupada por categoría (GPU, CPU, storage, LLM tokens)
+
+### Métricas Prometheus
+
+12 métricas custom expuestas en `/metrics`:
+- `praxisml_inference_latency_ms` (Histogram)
+- `praxisml_inference_tokens_total` (Counter)
+- `praxisml_inference_cost_usd` (Counter)
+- `praxisml_training_duration_seconds` (Histogram)
+- `praxisml_training_cost_usd` (Counter)
+- `praxisml_model_storage_bytes` (Gauge)
+- `praxisml_ws_connections_active` (Gauge)
+- `praxisml_drift_score` (Gauge)
+- `praxisml_quota_usage_pct` (Gauge)
+- `praxisml_cost_budget_remaining` (Gauge)
+- `praxisml_predictions_total` (Counter)
+- `praxisml_errors_total` (Counter)
+
+### Grafana Dashboards
+
+6 dashboards nuevos + 5 existentes enriquecidos:
+- **Cost Center**: Costes por tenant, breakdown por modelo, forecast vs budget
+- **Model Performance**: Latencia p50/p95/p99, throughput, error rate, drift score
+- **Tenant Usage**: Requests/día, entrenamientos, almacenamiento, cuotas
+- **LLM Spend**: Tokens input/output, coste por modelo, budget burn rate
+- **Training Dashboard**: Duración por algoritmo, coste por entrenamiento, GPU utilization
+- **Drift Timeline**: PSI/KS timeline, forecast line, alert annotations
 
 ---
 

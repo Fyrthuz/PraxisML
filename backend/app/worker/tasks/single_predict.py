@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 
 import torch
@@ -84,7 +85,9 @@ def run_single_tabular_inference(
         )
 
         # El input a inferir debe ser numpy
+        t_start = time.perf_counter()
         result_dict = estimator.estimate_uncertainty(input_data)
+        inference_time_s = time.perf_counter() - t_start
 
         # 5. Calcular SHAP values si se solicita
         if explain:
@@ -121,6 +124,45 @@ def run_single_tabular_inference(
         prediction.status = "COMPLETED"
         db.commit()
         logger.info(f"[{prediction_id}] Exito Single Tabular Inference")
+
+        # ── Observability: registrar métricas de uso y coste ─────────────
+        try:
+            from datetime import datetime, timezone
+
+            from app.observability.usage_collector import get_usage_collector
+            from app.observability.cost_calculator import get_cost_calculator
+
+            collector = get_usage_collector()
+            calculator = get_cost_calculator()
+
+            collector.record_inference(
+                db=db,
+                tenant_id=tenant_id,
+                model_id=model_id,
+                domain="tabular",
+                latency_ms=inference_time_s * 1000,
+                success=True,
+                tags={"algorithm": ml_model.metrics_metadata.get("algorithm", "unknown"),
+                      "method": method},
+            )
+
+            cost = calculator.estimate_inference_cost(
+                db=db, domain="tabular", latency_ms=inference_time_s * 1000,
+            )
+            if cost > 0:
+                now = datetime.now(timezone.utc)
+                calculator.record_cost(
+                    db=db, tenant_id=tenant_id, cost_type="inference", amount=cost,
+                    source=prediction_id, period_start=now, period_end=now,
+                    model_id=model_id,
+                )
+            db.commit()
+        except Exception as obs_exc:
+            logger.warning("Observability recording failed (non-critical): %s", obs_exc)
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         return "COMPLETED"
 

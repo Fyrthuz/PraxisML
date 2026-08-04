@@ -16,6 +16,7 @@ import PreprocessingTab from "./tabs/PreprocessingTab";
 import UsersTab from "./tabs/UsersTab";
 import PredictionResultsModal from "@/components/modals/PredictionResultsModal";
 import StreamingInference from "./StreamingInference";
+import ObservabilityTab from "./tabs/ObservabilityTab";
 
 import { useDatasets } from "@/hooks/useDatasets";
 import { useModels } from "@/hooks/useModels";
@@ -25,7 +26,7 @@ import { useTraining } from "@/hooks/useTraining";
 import { Prediction } from "@/lib/api";
 import { config } from '@/lib/config';
 
-type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming" | "users";
+type View = "datasets" | "preprocessing" | "models" | "predictions" | "training" | "registry" | "data_registry" | "streaming" | "users" | "observability";
 
 const API = config.getFullApiUrl("");
 
@@ -297,6 +298,10 @@ export default function DashboardMVP() {
                             tenantId={tenant?.id || ""}
                             onRefreshUsers={() => {}}
                         />
+                    )}
+
+                    {activeView === "observability" && (
+                        <ObservabilityTab token={token} />
                     )}
                 </div>
             </main>

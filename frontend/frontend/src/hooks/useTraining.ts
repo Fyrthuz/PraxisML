@@ -33,7 +33,7 @@ export function useTraining(token: string | null, onComplete?: () => void) {
     // Load algorithms once token is available
     useEffect(() => {
         if (!token) return;
-        fetch(`${API}/training/algorithms`, {
+        fetch(`${API}/tabular/training/algorithms`, {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((res) => res.json())
@@ -50,7 +50,7 @@ export function useTraining(token: string | null, onComplete?: () => void) {
         const interval = setInterval(async () => {
             try {
                 const res = await fetch(
-                    `${API}/training/status/${trainingTaskId}`,
+                    `${API}/tabular/training/status/${trainingTaskId}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
                 const data: TrainingStatus = await res.json();
@@ -79,7 +79,7 @@ export function useTraining(token: string | null, onComplete?: () => void) {
         setIsTraining(true);
         setTrainingStatus(null);
         try {
-            const res = await fetch(`${API}/training/train`, {
+            const res = await fetch(`${API}/tabular/training/train`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,

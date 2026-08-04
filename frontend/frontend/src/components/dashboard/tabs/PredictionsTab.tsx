@@ -232,7 +232,7 @@ export default function PredictionsTab({
                     onPredictionStarted={() => {
                         // Refresh the predictions list when a single file starts
                         if (token) {
-                            fetch(config.getFullApiUrl('/predictions'), {
+                            fetch(config.getFullApiUrl('/tabular/predictions'), {
                                 headers: { Authorization: `Bearer ${token}` }
                             }).then(r => r.json()).then(preds => {
                                 setPredictions(Array.isArray(preds) ? preds : []);

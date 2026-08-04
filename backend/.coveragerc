@@ -1,0 +1,19 @@
+[run]
+source = app
+omit =
+    app/migrations/*
+    app/core_ml/uncertainty/*
+    app/worker/*
+    */__pycache__/*
+    */site-packages/*
+
+[report]
+fail_under = 50
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.
+    raise NotImplementedError
+    pass
+    except ImportError
+    if TYPE_CHECKING:

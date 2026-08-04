@@ -274,6 +274,96 @@
             ],
             "title": "Errores Detallados (api_errors_total)",
             "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "displayMode": "gradient",
+                        "orientation": "horizontal"
+                    },
+                    "unit": "usd"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 24
+            },
+            "id": 102,
+            "options": {
+                "displayMode": "gradient",
+                "orientation": "horizontal",
+                "showUnfilled": true
+            },
+            "targets": [
+                {
+                    "expr": "praxisml_training_cost_usd",
+                    "legendFormat": "{{algorithm}}",
+                    "refId": "A"
+                }
+            ],
+            "title": "Coste por Entrenamiento",
+            "type": "bargauge"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "unit": "usd",
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 1000
+                            }
+                        ]
+                    }
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 24
+            },
+            "id": 103,
+            "options": {
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                },
+                "orientation": "auto",
+                "colorMode": "value"
+            },
+            "targets": [
+                {
+                    "expr": "sum(increase(praxisml_training_cost_usd[24h]))",
+                    "legendFormat": "Coste 24h",
+                    "refId": "A"
+                }
+            ],
+            "title": "Coste Total Entrenamiento",
+            "type": "stat"
         }
     ],
     "refresh": "10s",
