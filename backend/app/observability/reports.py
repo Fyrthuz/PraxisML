@@ -6,7 +6,6 @@ import csv
 import io
 import logging
 from datetime import datetime, timezone
-from typing import Optional
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -107,7 +106,7 @@ def generate_monthly_report_pdf(
     p.setTitle(f"PraxisML - Reporte Mensual {month}")
     width, height = A4
 
-    p.drawString(72, height - 72, f"Reporte Mensual - PraxisML")
+    p.drawString(72, height - 72, "Reporte Mensual - PraxisML")
     p.drawString(72, height - 96, f"Tenant: {tenant_id}")
     p.drawString(72, height - 120, f"Periodo: {month}")
     p.line(72, height - 130, width - 72, height - 130)

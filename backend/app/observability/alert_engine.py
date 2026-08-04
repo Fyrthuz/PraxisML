@@ -6,12 +6,11 @@ Soporta canales: webhook (Slack/Teams), email, dashboard badge, WebSocket push v
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.observability.models import AlertConfig, UsageMetric
 
 logger = logging.getLogger(__name__)
@@ -106,7 +105,7 @@ class AlertEngine:
             redis = create_redis_client()
             if redis is None:
                 return []
-            pattern = f"alert_cooldown:*"
+            pattern = "alert_cooldown:*"
             keys = redis.keys(pattern)
             return [k.split(":")[-1] for k in keys]
         except Exception:

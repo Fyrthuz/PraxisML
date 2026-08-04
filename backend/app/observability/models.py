@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, JSON, Text, text
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import Boolean, Column, DateTime, Float, Index, Integer, String, JSON, text
 
 from app.models.base import Base
 from app.utils.uuid import generate_uuid

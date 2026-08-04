@@ -218,14 +218,14 @@ def get_storage_service() -> StorageService:
 # ── Observability Dependencies ────────────────────────────────────────────────
 
 
-def get_usage_collector_dep() -> "UsageCollector":
+def get_usage_collector_dep():
     """FastAPI dependency que retorna el singleton UsageCollector."""
     from app.observability.usage_collector import get_usage_collector
 
     return get_usage_collector()
 
 
-def get_cost_calculator_dep() -> "CostCalculator":
+def get_cost_calculator_dep():
     """FastAPI dependency que retorna el singleton CostCalculator."""
     from app.observability.cost_calculator import get_cost_calculator
 

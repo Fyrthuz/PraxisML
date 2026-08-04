@@ -38,7 +38,6 @@ def create_tenant(
 
     # 3. Sembrar alertas por defecto para el nuevo tenant
     from app.observability.models import AlertConfig
-    from datetime import datetime, timezone
 
     default_alerts = [
         ("cost_spike", "inference_cost_usd", 2.0, "pct_change", 60),

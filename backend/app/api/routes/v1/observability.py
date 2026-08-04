@@ -28,7 +28,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     get_db,
     get_current_tenant,
-    get_usage_collector_dep,
     get_cost_calculator_dep,
     require_admin,
     require_editor,
@@ -43,13 +42,11 @@ from app.observability.models import (
     AlertConfig,
     ResourcePricing,
 )
-from app.observability.usage_collector import UsageCollector
 from app.observability.cost_calculator import CostCalculator
 from app.schemas.observability import (
     UsageResponse,
     UsagePointResponse,
     UsageAggregation,
-    CostBreakdownResponse,
     CostForecastResponse,
     DriftHistoryResponse,
     DriftPointResponse,
@@ -61,11 +58,9 @@ from app.schemas.observability import (
 )
 from app.schemas.pricing import (
     ResourcePricingCreate,
-    ResourcePricingUpdate,
     ResourcePricingResponse,
     ResourcePricingHistoryResponse,
 )
-from app.utils.uuid import generate_uuid
 
 router = APIRouter(tags=["Observability"])
 logger = logging.getLogger(__name__)
@@ -213,11 +208,6 @@ def get_cost_forecast(
     _user: User = Depends(require_editor),
 ):
     """Predicción de coste mensual vía regresión lineal."""
-    from app.models.tenant import Tenant as TenantModel
-
-    monthly = calculator.get_monthly_cost(db, tenant.id)
-    remaining = calculator.budget_remaining(db, tenant.id)
-
     projected = None
     trend = None
 
@@ -258,7 +248,7 @@ def get_cost_forecast(
         trend = round(slope, 4)
 
     tenant_obj = (
-        db.query(TenantModel).filter(TenantModel.id == tenant.id).first()
+        db.query(Tenant).filter(Tenant.id == tenant.id).first()
     )
     budget = tenant_obj.monthly_budget_usd if tenant_obj else None
 
@@ -509,7 +499,6 @@ def get_model_health(
     accuracy_score_val = 1.0
     drift_risk = 0.0
     latency_ratio = 1.0
-    cost_ratio = 0.0
 
     latest_drift = (
         db.query(DriftHistory)

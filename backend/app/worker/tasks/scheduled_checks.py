@@ -24,7 +24,7 @@ def scheduled_drift_check():
 
         production_models = (
             db.query(MLModel)
-            .filter(MLModel.stage == "Production", MLModel.is_active == True)
+            .filter(MLModel.stage == "Production", MLModel.is_active)
             .all()
         )
         for model in production_models:
@@ -72,7 +72,7 @@ def evaluate_alerts():
     try:
         alerts = (
             db.query(AlertConfig)
-            .filter(AlertConfig.enabled == True)
+            .filter(AlertConfig.enabled)
             .all()
         )
         engine = get_alert_engine()
@@ -109,7 +109,7 @@ def check_zombie_models():
             db.query(MLModel)
             .filter(
                 MLModel.stage == "Production",
-                MLModel.is_active == True,
+                MLModel.is_active,
                 MLModel.updated_at < cutoff,
             )
             .all()

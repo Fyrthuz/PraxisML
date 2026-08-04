@@ -46,6 +46,16 @@ def db_session(engine):
         session.close()
 
 
+@pytest.fixture(autouse=True)
+def _clean_db(engine):
+    """Limpia todas las tablas antes de cada test."""
+    with engine.connect() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            conn.execute(table.delete())
+        conn.commit()
+    yield
+
+
 @pytest.fixture()
 def override_db(db_session):
     """Sobreescribe la dependencia get_db de FastAPI con la sesión de test."""
