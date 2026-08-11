@@ -203,3 +203,98 @@ def get_default_hyperparams(algorithm: str) -> Dict[str, Any]:
     info = get_algorithm_info(algorithm)
     return {hp["name"]: hp["default"] for hp in info["hyperparams"]}
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NLP Algorithms (Fase 1 — NLP Engine)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+NLP_TASK_TYPES = [
+    "text_classification",
+    "token_classification",  # NER
+    "sentiment_analysis",
+]
+
+NLP_HYPERPARAMS = [
+    {"name": "epochs", "label": "Epochs", "type": "int", "min": 1, "max": 20, "default": 3},
+    {"name": "learning_rate", "label": "Learning Rate", "type": "float", "min": 0.00001, "max": 0.001, "default": 0.00002},
+    {"name": "batch_size", "label": "Batch Size", "type": "int", "min": 4, "max": 64, "default": 16},
+    {"name": "weight_decay", "label": "Weight Decay (L2)", "type": "float", "min": 0.0, "max": 0.1, "default": 0.01},
+    {"name": "warmup_ratio", "label": "Warmup Ratio", "type": "float", "min": 0.0, "max": 0.5, "default": 0.1},
+    {"name": "max_seq_length", "label": "Max Sequence Length", "type": "int", "min": 32, "max": 512, "default": 128},
+]
+
+NLP_ALGORITHMS: Dict[str, Dict[str, Any]] = {
+    "distilbert": {
+        "display_name": "DistilBERT",
+        "hf_model": "distilbert-base-uncased",
+        "task_types": list(NLP_TASK_TYPES),
+        "framework": "huggingface",
+        "hyperparams": NLP_HYPERPARAMS,
+    },
+    "bert-base": {
+        "display_name": "BERT Base",
+        "hf_model": "bert-base-uncased",
+        "task_types": list(NLP_TASK_TYPES),
+        "framework": "huggingface",
+        "hyperparams": NLP_HYPERPARAMS,
+    },
+    "bert-multilingual": {
+        "display_name": "BERT Multilingual",
+        "hf_model": "bert-base-multilingual-cased",
+        "task_types": list(NLP_TASK_TYPES),
+        "framework": "huggingface",
+        "hyperparams": NLP_HYPERPARAMS,
+    },
+    "roberta": {
+        "display_name": "RoBERTa",
+        "hf_model": "roberta-base",
+        "task_types": list(NLP_TASK_TYPES),
+        "framework": "huggingface",
+        "hyperparams": NLP_HYPERPARAMS,
+    },
+    "xlm-roberta": {
+        "display_name": "XLM-RoBERTa",
+        "hf_model": "xlm-roberta-base",
+        "task_types": list(NLP_TASK_TYPES),
+        "framework": "huggingface",
+        "hyperparams": NLP_HYPERPARAMS,
+    },
+    "biobert": {
+        "display_name": "BioBERT",
+        "hf_model": "dmis-lab/biobert-v1.1",
+        "task_types": list(NLP_TASK_TYPES),
+        "framework": "huggingface",
+        "hyperparams": NLP_HYPERPARAMS,
+    },
+}
+
+
+def get_nlp_algorithm_info(algorithm: str) -> Dict[str, Any]:
+    """Devuelve la info de un algoritmo NLP o lanza ValueError."""
+    if algorithm not in NLP_ALGORITHMS:
+        raise ValueError(
+            f"Algoritmo NLP '{algorithm}' no registrado. "
+            f"Disponibles: {list(NLP_ALGORITHMS.keys())}"
+        )
+    return NLP_ALGORITHMS[algorithm]
+
+
+def get_all_nlp_algorithms() -> List[Dict[str, Any]]:
+    """Devuelve la lista de algoritmos NLP con su metadata (mismo contrato que tabular)."""
+    result = []
+    for key, info in NLP_ALGORITHMS.items():
+        result.append({
+            "id": key,
+            "display_name": info["display_name"],
+            "framework": info.get("framework", "huggingface"),
+            "task_types": info["task_types"],
+            "hyperparams": info["hyperparams"],
+        })
+    return result
+
+
+def get_nlp_default_hyperparams(algorithm: str) -> Dict[str, Any]:
+    """Devuelve los hiperparámetros por defecto de un algoritmo NLP."""
+    info = get_nlp_algorithm_info(algorithm)
+    return {hp["name"]: hp["default"] for hp in info["hyperparams"]}
+

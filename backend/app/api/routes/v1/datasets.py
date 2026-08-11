@@ -256,6 +256,30 @@ async def upload_dataset(
     db.add(new_dataset)
     db.commit()
     db.refresh(new_dataset)
+
+    # ── NLP Profiler hook (Fase 1) ─────────────────────────────────────────
+    if file_type and is_tabular(file_type):
+        try:
+            from io import BytesIO
+
+            from app.core_ml.tabular_parser import read_tabular
+            from app.services.nlp_profiler import NLPProfiler
+
+            df = read_tabular(BytesIO(content), file_type)
+            analysis = NLPProfiler().analyze_df(df, column_names)
+            new_dataset.column_types_analysis = analysis
+            db.commit()
+
+            try:
+                from app.services.embedding_service import get_embedding_service
+
+                get_embedding_service().index_dataset(db, new_dataset, analysis)
+                db.commit()
+            except Exception as idx_exc:
+                logger.warning("Embedding index del dataset falló (no crítico): %s", idx_exc)
+        except Exception as e:
+            logger.warning("NLP profiler skipped: %s", e)
+
     return new_dataset
 
 

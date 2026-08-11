@@ -82,6 +82,22 @@ uv run pytest tests/ --cov=app --cov-report=term-missing
 | `DVC_REMOTE_NAME` | `minio` | DVC remote name for dataset versioning |
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Redis broker for Celery |
 | `MLFLOW_TRACKING_URI` | `""` | MLflow tracking server URI |
+| `LLM_PROVIDER` | `vllm` | LLM provider: `vllm`, `openai`, `anthropic`, `ollama` (Fase 1) |
+| `VLLM_BASE_URL` | `http://vllm:8001/v1` | vLLM OpenAI-compatible endpoint (Fase 1) |
+| `VLLM_MODEL_NAME` | `Qwen/Qwen2.5-7B-Instruct` | Model served by vLLM (Fase 1) |
+| `LLM_API_KEY` | `EMPTY` | API key (vLLM uses `EMPTY`) (Fase 1) |
+| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | Embeddings model (Fase 1) |
+
+### NLP Engine (Fase 1) — opcional
+
+Para el asistente LLM con vLLM (requiere GPU):
+```bash
+docker compose --profile nlp up -d vllm
+export LLM_PROVIDER=vllm
+export VLLM_BASE_URL=http://localhost:8001/v1
+```
+
+La base de datos usa la imagen `pgvector/pgvector:pg15`; la extensión `vector` se crea automáticamente al aplicar la migración `phase1_nlp_001`.
 
 Generate a secure SECRET_KEY:
 
@@ -94,13 +110,13 @@ python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 backend/
 ├── app/
-│   ├── api/routes/v1/     # REST API endpoints (auth, datasets, models, training, etc.)
+│   ├── api/routes/v1/     # REST API endpoints (auth, datasets, models, training, nlp/, etc.)
 │   ├── core/              # Config, security, logging, middleware
-│   ├── core_ml/           # ML engine (preprocessing, uncertainty, explainability)
-│   ├── models/            # SQLAlchemy ORM models
+│   ├── core_ml/           # ML engine (preprocessing, uncertainty, explainability, nlp/)
+│   ├── models/            # SQLAlchemy ORM models (incl. embedding, assistant)
 │   ├── schemas/           # Pydantic request/response schemas
-│   ├── services/          # Business logic (MLflow, DVC, training, inference)
-│   ├── worker/tasks/      # Celery async tasks
+│   ├── services/          # Business logic (MLflow, DVC, training, inference, nlp_trainer, llm_gateway)
+│   ├── worker/tasks/      # Celery async tasks (train, predict, train_nlp, predict_nlp)
 │   ├── utils/             # Shared utilities
 │   ├── database.py        # DB engine & session
 │   └── main.py            # FastAPI app factory

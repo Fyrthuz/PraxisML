@@ -662,3 +662,87 @@ export const api = {
     },
 };
 
+// ── NLP Engine Types (Fase 1) ──────────────────────────────────────────────
+
+export interface NLPHyperparam {
+    name: string;
+    label: string;
+    type: "int" | "float" | "bool" | "select";
+    min?: number;
+    max?: number;
+    default?: any;
+    options?: { label: string; value: any }[];
+}
+
+export interface NLPAlgorithm {
+    id: string;
+    display_name: string;
+    framework: string;
+    task_types: string[];
+    hyperparams: NLPHyperparam[];
+}
+
+export interface NLPValidationConfig {
+    strategy: "holdout" | "cross_validation";
+    test_size: number;
+    n_folds: number;
+    shuffle: boolean;
+    random_state: number;
+}
+
+export interface NLPTrainingStatus {
+    task_id: string;
+    status: string;
+    result?: any;
+    error?: string;
+}
+
+export interface NLPPrediction {
+    label: string | null;
+    confidence: number | null;
+    entities: { entity: string; label: string }[];
+    tokens: string[];
+    latency_ms: number;
+}
+
+export interface EmbeddingResponse {
+    dim: number;
+    model: string;
+    embeddings: number[][];
+}
+
+export interface SemanticSearchResult {
+    index_type: "model" | "dataset";
+    model_id?: string;
+    dataset_id?: string;
+    name?: string;
+    score: number;
+    metadata: Record<string, any>;
+}
+
+export interface ChatResponse {
+    conversation_id: string;
+    answer: string;
+    sources: { model_id?: string; name?: string; type?: string }[];
+    tokens: { input: number; output: number };
+}
+
+export interface ChatHistoryItem {
+    conversation_id: string;
+    created_at: string;
+    messages: { role: string; content: string; ts: string }[];
+}
+
+export interface ColumnTypesAnalysis {
+    text_columns: string[];
+    numeric_columns: string[];
+    categorical_columns: string[];
+    predominant_language?: string | null;
+    avg_text_length_chars: number;
+    avg_tokens_per_text: number;
+    estimated_vocab_size: number;
+    suggested_task?: string | null;
+    suggested_algorithm: string;
+    suggested_label_columns: string[];
+}
+

@@ -3,11 +3,11 @@
 Guía completa para poner en marcha el stack completo en desarrollo, pruebas (Testing) o producción local mediante Docker Compose.
 
 ## 1. Stack Dockerizado
-`docker-compose.yml` gestiona 10 contenedores base intercomunicados lógicamente por un switch local:
+`docker-compose.yml` gestiona los contenedores base intercomunicados lógicamente por un switch local:
 
 | Contenedor | Descripción / Base Image | Rol Maestro | Puerto (Host) |
 |------------|-------------------------|-------------|---------------|
-| `praxisml_db` | `postgres:15` | SOT: Metadatos de la API y de MLflow (schemas separados). | `:5432` |
+| `praxisml_db` | `pgvector/pgvector:pg15` | SOT: Metadatos de la API, de MLflow (schemas separados) y **embeddings semánticos (extensión `vector`)**. | `:5432` |
 | `praxisml_redis` | `redis:7` | Celery broker y result backend. | `:6379` |
 | `mlflow_server` | `mlflow:v3.10.0` | Servidor central de Tracking de Modelos de ML. | `:5000` |
 | `praxisml_minio` | `minio:latest` | Objeto de almacenamiento compatible S3. | `:9000` / `:9001` (UI) |
@@ -16,8 +16,30 @@ Guía completa para poner en marcha el stack completo en desarrollo, pruebas (Te
 | `praxisml_frontend`| `Dockerfile` Next.js React | Server Rendering e inicio de sesión SPA para cliente. | `:3000` |
 | `praxisml_prometheus`| `prom/prometheus:latest` | Agente *Scraping* de métricas para FastAPI y Worker. | `:9090` |
 | `praxisml_grafana` | `grafana/grafana:latest` | Componente de Visualización en vivo (Dashboard por API / OS). | `:3001` |
+| `praxisml_vllm` *(opcional)* | `vllm/vllm-openai:latest` | Servidor LLM OpenAI-compatible para el asistente RAG (perfil `nlp`, requiere GPU). | `:8001` |
 
 *(El contenedor `praxisml_minio_init` es efímero y simplemente crea el Bucket predeterminado si no existe)*.
+
+> **NLP (Fase 1):** la base de datos usa la imagen `pgvector/pgvector:pg15` (Postgres 15 + extensión `vector`). La extensión se crea en `infra/postgres/init-mlflow-db.sh` y en la migración `phase1_nlp_001`. El servicio `vllm` se activa con `docker compose --profile nlp up -d vllm`.
+
+### Migración `postgres:15` → `pgvector/pgvector:pg15`
+
+Al cambiar la imagen con un volumen existente puede aparecer en los logs del contenedor `praxisml_db`:
+
+```
+WARNING: database "praxisml_db" has a collation version mismatch
+DETAIL: The database was created using collation version 2.41, but the operating system provides version 2.36.
+```
+
+Es **benigno** (los datos no se corrompen), pero conviene refrescar las versiones de collation para silenciarlo y evitar riesgo en `ORDER BY` sobre texto:
+
+```bash
+for db in postgres praxisml_db mlflow_db template1; do
+  docker exec praxisml_db psql -U postgres -d "$db" -c "ALTER DATABASE $db REFRESH COLLATION VERSION;"
+done
+```
+
+Si prefieres empezar de cero (solo dev): `docker compose down -v && docker compose up --build`.
 
 ## 2. Variables de Entorno (`.env`)
 
@@ -38,7 +60,20 @@ SECRET_KEY=clave_ultra_secreta_aqui...
 
 # Selecciona hacia dónde escriben los modelos exportables o ZIPs: 'local', 'minio' o remotas en 's3' real de Amazon AWS.
 STORAGE_BACKEND=minio
+
+# ── NLP / LLM (Fase 1) ──────────────────────────────────────────────────
+# Proveedor LLM: vllm | openai | anthropic | ollama
+LLM_PROVIDER=vllm
+VLLM_BASE_URL=http://vllm:8001/v1
+VLLM_MODEL_NAME=Qwen/Qwen2.5-7B-Instruct
+LLM_API_KEY=EMPTY
+EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
 ```
+
+### Configuración de vLLM
+
+- El modelo servido (`VLLM_MODEL_NAME`) **debe coincidir** con el `resource_id` de precios en `resource_pricing` (categoría `llm_tokens`) para que el coste se compute correctamente. El seed inicial registra el modelo por defecto a precio 0.0 (self-hosted); se ajusta vía `POST /api/v1/observability/pricing` (admin).
+- Para desplegar el LLM: `docker compose --profile nlp up -d vllm` (requiere GPU; el `VLLM_MODEL` se descarga al primer arranque).
 
 ## 3. Comandos Esenciales de Operación
 
@@ -69,10 +104,11 @@ STORAGE_BACKEND=minio
 ## 4. Persistencia (Volúmenes de Docker)
 
 El sistema genera una serie de *named volumes* mapeados globalmente:
-- `postgres_data`: Mantenimiento seguro para base de datos.
+- `postgres_data`: Mantenimiento seguro para base de datos (incluye los índices `pgvector`).
 - `minio_data`: Aislado seguro para objetos `.pt`, `models` en bruto y `datasets`.
 - `grafana_data`: Provisión del Dashboard configurado o configuraciones de accesos.
 - `prometheus_data`: Scraping o Time-series index files (TSDB) sin truncamientos tras reinicios.
+- `vllm_cache`: Cache de modelos HuggingFace descargados por el servidor vLLM (Fase 1).
 
 **Directorio Local (`/backend/data`)**: Montado solo para desarrollos nativos y para inicializar o explorar los directorios en host sin recurrir a accesos por MinIO Console.
 

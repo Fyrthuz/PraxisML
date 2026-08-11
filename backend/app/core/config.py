@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     # Formato: "N/period" donde period ∈ {second, minute, hour, day}
     RATE_LIMIT_TRAINING: str = "10/minute"
     RATE_LIMIT_INFERENCE: str = "30/minute"
+    RATE_LIMIT_LLM: str = "20/minute"
+    RATE_LIMIT_NLP_INFERENCE: str = "30/minute"
 
     # ── Celery / Redis ─────────────────────────────────────────────────────────
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
@@ -116,7 +118,7 @@ class Settings(BaseSettings):
             )
         return v
 
-    @field_validator("RATE_LIMIT_TRAINING", "RATE_LIMIT_INFERENCE")
+    @field_validator("RATE_LIMIT_TRAINING", "RATE_LIMIT_INFERENCE", "RATE_LIMIT_LLM", "RATE_LIMIT_NLP_INFERENCE")
     @classmethod
     def validate_rate_limit_format(cls, v: str) -> str:
         pattern = r"^\d+/(second|minute|hour|day)$"
@@ -159,6 +161,20 @@ class Settings(BaseSettings):
 
     # ── DVC ────────────────────────────────────────────────────────────────────
     DVC_REMOTE_NAME: str = "minio"
+
+    # ── NLP / LLM ──────────────────────────────────────────────────────────────
+    # Provider LLM: vllm | openai | anthropic | ollama
+    LLM_PROVIDER: str = "vllm"
+    VLLM_BASE_URL: str = "http://vllm:8001/v1"
+    VLLM_MODEL_NAME: str = "Qwen/Qwen2.5-7B-Instruct"
+    LLM_API_KEY: str = "EMPTY"
+    LLM_MODEL_NAME: str = "Qwen/Qwen2.5-7B-Instruct"
+    OLLAMA_BASE_URL: str = "http://ollama:11434"
+    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_DIM: int = 384
+    LLM_GPU_TYPE: str = "A100"
+    LLM_CHARGE_COMPUTE: bool = False
+    LLM_MAX_CONTEXT_TOKENS: int = 8192
 
     # ── Pydantic Settings Config ───────────────────────────────────────────────
 

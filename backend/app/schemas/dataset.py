@@ -38,6 +38,9 @@ class DatasetResponse(DatasetBase):
     dvc_version: Optional[int] = None
     parent_dataset_id: Optional[str] = None
 
+    # ── NLP Profiler (Fase 1) ──────────────────────────────────────────────────
+    column_types_analysis: Optional[dict] = None
+
     model_config = ConfigDict(from_attributes=True)
 
 

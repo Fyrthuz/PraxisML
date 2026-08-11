@@ -1,7 +1,7 @@
 services:
   # 1. Database
   db:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: praxisml_db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -197,6 +197,28 @@ services:
       - NEXT_PUBLIC_API_URL=http://api:8000
     restart: always
 
+  # 7b. vLLM — servidor LLM (OpenAI-compatible) para el asistente RAG (Fase 1)
+  #     Opcional (profile "nlp"). Requiere GPU.
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: praxisml_vllm
+    profiles: ["nlp"]
+    depends_on:
+      - api
+    ports:
+      - "8001:8001"
+    environment:
+      - VLLM_MODEL=${VLLM_MODEL_NAME:-Qwen/Qwen2.5-3B-Instruct}
+    volumes:
+      - vllm_cache:/root/.cache/huggingface
+    command: ["--model", "${VLLM_MODEL_NAME:-Qwen/Qwen2.5-3B-Instruct}", "--host", "0.0.0.0", "--port", "8001", "--max-model-len", "4096"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    restart: unless-stopped
+
   # 8. Prometheus — scraping de métricas
   prometheus:
     image: prom/prometheus:latest
@@ -234,3 +256,4 @@ volumes:
   minio_data:
   prometheus_data:
   grafana_data:
+  vllm_cache:

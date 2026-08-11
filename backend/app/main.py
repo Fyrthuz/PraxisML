@@ -225,6 +225,12 @@ def create_app() -> FastAPI:
         streaming as tabular_streaming,
         training as tabular_training,
     )
+    from app.api.routes.v1.nlp import (
+        assistant as nlp_assistant,
+        embeddings as nlp_embeddings,
+        inference as nlp_inference,
+        training as nlp_training,
+    )
 
     app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
     app.include_router(
@@ -247,6 +253,28 @@ def create_app() -> FastAPI:
         observability.router,
         prefix=f"{settings.API_V1_STR}/observability",
         tags=["Observability"],
+    )
+
+    # ── NLP Domain ───────────────────────────────────────────────────────────
+    app.include_router(
+        nlp_training.router,
+        prefix=f"{settings.API_V1_STR}/nlp",
+        tags=["NLP"],
+    )
+    app.include_router(
+        nlp_inference.router,
+        prefix=f"{settings.API_V1_STR}/nlp",
+        tags=["NLP"],
+    )
+    app.include_router(
+        nlp_embeddings.router,
+        prefix=f"{settings.API_V1_STR}/nlp",
+        tags=["NLP"],
+    )
+    app.include_router(
+        nlp_assistant.router,
+        prefix=f"{settings.API_V1_STR}/nlp",
+        tags=["NLP"],
     )
 
     # ── Tabular Domain (primary routes) ───────────────────────────────────────

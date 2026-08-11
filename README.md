@@ -28,6 +28,10 @@
 - **Explicabilidad (XAI)**: Panel de explicabilidad SHAP integrado en resultados de predicción para interpretación de modelos.
 - **Streaming en Tiempo Real**: Inferencia continua via WebSockets con cuotas de conexión y manejo de reconexión.
 - **Data Drift Monitoring**: Monitorización de estabilidad de distribuciones con umbrales configurables.
+- **NLP Engine (Fase 1)**: Entrenamiento e inferencia de modelos transformer (DistilBERT, BERT, RoBERTa, XLM-R, BioBERT) con export **ONNX**, NER con `seqeval`, y análisis de sentimiento.
+- **Semantic Search (pgvector)**: Embeddings con `sentence-transformers` (MiniLM-L6-v2, 384 dims) almacenados en PostgreSQL + pgvector para búsqueda semántica sobre modelos y datasets.
+- **Asistente LLM + RAG**: Chatbot con gateway multi-provider (**vLLM** default, OpenAI/Ollama/Anthropic), RAG sobre metadatos internos y respuestas en streaming (SSE).
+- **NLP Profiler**: Detección automática de columnas de texto, idioma y sugerencia de pipeline al subir datasets.
 
 ---
 
@@ -39,6 +43,7 @@ Para comprender a fondo la arquitectura, el diseño de la API y las decisiones t
 - ⚙️ [**Backend & Motor de ML (`docs/backend.md`)**](docs/backend.md): Estructura detallada del proyecto FastAPI, inyección de dependencias (RBAC), flujos críticos de la API para modelado (TorchScript / Scikit-learn), y cómo opera el control de procesamiento de Celery.
 - 🎨 [**Frontend (`docs/frontend.md`)**](docs/frontend.md): Guía de la SPA en React + Next.js. Cómo gestionamos eventos asíncronos (Polling) para evitar congelaciones UI y unificar notificaciones de error.
 - 🚀 [**Despliegue y DevOps (`docs/deployment.md`)**](docs/deployment.md): Qué hace cada contenedor en el *Docker compose*, precedencia de las variables de entorno, y cómo inspeccionar logs y telemetría en vivo vía **Grafana** + **Prometheus**.
+- 🧠 [**Plan Fase 1 — NLP Engine (`docs/plan-fase-1-nlp-engine.md`)**](docs/plan-fase-1-nlp-engine.md): Especificación completa de la vertical NLP (training, inferencia, embeddings/pgvector, LLM+RAG, profiler) con decisiones de diseño, precios vLLM y observabilidad.
 
 ---
 
@@ -58,6 +63,11 @@ PraxisML/
 │   │   │   ├── users.py        # Creación/eliminación de usuarios
 │   │   │   ├── observability/  # Observability API (Fase 0)
 │   │   │   │   └── observability.py  # Usage, costs, pricing, alerts, health
+│   │   │   ├── nlp/            # NLP Engine (Fase 1)
+│   │   │   │   ├── training.py       # Entrenamiento de transformers (BERT/RoBERTa)
+│   │   │   │   ├── inference.py      # Predict, batch y streaming WS NLP
+│   │   │   │   ├── embeddings.py     # Embeddings y búsqueda semántica (pgvector)
+│   │   │   │   └── assistant.py      # Chatbot LLM + RAG (vLLM/OpenAI/Ollama)
 │   │   │   └── tabular/        # Tabular ML domain (renombrado desde root)
 │   │   │       ├── training.py       # Entrenamiento Sklearn / PyTorch
 │   │   │       ├── predictions.py    # Inferencia async y single-image + XAI
@@ -75,14 +85,18 @@ PraxisML/
 │   │   │   ├── explainability.py # Explicabilidad SHAP (KernelExplainer)
 │   │   │   ├── dataset_parser.py # Parser de datasets ZIP
 │   │   │   ├── tabular_parser.py # Parser para datos tabulares (CSV/JSON)
+│   │   │   ├── nlp/               # NLP clásico (Fase 1)
+│   │   │   │   └── onnx_export.py # Export ONNX con torch.onnx.export
 │   │   │   └── uncertainty/    # Estimadores de incertidumbre
 │   │   ├── models/             # Modelos SQLAlchemy ORM
+│   │   │   ├── embedding.py    # ModelEmbedding + VectorType (pgvector, Fase 1)
+│   │   │   └── assistant.py    # AssistantConversation (historial chatbot, Fase 1)
 │   │   ├── schemas/            # Schemas Pydantic (request/response)
 │   │   │   ├── observability.py  # Schemas de observabilidad (Fase 0)
 │   │   │   └── pricing.py      # Schemas de pricing dinámico (Fase 0)
 │   │   ├── observability/      # Paquete de observabilidad (Fase 0)
 │   │   │   ├── models.py       # ORM: UsageMetric, CostRecord, DriftHistory, AlertConfig, ResourcePricing
-│   │   │   ├── metrics.py      # 12 métricas Prometheus custom
+│   │   │   ├── metrics.py      # 19 métricas Prometheus custom (incl. NLP/LLM)
 │   │   │   ├── usage_collector.py  # Captura métricas de uso
 │   │   │   ├── cost_calculator.py  # Estimación de costes con precios dinámicos
 │   │   │   ├── alert_engine.py # Motor de evaluación y despacho de alertas
@@ -93,9 +107,15 @@ PraxisML/
 │   │   │   ├── training_service.py    # Entrenamiento de modelos
 │   │   │   ├── drift_service.py       # Cálculo de drift con Evidently
 │   │   │   ├── data_profiler.py       # Profiling con ydata-profiling
+│   │   │   ├── nlp_trainer.py         # Entrenamiento NLP (transformers + ONNX, Fase 1)
+│   │   │   ├── nlp_inference.py       # Inferencia NLP (ONNX Runtime, Fase 1)
+│   │   │   ├── embedding_service.py   # Embeddings + semantic search (Fase 1)
+│   │   │   ├── llm_gateway.py         # Gateway LLM multi-provider (Fase 1)
+│   │   │   ├── rag_service.py         # RAG sobre metadatos internos (Fase 1)
+│   │   │   ├── nlp_profiler.py        # Detección de columnas de texto (Fase 1)
 │   │   │   └── storage_service.py     # Factory de almacenamiento (Local/MinIO/S3)
 │   │   ├── worker/             # Workers Celery
-│   │   │   └── tasks/          # Tareas async (predict, train, scheduled_checks)
+│   │   │   └── tasks/          # Tareas async (predict, train, train_nlp, predict_nlp, scheduled_checks)
 │   │   ├── utils/              # Utilidades
 │   │   │   └── dvc_helper.py   # Helper DVC para CLI
 │   │   ├── database.py
@@ -111,13 +131,26 @@ PraxisML/
 │   │   │   ├── test_alert_engine.py
 │   │   │   ├── test_observability_reports.py
 │   │   │   ├── test_observability_hooks.py
-│   │   │   └── test_services.py
+│   │   │   ├── test_services.py
+│   │   │   ├── test_nlp_hyperparams.py   # Registry NLP (Fase 1)
+│   │   │   ├── test_nlp_trainer.py       # Trainer transformers mockeado (Fase 1)
+│   │   │   ├── test_nlp_inference.py     # Inferencia NLP (Fase 1)
+│   │   │   ├── test_embedding_service.py # Embeddings + search sqlite (Fase 1)
+│   │   │   ├── test_vector_type.py       # VectorType pgvector/JSON (Fase 1)
+│   │   │   ├── test_llm_gateway.py       # Gateway LLM mockeado (Fase 1)
+│   │   │   ├── test_rag_service.py       # RAG contexto (Fase 1)
+│   │   │   └── test_nlp_profiler.py      # NLP Profiler (Fase 1)
 │   │   └── integration/        # Tests de integración (API endpoints)
 │   │       ├── test_api_endpoints.py
 │   │       ├── test_model_lifecycle.py
 │   │       ├── test_observability_api.py
 │   │       ├── test_tabular_domain.py
-│   │       └── test_deprecated_routes.py
+│   │       ├── test_deprecated_routes.py
+│   │       ├── test_nlp_training_api.py      # API entrenamiento NLP (Fase 1)
+│   │       ├── test_nlp_inference_api.py     # API inferencia + WS NLP (Fase 1)
+│   │       ├── test_nlp_embeddings_api.py    # API embeddings/search (Fase 1)
+│   │       ├── test_nlp_assistant_api.py     # API asistente + SSE (Fase 1)
+│   │       └── test_nlp_profiler_hook.py     # Hook profiler en datasets (Fase 1)
 │   ├── scripts/                # Scripts utilitarios
 │   │   └── validate_model.py   # Validación de modelos para CI/CD
 │   └── pyproject.toml
@@ -164,6 +197,14 @@ Toda la configuración se gestiona mediante variables de entorno. El archivo `ba
 | `DVC_REMOTE_NAME` | `minio` | Cualquier string | Nombre del remote DVC para dataset versioning |
 | `RATE_LIMIT_TRAINING` | `10/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de entrenamiento |
 | `RATE_LIMIT_INFERENCE` | `30/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de inferencia |
+| `RATE_LIMIT_LLM` | `20/minute` | `N/{second,minute,hour,day}` | Rate limit para el chatbot LLM (Fase 1) |
+| `RATE_LIMIT_NLP_INFERENCE` | `30/minute` | `N/{second,minute,hour,day}` | Rate limit para inferencia NLP (Fase 1) |
+| `LLM_PROVIDER` | `vllm` | `{vllm, openai, anthropic, ollama}` | Proveedor LLM del asistente (Fase 1) |
+| `VLLM_BASE_URL` | `http://vllm:8001/v1` | URL | Endpoint OpenAI-compatible de vLLM (Fase 1) |
+| `VLLM_MODEL_NAME` | `Qwen/Qwen2.5-7B-Instruct` | string | Modelo servido por vLLM (debe coincidir con el pricing) (Fase 1) |
+| `LLM_API_KEY` | `EMPTY` | string | API key (vLLM usa `EMPTY`; OpenAI/Anthropic la real) (Fase 1) |
+| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | string | Modelo de embeddings para semantic search (Fase 1) |
+| `LLM_CHARGE_COMPUTE` | `false` | `true/false` | Cobrar GPU-hours por request LLM (Fase 1) |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | URL completa | URL de la API para el frontend (WebSocket se convierte automáticamente a ws://) |
 
 > **⚠️ Seguridad en producción**: Con `ENVIRONMENT=production` o `staging`, la app **no arrancará** si la `SECRET_KEY` mantiene el valor por defecto.
@@ -240,6 +281,29 @@ Configurables vía `PATCH /api/v1/tenants/{id}/quotas` (solo admin). Valor `null
 | Noisy Inference | `noisy_inference` | Perturbaciones gaussianas en la entrada |
 | **Ensemble** | `ensemble` | Combina los tres métodos anteriores |
 | Ninguno | `none` | Inferencia estándar sin incertidumbre |
+
+### NLP (HuggingFace Transformers — Fase 1)
+
+| Arquitectura | API value | Modelo HF | Notas |
+|--------------|-----------|-----------|-------|
+| **DistilBERT** | `distilbert` | `distilbert-base-uncased` | Default (rápido, CPU-friendly) |
+| BERT Base | `bert-base` | `bert-base-uncased` | |
+| BERT Multilingual | `bert-multilingual` | `bert-base-multilingual-cased` | Multiidioma |
+| RoBERTa | `roberta` | `roberta-base` | |
+| XLM-RoBERTa | `xlm-roberta` | `xlm-roberta-base` | Multilingüe avanzado |
+| BioBERT | `biobert` | `dmis-lab/biobert-v1.1` | Dominio médico |
+
+**Tareas soportadas:** `text_classification`, `token_classification` (NER), `sentiment_analysis`.
+Los modelos se exportan a **ONNX** (`torch.onnx.export`) para inferencia rápida en CPU.
+
+### LLM Gateway (Fase 1)
+
+| Proveedor | API value | Requiere |
+|-----------|-----------|----------|
+| **vLLM** (default) | `vllm` | `VLLM_BASE_URL` + `VLLM_MODEL_NAME` (GPU) |
+| OpenAI | `openai` | `LLM_API_KEY` |
+| Ollama | `ollama` | `OLLAMA_BASE_URL` |
+| Anthropic | `anthropic` | `LLM_API_KEY` |
 
 ---
 
@@ -359,7 +423,7 @@ El tab **Observability** en el frontend muestra:
 
 ### Métricas Prometheus
 
-12 métricas custom expuestas en `/metrics`:
+19 métricas custom expuestas en `/metrics`:
 - `praxisml_inference_latency_ms` (Histogram)
 - `praxisml_inference_tokens_total` (Counter)
 - `praxisml_inference_cost_usd` (Counter)
@@ -372,6 +436,13 @@ El tab **Observability** en el frontend muestra:
 - `praxisml_cost_budget_remaining` (Gauge)
 - `praxisml_predictions_total` (Counter)
 - `praxisml_errors_total` (Counter)
+- `praxisml_nlp_inference_latency_ms` (Histogram, Fase 1)
+- `praxisml_nlp_predictions_total` (Counter, Fase 1)
+- `praxisml_embeddings_total` (Counter, Fase 1)
+- `praxisml_semantic_search_latency_ms` (Histogram, Fase 1)
+- `praxisml_llm_tokens_total` (Counter, Fase 1)
+- `praxisml_llm_requests_total` (Counter, Fase 1)
+- `praxisml_llm_latency_ms` (Histogram, Fase 1)
 
 ### Grafana Dashboards
 
@@ -382,6 +453,42 @@ El tab **Observability** en el frontend muestra:
 - **LLM Spend**: Tokens input/output, coste por modelo, budget burn rate
 - **Training Dashboard**: Duración por algoritmo, coste por entrenamiento, GPU utilization
 - **Drift Timeline**: PSI/KS timeline, forecast line, alert annotations
+- **NLP Engine** (Fase 1): Entrenamiento NLP (p95), latencia inferencia, predicciones, embeddings, latencia búsqueda semántica, tokens/latencia/requests LLM
+
+---
+
+## 🧠 NLP Engine (Fase 1)
+
+Vertical completa de NLP bajo el router `/api/v1/nlp/*` con dos ejes: **NLP Clásico** (transformers fine-tuneados) y **NLP Generativo** (LLM + RAG).
+
+### Componentes
+
+| Componente | Descripción |
+|------------|-------------|
+| **NLP Training** | Fine-tuning de BERT/RoBERTa/DistilBERT sobre CSVs (`text_column` + `label_column`). Tareas: clasificación, NER, sentimiento. Métricas NER con `seqeval`. Autologging en MLflow (`tenant_{id}_nlp_training`). |
+| **ONNX Export** | Los modelos se exportan a ONNX (`torch.onnx.export`) para inferencia rápida en CPU con `onnxruntime`. |
+| **NLP Inference** | `POST /predict` (síncrono), `POST /predict/batch` (Celery sobre CSV) y `WS /streaming/{model_id}` (tiempo real). Devuelve `{label, confidence, entities[], tokens[], latency_ms}`. |
+| **Semantic Search** | Embeddings `all-MiniLM-L6-v2` (384 dims) en `model_embeddings` (pgvector, índice IVFFlat). Búsqueda coseno sobre modelos y datasets del tenant. |
+| **LLM Gateway** | Abstracción multi-provider (vLLM default). Registra tokens y coste por tenant (`CostRecord` cost_type=`llm`). |
+| **Asistente RAG** | Chatbot que construye contexto desde metadatos internos (modelos, drift, costes, búsqueda semántica). **Nunca recibe datos crudos de los datasets.** Streaming SSE. |
+| **NLP Profiler** | Post-hook en `POST /datasets/`: detecta columnas de texto, idioma (langdetect), vocabulario estimado y sugiere pipeline. Se guarda en `dataset.column_types_analysis`. |
+
+### Base de datos (migración `phase1_nlp_001`)
+
+- Extensión `vector` (pgvector) + tabla `model_embeddings(id, tenant_id, model_id, dataset_id, embedding vector(384), metadata jsonb)`.
+- Tabla `assistant_conversations(id, tenant_id, user_id, messages jsonb)`.
+- Columna `dataset.column_types_analysis JSON` (salida del profiler).
+- Seed de precios vLLM en `resource_pricing` (`llm_tokens` → precio 0.0 self-hosted, administrable vía `POST /observability/pricing`).
+
+### Frontend
+
+El tab **NLP** del dashboard incluye 4 sub-tabs:
+- **Training**: formulario dataset + columnas + arquitectura + hiperparámetros + estado del job.
+- **Inference**: predicción de texto con label/confianza/entidades/latencia + batch CSV.
+- **Semantic Search**: búsqueda semántica sobre modelos/datasets con score.
+- **Assistant**: chat con streaming SSE, fuentes citadas y borrado de historial.
+
+> 📖 Plan de implementación completo en [`docs/plan-fase-1-nlp-engine.md`](docs/plan-fase-1-nlp-engine.md).
 
 ---
 
@@ -414,6 +521,13 @@ npm i
 npm run dev
 ```
 
+### 3b. (Opcional) Levantar el LLM (vLLM) para el asistente RAG
+Requiere GPU. Añade el servicio `vllm` y arranca con el perfil `nlp`:
+```bash
+docker compose --profile nlp up -d vllm
+# Configura en .env: LLM_PROVIDER=vllm, VLLM_BASE_URL=http://localhost:8001/v1
+```
+
 ### 4. Servicios disponibles
 | Servicio | URL | Descripción |
 |----------|-----|-------------|
@@ -423,8 +537,9 @@ npm run dev
 | **MLflow UI** | `http://localhost:5000` | Experiment tracking |
 | **MLflow UI local** | `http://localhost:5001` | Alternativa (solo dev) |
 | **MinIO Console** | `http://localhost:9001` | Almacenamiento objetos |
-| **PostgreSQL** | `localhost:5432` | Base de datos |
+| **PostgreSQL (pgvector)** | `localhost:5432` | Base de datos + vector store |
 | **Redis** | `localhost:6379` | Cache + message broker |
+| **vLLM** *(opcional)* | `http://localhost:8001` | Servidor LLM OpenAI-compatible |
 | **Prometheus** | `http://localhost:9090` | Métricas |
 | **Grafana** | `http://localhost:3001` (admin/admin) | Dashboards |
 
@@ -559,6 +674,34 @@ Documentación interactiva en **`http://localhost:8000/docs`**
 |--------|------|-----|-------------|
 | GET | `/api/v1/profiling/{dataset_id}` | viewer | Obtener profiling de un dataset |
 
+### NLP Training (Fase 1)
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| GET | `/api/v1/nlp/algorithms` | viewer | Listar arquitecturas NLP disponibles |
+| POST | `/api/v1/nlp/train` | editor | Lanzar entrenamiento NLP (Celery, rate-limited) |
+| GET | `/api/v1/nlp/training/status/{task_id}` | viewer | Estado del entrenamiento NLP |
+
+### NLP Inference (Fase 1)
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/nlp/predict` | editor | Clasificar texto / extraer entidades (síncrono) |
+| POST | `/api/v1/nlp/predict/batch` | editor | Batch inference sobre CSV (asíncrono, 202) |
+| GET | `/api/v1/nlp/predict/batch/{id}/result` | viewer | Resultados JSON del batch |
+| WS | `/api/v1/nlp/streaming/{model_id}` | editor | Clasificación NLP en tiempo real |
+
+### Semantic Search (Fase 1)
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/nlp/embed` | viewer | Generar embeddings de texto libre |
+| GET | `/api/v1/nlp/search` | viewer | Búsqueda semántica sobre modelos/datasets |
+
+### Asistente LLM (Fase 1)
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| POST | `/api/v1/nlp/assistant/chat` | editor | Chat con el asistente (JSON o SSE streaming) |
+| GET | `/api/v1/nlp/assistant/history` | viewer | Historial de conversaciones |
+| DELETE | `/api/v1/nlp/assistant/history` | editor | Borrar historial del asistente |
+
 ---
 
 ## CI Pipeline
@@ -598,6 +741,9 @@ gh workflow run model_ci.yml -f run_id=<MLFLOW_RUN_ID> -f target_stage=Productio
 | Framework API | FastAPI |
 | Cola asíncrona | Celery + Redis |
 | ML & Deep Learning | Scikit-learn, PyTorch, TorchScript |
+| **NLP Clásico** | **HuggingFace Transformers + ONNX Runtime + seqeval** |
+| **Embeddings / Vector Store** | **sentence-transformers + pgvector** |
+| **LLM Gateway / RAG** | **vLLM (OpenAI-compatible) / OpenAI / Ollama / Anthropic** |
 | Autenticación | OAuth2 JWT + bcrypt |
 | Autorización | RBAC (admin/editor/viewer) + quotas |
 | Rate Limiting | slowapi (por IP) |
@@ -605,7 +751,7 @@ gh workflow run model_ci.yml -f run_id=<MLFLOW_RUN_ID> -f target_stage=Productio
 | Model Registry | MLflow Registry |
 | Data Versioning | DVC |
 | Almacenamiento objetos | MinIO (S3-compatible) / AWS S3 |
-| Base de datos | PostgreSQL + SQLAlchemy + Alembic |
+| Base de datos | PostgreSQL + pgvector + SQLAlchemy + Alembic |
 | Migraciones | Alembic |
 | Monitorización | Prometheus + Grafana |
 | Gestión de paquetes | uv + pyproject.toml |

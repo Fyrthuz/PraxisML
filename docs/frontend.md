@@ -14,12 +14,14 @@ El cliente principal de PraxisML, una SPA (Single Page Application) servida desd
 
 ## 2. Estilo de Código y Directrices Generales
 
-- **App Router (`src/app`)**: Navegación principal. Incluye secciones para `Datasets`, `Models`, `Predictions`, y la nueva sección de `Streaming`.
+- **App Router (`src/app`)**: Navegación principal. Incluye secciones para `Datasets`, `Models`, `Predictions`, `Streaming`, `Observability` y la nueva sección de `NLP`.
 - **Auth Provider**: El patrón context encapsulado, persistiendo o refrescando el token de `FastAPI` transparentemente (OAuth2).
 - **Custom Hooks (`src/hooks`)**: Lógica encapsulada para funcionalidades complejas:
     - `useDrift`: Gestión de reportes de drift y actualización de umbrales.
     - `useStreamingInference`: Manejo del ciclo de vida de WebSockets para inferencia en tiempo real.
     - `usePredictions`: Polling y resultados de inferencia batch/single.
+    - `useObservability`: Métricas de uso, costes, alertas y pricing (Fase 0).
+    - `useNLP`: Algoritmos NLP, entrenamiento (polling), inferencia, embeddings, búsqueda semántica y chat SSE (Fase 1).
 - **Drag & Drop**: Funciones para la carga local de Datasets (`ZIP`, `.json`) y modelos seguros de Pytorch (`.pt`).
 - **Manejo de Errores de API (4xx / 5xx)**: Interceptor global que refleja errores en alertas flotantes amigables.
 - **Client Components (`"use client"`)**: Se delega el mínimo indispensable al navegador (hooks pre-compilados y polling).
@@ -34,8 +36,22 @@ Integrado en la vista de Datasets, muestra la estabilidad de los datos. Permite 
 
 ## 4. Estado Asíncrono de Tareas de Celery y WebSockets
 
-1. **Polling (Celery)**: Para tareas de largo recorrido (Training, Batch Predictions). El frontend consulta el estado cada 2s hasta llegar a un estado final.
+1. **Polling (Celery)**: Para tareas de largo recorrido (Training, Batch Predictions, Entrenamiento NLP). El frontend consulta el estado cada 3s hasta llegar a un estado final.
 2. **WebSockets (Streaming)**: Para inferencia inmediata. Se mantiene una conexión abierta que permite enviar filas de datos y recibir predicciones al instante sin la sobrecarga de HTTP.
+3. **SSE (Streaming LLM)**: El asistente usa `text/event-stream` leído con `ReadableStream` para mostrar la respuesta token a token.
+
+## 5. Sección NLP (Fase 1)
+
+El tab **NLP** de la Sidebar (`Sparkles`) contiene 4 sub-tabs gestionados por `useNLP` y el contenedor `NLPTab.tsx`:
+
+| Sub-tab | Componente | Funcionalidad |
+|---------|-----------|---------------|
+| **Training** | `NLPTrainingTab.tsx` | Selección de dataset + `text_column`/`label_column` + arquitectura (`GET /nlp/algorithms`) + tarea + estado del job (polling 3s). |
+| **Inference** | `NLPInferenceTab.tsx` | Modelo NLP (filtro por `domain:"nlp"` en `useModels`) + textarea → label/confianza/entidades/tokens/latencia. Batch CSV con `POST /nlp/predict/batch`. |
+| **Semantic Search** | `SemanticSearchTab.tsx` | Búsqueda semántica sobre modelos/datasets (`GET /nlp/search`) con score y metadata. |
+| **Assistant** | `AssistantTab.tsx` | Chat con streaming SSE (`POST /nlp/assistant/chat`), fuentes citadas, historial y borrado. |
+
+Tipos compartidos en `src/lib/api.ts` (`NLPAlgorithm`, `NLPPrediction`, `SemanticSearchResult`, `ChatResponse`, `ColumnTypesAnalysis`, etc.).
 
 ## 5. UI/UX: Modos Claros/Oscuros y Componentes Base
 

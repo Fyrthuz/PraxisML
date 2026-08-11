@@ -96,3 +96,53 @@ errors_total = Counter(
     "Errores capturados por componente y tipo",
     ["tenant_id", "error_type", "component"],
 )
+
+# ── NLP Engine (Fase 1) ──────────────────────────────────────────────────────────
+
+nlp_inference_latency_ms = Histogram(
+    "praxisml_nlp_inference_latency_ms",
+    "Latencia de inferencia NLP en milisegundos",
+    ["tenant_id", "model_id", "task_type"],
+    buckets=[10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
+)
+
+nlp_predictions_total = Counter(
+    "praxisml_nlp_predictions_total",
+    "Total de predicciones NLP por tarea y estado",
+    ["tenant_id", "model_id", "task_type", "status"],
+)
+
+embeddings_total = Counter(
+    "praxisml_embeddings_total",
+    "Operaciones de embeddings por tenant (embed|index|search)",
+    ["tenant_id", "operation"],
+)
+
+semantic_search_latency_ms = Histogram(
+    "praxisml_semantic_search_latency_ms",
+    "Latencia de búsqueda semántica en milisegundos",
+    ["tenant_id", "index_type"],
+    buckets=[10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
+)
+
+# ── LLM Gateway (vLLM / OpenAI / Ollama) ─────────────────────────────────────────
+
+llm_tokens_total = Counter(
+    "praxisml_llm_tokens_total",
+    "Tokens procesados por el LLM (input/output)",
+    ["tenant_id", "model_id", "provider", "direction"],
+)
+
+llm_requests_total = Counter(
+    "praxisml_llm_requests_total",
+    "Requests al LLM por proveedor y estado",
+    ["tenant_id", "model_id", "provider", "status"],
+)
+
+llm_latency_ms = Histogram(
+    "praxisml_llm_latency_ms",
+    "Latencia de las llamadas al LLM en milisegundos",
+    ["tenant_id", "model_id", "provider"],
+    buckets=[100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000],
+)
+

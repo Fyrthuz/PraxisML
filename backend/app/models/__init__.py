@@ -9,7 +9,10 @@ from app.models.ml_model import MLModel  # noqa: F401
 from app.models.prediction import Prediction  # noqa: F401
 from app.models.tenant import Tenant  # noqa: F401
 from app.models.user import User  # noqa: F401
+from app.models.embedding import ModelEmbedding, VectorType  # noqa: F401
+from app.models.assistant import AssistantConversation  # noqa: F401
 
 __all__ = [
     "Base", "Tenant", "User", "Dataset", "MLModel", "Prediction",
+    "ModelEmbedding", "VectorType", "AssistantConversation",
 ]

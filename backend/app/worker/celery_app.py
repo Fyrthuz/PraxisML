@@ -15,6 +15,8 @@ celery_app = Celery(
         "app.worker.tasks.predict",
         "app.worker.tasks.single_predict",
         "app.worker.tasks.train",
+        "app.worker.tasks.train_nlp",
+        "app.worker.tasks.predict_nlp",
         "app.worker.tasks.scheduled_checks",
     ],
 )
