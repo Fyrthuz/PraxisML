@@ -157,10 +157,19 @@ def test_train_holdout_sentiment(mock_transformers, mock_mlflow, mock_onnx):
     assert result["label_map"] == {"neg": 0, "pos": 1}
 
 
-def test_train_cv(mock_transformers, mock_mlflow, mock_onnx):
+def test_train_cv(mock_transformers, mock_mlflow, mock_onnx, monkeypatch):
     from sklearn import model_selection as ms
 
-    ms.StratifiedKFold = lambda n_splits, shuffle, random_state: SimpleNamespace(split=lambda *a, **k: [(list(range(0, 9)), list(range(9, 18))), (list(range(9, 18)), list(range(0, 9)))])
+    def fake_split(*args, **kwargs):
+        return [
+            (list(range(0, 9)), list(range(9, 18))),
+            (list(range(9, 18)), list(range(0, 9))),
+        ]
+
+    def fake_cv(n_splits, shuffle, random_state):
+        return SimpleNamespace(split=fake_split)
+
+    monkeypatch.setattr(ms, "StratifiedKFold", fake_cv)
     trainer = NLPTrainer(tenant_id="t1")
     result = trainer.train(
         df=_sample_df(),
