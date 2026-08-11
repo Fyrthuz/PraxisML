@@ -433,7 +433,7 @@ requires-dist = [
     { name = "pgvector", specifier = ">=0.5.0" },
     { name = "prometheus-fastapi-instrumentator", specifier = ">=7.0.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
-    { name = "pyarrow", specifier = ">=14.0.0" },
+    { name = "pyarrow", specifier = ">=23.0.1" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.12.5" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "pyjwt", specifier = ">=2.11.0" },
