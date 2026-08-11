@@ -21,7 +21,7 @@ dependencies = [
     "jose>=1.0.0",
     # ── Validación y configuración ─────────────────────────────────────
     "pydantic[email]>=2.12.5",
-    "pydantic-settings>=2.13.1",
+    "pydantic-settings>=2.14.2",
     # ── Rate Limiting ──────────────────────────────────────────────────
     "slowapi>=0.1.9",
     # ── Observabilidad ─────────────────────────────────────────────────
