@@ -186,22 +186,34 @@ export function useNLP(token: string | null) {
                 }
                 const reader = res.body.getReader();
                 const decoder = new TextDecoder();
+                let sseBuffer = "";
+                const processEvents = (raw: string) => {
+                    const events = raw.split("\n\n");
+                    const remainder = events.pop() ?? "";
+                    for (const block of events) {
+                        for (const line of block.split("\n")) {
+                            if (!line.startsWith("data: ")) continue;
+                            const payload = line.slice(6).trim();
+                            if (!payload || payload === "[DONE]") continue;
+                            try {
+                                const json = JSON.parse(payload);
+                                if (json.delta) setChatAnswer((prev) => prev + json.delta);
+                                if (json.sources) setChatSources(json.sources);
+                            } catch {
+                                /* ignore malformed event */
+                            }
+                        }
+                    }
+                    return remainder;
+                };
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-                    const chunk = decoder.decode(value, { stream: true });
-                    const events = chunk.split("\n\n").filter((e) => e.startsWith("data: "));
-                    for (const ev of events) {
-                        const payload = ev.slice(6);
-                        if (payload === "[DONE]") continue;
-                        try {
-                            const json = JSON.parse(payload);
-                            if (json.delta) setChatAnswer((prev) => prev + json.delta);
-                            if (json.sources) setChatSources(json.sources);
-                        } catch {
-                            /* chunk parcial */
-                        }
-                    }
+                    sseBuffer += decoder.decode(value, { stream: true });
+                    sseBuffer = processEvents(sseBuffer);
+                }
+                if (sseBuffer.trim()) {
+                    processEvents(sseBuffer + "\n\n");
                 }
             } catch {
                 toast.error("Error de conexión con el asistente");

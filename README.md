@@ -46,7 +46,7 @@
 
 [![Ver Demo de PraxisML (720p MP4)](docs/demo/architecture_overview.png)](docs/demo/praxisml_demo.mp4)
 
-- 🎥 [**Demo Completa en Vídeo (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4) · [**Guía por capítulos y capturas (`docs/demo/README.md`)**](docs/demo/README.md): Recorrido por la arquitectura modular reorganizada, los 7 registros pluggables, Guardia de Compatibilidad Tabular vs NLP, NLP Studio + atribución por palabra, Model Serving Tabular/NLP con Canary y **SHAP `TreeExplainer` en vivo**, Observabilidad Total (11 servicios) y vistas en vivo de **MLflow**, **Prometheus**, **Grafana** y **MinIO** (`2m 38s`, 720p H.264 Main@3.1 + AAC, `2.75 MB`).
+- 🎥 [**Demo Completa en Vídeo (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4) · [**Guía por capítulos y capturas (`docs/demo/README.md`)**](docs/demo/README.md): Recorrido por **las 16 pestañas de la GUI** (Overview, Datasets, Data Registry DVC, Preprocessing, Environments & Code, Tabular Training, NLP Studio + Asistente RAG, Guardia de Compatibilidad, Model Registry, Model Endpoints con **SHAP `TreeExplainer` + NLP Token Attribution**, Predictions, Streaming WS, Observability, Plugins, API Keys & Audit, Users & RBAC, `⌘K`) y **los 5 servicios en vivo** (**MLflow**, **Prometheus**, **Grafana**, **MinIO** y **FastAPI Swagger**) (`2m 54s`, 720p H.264 Main@3.1 + AAC, `2.99 MB`).
 - 🗺️ [**Roadmap de Evolución v2.0 (`roadmap.md`)**](roadmap.md): Fases 0, 1 y 2 completadas; hoja de ruta detallada hacia **Fase 3 (Lakehouse Delta + DuckDB/Polars + Monitoring)**, **Fase 4 (Ray Serve + Notebooks + CV/TS)** y **Fase 5 (Agentic Copilot + MCP + K8s/BYOC)**.
 
 ---
