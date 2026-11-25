@@ -14,10 +14,10 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_tenant, require_editor, require_viewer
-from app.compute.base import get_compute_registry
-from app.compute.environment_runner import get_environment_runner_registry
-from app.core.event_bus import _event_bus_registry
-from app.core_ml.data_engine import get_data_engine_registry
+from app.platform.compute.base import get_compute_registry
+from app.platform.compute.environment_runner import get_environment_runner_registry
+from app.platform.events.event_bus import _event_bus_registry
+from app.platform.data_engine.engine import get_data_engine_registry
 from app.database import get_db
 from app.models.runtime_environment import RuntimeEnvironment
 from app.models.tenant import Tenant
@@ -25,8 +25,8 @@ from app.models.user import User
 from app.platform.audit.service import record_audit_event
 from app.platform.serving.runtimes import get_model_runtime_registry
 from app.plugins.registry import get_plugin_registry
-from app.services.storage_service import get_storage_registry
-from app.services.tracker_backend import get_tracker_registry
+from app.platform.storage.service import get_storage_registry
+from app.platform.tracker.backend import get_tracker_registry
 
 router = APIRouter()
 

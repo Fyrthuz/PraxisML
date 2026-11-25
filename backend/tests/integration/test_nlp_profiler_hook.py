@@ -75,7 +75,7 @@ def mock_index_dataset(monkeypatch):
 
     fake_svc = MagicMock()
     monkeypatch.setattr(
-        "app.services.embedding_service.get_embedding_service",
+        "app.domains.nlp.embedding_service.get_embedding_service",
         lambda: fake_svc,
     )
     return fake_svc

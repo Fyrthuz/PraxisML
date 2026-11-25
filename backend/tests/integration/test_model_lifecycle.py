@@ -283,7 +283,7 @@ class TestRegisteredModelsEndpoint:
         mock_require_viewer.return_value = MagicMock()
 
         with patch(
-            "app.services.mlflow_service.MLFlowService.get_registered_models"
+            "app.platform.tracker.mlflow_service.MLFlowService.get_registered_models"
         ) as mock_get:
             mock_get.return_value = []
 
@@ -300,7 +300,7 @@ class TestDVCService:
     @patch("subprocess.run")
     @patch("pathlib.Path.mkdir")
     def test_init_repository(self, mock_mkdir, mock_run):
-        from app.services.dvc_service import DVCService
+        from app.domains.data.dvc_service import DVCService
         from unittest.mock import MagicMock, patch
         
         mock_run.return_value = MagicMock(returncode=0, stdout="")

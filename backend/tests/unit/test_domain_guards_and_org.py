@@ -12,9 +12,9 @@ from fastapi import HTTPException
 
 from app.api.routes.v1.nlp.inference import _get_nlp_model
 from app.api.routes.v1.tabular.predictions import _get_tabular_model
-from app.services.mlflow_service import MLFlowService
-from app.services.nlp_inference import _resolve_artifact_path
-from app.services.storage_service import StorageKeyBuilder
+from app.platform.tracker.mlflow_service import MLFlowService
+from app.domains.nlp.inference import _resolve_artifact_path
+from app.platform.storage.service import StorageKeyBuilder
 
 
 class TestStorageKeyBuilder:

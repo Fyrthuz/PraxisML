@@ -19,8 +19,8 @@ import numpy as np
 import pandas as pd
 
 from app.models.ml_model import MLModel
-from app.services.inference_service import get_inference_service
-from app.services.model_cache import get_model_cache
+from app.domains.tabular.inference_service import get_inference_service
+from app.platform.cache.model_cache import get_model_cache
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ class NLPRuntime(ModelRuntime):
         pipeline_path: Optional[str] = None,
         explain: bool = False,
     ) -> Dict[str, Any]:
-        from app.services.nlp_inference import get_nlp_inference_service
+        from app.domains.nlp.inference import get_nlp_inference_service
 
         if isinstance(inputs, dict):
             texts = [str(inputs.get("text") or inputs.get("input") or "")]
@@ -257,7 +257,7 @@ class MLflowPyFuncRuntime(ModelRuntime):
         explain: bool = False,
     ) -> Dict[str, Any]:
         import mlflow.pyfunc
-        from app.services.mlflow_service import MLFlowService
+        from app.platform.tracker.mlflow_service import MLFlowService
 
         rows = [inputs] if isinstance(inputs, dict) else list(inputs)
         df = prepare_tabular_dataframe(rows, ml_model, pipeline_path) if rows and isinstance(rows[0], dict) else pd.DataFrame(rows)

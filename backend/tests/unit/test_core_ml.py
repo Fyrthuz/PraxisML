@@ -171,7 +171,7 @@ class TestLocalStorageService:
         cfg.settings.__dict__["DATA_DIR"] = str(tmp_path)
 
         try:
-            from app.services.storage_local import LocalStorageService
+            from app.platform.storage.local import LocalStorageService
             storage = LocalStorageService.__new__(LocalStorageService)
             storage.base_dir = tmp_path / "storage"
             storage.base_dir.mkdir(parents=True, exist_ok=True)
@@ -185,7 +185,7 @@ class TestLocalStorageService:
             cfg.settings.__dict__["DATA_DIR"] = original_data_dir
 
     def test_exists_false_for_missing(self, tmp_path):
-        from app.services.storage_local import LocalStorageService
+        from app.platform.storage.local import LocalStorageService
         storage = LocalStorageService.__new__(LocalStorageService)
         storage.base_dir = tmp_path / "storage"
         storage.base_dir.mkdir(parents=True, exist_ok=True)
@@ -193,7 +193,7 @@ class TestLocalStorageService:
         assert not storage.exists("no/existe/este.npy")
 
     def test_download_missing_raises(self, tmp_path):
-        from app.services.storage_local import LocalStorageService
+        from app.platform.storage.local import LocalStorageService
         from app.core.exceptions import StorageObjectNotFoundError
         storage = LocalStorageService.__new__(LocalStorageService)
         storage.base_dir = tmp_path / "storage"

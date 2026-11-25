@@ -40,7 +40,7 @@ def embed_texts(
 
     Requiere rol **viewer** o superior.
     """
-    from app.services.embedding_service import get_embedding_service
+    from app.domains.nlp.embedding_service import get_embedding_service
 
     service = get_embedding_service()
     t0 = time.perf_counter()
@@ -95,7 +95,7 @@ def semantic_search(
             status_code=400, detail="index debe ser 'models' o 'datasets'."
         )
 
-    from app.services.embedding_service import get_embedding_service
+    from app.domains.nlp.embedding_service import get_embedding_service
 
     service = get_embedding_service()
     t0 = time.perf_counter()

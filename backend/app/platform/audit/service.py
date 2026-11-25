@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from app.core.event_bus import get_event_bus
+from app.platform.events.event_bus import get_event_bus
 from app.models.audit_log import AuditLog
 
 logger = logging.getLogger(__name__)

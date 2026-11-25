@@ -12,8 +12,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from pydantic import BaseModel
 
-from app.compute.base import ComputeProfile, JobSpec, get_compute_backend
-from app.compute.celery_backend import CeleryComputeBackend
+from app.platform.compute.base import ComputeProfile, JobSpec, get_compute_backend
+from app.platform.compute.celery_backend import CeleryComputeBackend
 from app.platform.copilot.contracts import (
     ActionRiskTier,
     CopilotTool,
@@ -187,14 +187,14 @@ class TestComputeBackendAndTypedQueues:
 
 class TestInferenceServiceRemoteStorage:
     def test_resolve_torchscript_from_remote_storage(self, monkeypatch):
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         fake_storage = MagicMock()
         fake_storage.exists.return_value = True
         fake_storage.download.return_value = b"fake-torchscript-bytes"
 
         monkeypatch.setattr(
-            "app.services.storage_service.get_storage", lambda: fake_storage
+            "app.platform.storage.service.get_storage", lambda: fake_storage
         )
 
         service = InferenceService(use_cache=False)

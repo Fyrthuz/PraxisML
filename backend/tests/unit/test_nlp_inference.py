@@ -4,7 +4,7 @@ Tests unitarios del NLPInferenceService (post-procesado y pipeline con mocks).
 
 import numpy as np
 
-from app.services.nlp_inference import NLPInferenceService
+from app.domains.nlp.inference import NLPInferenceService
 
 
 def _handle(task_type="text_classification"):

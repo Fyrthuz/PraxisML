@@ -37,8 +37,8 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.ml_model import MLModelCreate, MLModelResponse
 from app.schemas.pagination import PaginatedResponse
-from app.services.mlflow_service import MLFlowService
-from app.services.storage_service import StorageService
+from app.platform.tracker.mlflow_service import MLFlowService
+from app.platform.storage.service import StorageService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)

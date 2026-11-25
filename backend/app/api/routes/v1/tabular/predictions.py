@@ -34,7 +34,7 @@ from app.models.ml_model import MLModel
 from app.models.prediction import Prediction
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.services.storage_service import StorageService
+from app.platform.storage.service import StorageService
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.prediction import PredictionResponse
 
@@ -546,7 +546,7 @@ def get_prediction_explainability(
         )
 
     # 1. Intentar artefacto SHAP guardado en storage (ambos prefijos: nuevo y legacy)
-    from app.services.storage_service import StorageKeyBuilder
+    from app.platform.storage.service import StorageKeyBuilder
 
     candidate_keys = [
         StorageKeyBuilder.prediction_output(tenant.id, prediction_id, "shap.json"),
@@ -572,7 +572,7 @@ def get_prediction_explainability(
     ):
         try:
             from app.core_ml.explainability import explain_tabular_fast
-            from app.services.inference_service import InferenceService
+            from app.domains.tabular.inference_service import InferenceService
 
             arr = np.load(prediction.input_image_path)
             if arr.ndim == 1:

@@ -631,7 +631,7 @@ def get_platform_summary(
     from sqlalchemy import text
 
     from app.core.config import settings
-    from app.core.event_bus import get_event_bus
+    from app.platform.events.event_bus import get_event_bus
     from app.core.redis import create_sync_redis_client
     from app.models.api_key import APIKey
     from app.models.audit_log import AuditLog
@@ -643,7 +643,7 @@ def get_platform_summary(
     from app.models.user_pipeline import UserPipeline
     from app.models.workspace import Workspace
     from app.platform.serving.runtimes import get_model_runtime_registry
-    from app.services.storage_service import get_storage
+    from app.platform.storage.service import get_storage
 
     def _probe_http(url: str, timeout: float = 0.8) -> str:
         try:

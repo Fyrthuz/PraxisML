@@ -5,7 +5,7 @@ Tests del EmbeddingService (modelo de embeddings mockeado).
 import numpy as np
 import pytest
 
-from app.services.embedding_service import EmbeddingService
+from app.domains.nlp.embedding_service import EmbeddingService
 
 
 class FakeSentenceTransformer:

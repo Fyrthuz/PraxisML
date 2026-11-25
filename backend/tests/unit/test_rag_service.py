@@ -5,7 +5,7 @@ Tests del RAGService: construcción de contexto y sources sin datos crudos.
 
 import pytest
 
-from app.services.rag_service import RAGService
+from app.domains.nlp.rag_service import RAGService
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ def _seed(db):
 
 def test_retrieve_context_includes_models(db):
     tenant, model = _seed(db)
-    import app.services.rag_service as rag_mod
+    import app.domains.nlp.rag_service as rag_mod
 
     original = rag_mod.RAGService._semantic_search
     rag_mod.RAGService._semantic_search = lambda self, db, tenant_id, q, top_k=5: {

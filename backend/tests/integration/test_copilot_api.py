@@ -145,8 +145,8 @@ async def test_copilot_sse_persists_full_accumulated_answer(client, db_session):
     rag.SYSTEM_PROMPT = "Prompt"
     rag.retrieve_context.return_value = {"context": "{}", "sources": []}
 
-    with patch("app.services.llm_gateway.get_llm_gateway", return_value=gateway), patch(
-        "app.services.rag_service.get_rag_service", return_value=rag
+    with patch("app.domains.nlp.llm_gateway.get_llm_gateway", return_value=gateway), patch(
+        "app.domains.nlp.rag_service.get_rag_service", return_value=rag
     ):
         async with client.stream(
             "POST",

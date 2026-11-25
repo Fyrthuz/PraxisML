@@ -6,7 +6,7 @@ import torch
 from celery import Task
 
 from app.core_ml.factory import PredictionFactory, UncertaintyMethod
-from app.services.inference_service import get_inference_service
+from app.domains.tabular.inference_service import get_inference_service
 from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ def run_single_tabular_inference(
             import json as _json
 
             from app.core_ml.explainability import explain_tabular_fast
-            from app.services.storage_service import StorageKeyBuilder, get_storage
+            from app.platform.storage.service import StorageKeyBuilder, get_storage
 
             try:
                 feature_names = (ml_model.metrics_metadata or {}).get("feature_names", [])

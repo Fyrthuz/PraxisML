@@ -20,7 +20,7 @@ from app.models.dataset import Dataset
 from app.models.ml_model import MLModel
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.services.storage_service import StorageService
+from app.platform.storage.service import StorageService
 
 # Evidently imports (compatible con v0.7+)
 try:
@@ -485,7 +485,7 @@ def calculate_drift_for_model(model_id: str, db: Session) -> Optional[dict]:
     comparando su dataset de referencia contra las inferencias recientes.
     """
     from app.models.prediction import Prediction as PredictionModel
-    from app.services.storage_service import get_storage
+    from app.platform.storage.service import get_storage
 
     model = db.query(MLModel).filter(MLModel.id == model_id).first()
     if not model:

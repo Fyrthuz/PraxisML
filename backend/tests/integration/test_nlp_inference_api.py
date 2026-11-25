@@ -150,7 +150,7 @@ async def test_nlp_predict_success(client, db_session):
     }
 
     with patch(
-        "app.services.nlp_inference.get_nlp_inference_service",
+        "app.domains.nlp.inference.get_nlp_inference_service",
         return_value=fake_service,
     ):
         response = await client.post(
@@ -245,7 +245,7 @@ async def test_nlp_streaming_ws(client, db_session, engine):
     }
 
     with patch(
-        "app.services.nlp_inference.get_nlp_inference_service",
+        "app.domains.nlp.inference.get_nlp_inference_service",
         return_value=fake_service,
     ), patch("app.database.SessionLocal", TestSession):
         with TestClient(_fastapi_app) as tc:

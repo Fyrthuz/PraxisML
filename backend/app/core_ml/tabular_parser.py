@@ -57,7 +57,7 @@ def read_tabular(file_path: str, file_type: Optional[str] = None) -> pd.DataFram
         else:
             raise ValueError("file_type is required when passing a file-like object")
 
-    from app.core_ml.data_engine import get_data_engine
+    from app.platform.data_engine.engine import get_data_engine
 
     if not file_type:
         raise ValueError(f"Formato tabular no soportado: {file_type}")

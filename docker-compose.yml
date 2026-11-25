@@ -259,7 +259,7 @@ services:
   # 7. Frontend
   frontend:
     build:
-      context: ./frontend/frontend
+      context: ./frontend
       dockerfile: Dockerfile
     container_name: praxisml_frontend
     depends_on:

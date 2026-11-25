@@ -61,7 +61,7 @@ def run_training(
 
         from io import BytesIO
 
-        from app.services.storage_service import get_storage
+        from app.platform.storage.service import get_storage
         storage = get_storage()
         data_bytes = storage.download(dataset.file_path)
         df = read_tabular(BytesIO(data_bytes), dataset.file_type)
@@ -93,13 +93,13 @@ def run_training(
         mlflow_uri = settings.MLFLOW_TRACKING_URI or None
 
         if framework == "pytorch":
-            from app.services.training_service import PyTorchTrainer
+            from app.domains.tabular.training_service import PyTorchTrainer
 
             trainer = PyTorchTrainer(
                 tenant_id=tenant_id, mlflow_tracking_uri=mlflow_uri
             )
         else:
-            from app.services.training_service import SklearnTrainer
+            from app.domains.tabular.training_service import SklearnTrainer
 
             trainer = SklearnTrainer(
                 tenant_id=tenant_id, mlflow_tracking_uri=mlflow_uri
@@ -129,7 +129,7 @@ def run_training(
         mlflow_version = None
         if registry_name:
             try:
-                from app.services.mlflow_service import MLFlowService
+                from app.platform.tracker.mlflow_service import MLFlowService
 
                 mlflow_svc = MLFlowService()
 
@@ -197,7 +197,7 @@ def run_training(
         logger.info("Modelo registrado en BD: id=%s", new_model.id)
 
         try:
-            from app.core.event_bus import get_event_bus
+            from app.platform.events.event_bus import get_event_bus
 
             get_event_bus().publish(
                 event_type="model.trained",

@@ -5,7 +5,7 @@ import pytest
 
 class TestSklearnTrainer:
     def test_sklearn_holdout_classification(self):
-        from app.services.training_service import SklearnTrainer
+        from app.domains.tabular.training_service import SklearnTrainer
 
         df = pd.DataFrame({
             "feature1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0],
@@ -31,7 +31,7 @@ class TestSklearnTrainer:
         assert result["metrics"]["accuracy"] <= 1.0
 
     def test_sklearn_holdout_regression(self):
-        from app.services.training_service import SklearnTrainer
+        from app.domains.tabular.training_service import SklearnTrainer
 
         np.random.seed(42)
         df = pd.DataFrame({
@@ -56,7 +56,7 @@ class TestSklearnTrainer:
         assert "mse" in result["metrics"]
 
     def test_sklearn_cross_validation(self):
-        from app.services.training_service import SklearnTrainer
+        from app.domains.tabular.training_service import SklearnTrainer
 
         df = pd.DataFrame({
             "feature1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0] * 3,
@@ -80,7 +80,7 @@ class TestSklearnTrainer:
         assert "cv_mean_accuracy" in result["metrics"]
 
     def test_sklearn_unknown_algorithm_raises(self):
-        from app.services.training_service import SklearnTrainer
+        from app.domains.tabular.training_service import SklearnTrainer
 
         trainer = SklearnTrainer(tenant_id="test-tenant")
         df = pd.DataFrame({"x": [1, 2, 3], "y": [0, 1, 0]})
@@ -98,7 +98,7 @@ class TestPyTorchTrainer:
         except ImportError:
             pytest.skip("PyTorch no está instalado")
 
-        from app.services.training_service import PyTorchTrainer
+        from app.domains.tabular.training_service import PyTorchTrainer
 
         df = pd.DataFrame({
             "feature1": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0] * 3,

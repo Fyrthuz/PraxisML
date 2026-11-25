@@ -9,8 +9,8 @@ from app.database import get_db
 from app.models.dataset import Dataset
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.services.data_profiler import profile_dataset
-from app.services.storage_service import StorageService
+from app.domains.data.data_profiler import profile_dataset
+from app.platform.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

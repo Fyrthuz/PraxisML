@@ -160,8 +160,8 @@ async def assistant_chat(
     Envía un mensaje al chatbot. Si `stream=true` responde en SSE,
     si no, devuelve JSON {answer, sources, tokens, conversation_id}.
     """
-    from app.services.llm_gateway import get_llm_gateway
-    from app.services.rag_service import get_rag_service
+    from app.domains.nlp.llm_gateway import get_llm_gateway
+    from app.domains.nlp.rag_service import get_rag_service
 
     gateway = get_llm_gateway()
     rag = get_rag_service()

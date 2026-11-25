@@ -35,8 +35,8 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.schemas.dataset import DatasetPreviewResponse, DatasetResponse
 from app.schemas.pagination import PaginatedResponse
-from app.services.dvc_service import DVCService
-from app.services.storage_service import StorageService
+from app.domains.data.dvc_service import DVCService
+from app.platform.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -133,7 +133,7 @@ async def upload_dataset(
     file_type = detect_file_type(file.filename)
 
     # ── Guardar en Storage ───────────────────────────────────────────────────
-    from app.services.storage_service import StorageKeyBuilder
+    from app.platform.storage.service import StorageKeyBuilder
 
     storage_key = StorageKeyBuilder.dataset_raw(tenant.id, file.filename)
 
@@ -263,7 +263,7 @@ async def upload_dataset(
             from io import BytesIO
 
             from app.core_ml.tabular_parser import read_tabular
-            from app.services.nlp_profiler import NLPProfiler
+            from app.domains.nlp.profiler import NLPProfiler
 
             df = read_tabular(BytesIO(content), file_type)
             analysis = NLPProfiler().analyze_df(df, column_names)
@@ -271,7 +271,7 @@ async def upload_dataset(
             db.commit()
 
             try:
-                from app.services.embedding_service import get_embedding_service
+                from app.domains.nlp.embedding_service import get_embedding_service
 
                 get_embedding_service().index_dataset(db, new_dataset, analysis)
                 db.commit()
@@ -595,7 +595,7 @@ def push_dataset_to_remote(
         raise HTTPException(status_code=400, detail="Dataset no está trackeado con DVC")
 
     try:
-        from app.services.dvc_service import DVCService
+        from app.domains.data.dvc_service import DVCService
 
         dvc_service = DVCService(tenant.id)
         success = dvc_service.push_dataset(dataset.file_path)
@@ -631,7 +631,7 @@ def pull_dataset_from_remote(
         raise HTTPException(status_code=400, detail="Dataset no está trackeado con DVC")
 
     try:
-        from app.services.dvc_service import DVCService
+        from app.domains.data.dvc_service import DVCService
 
         dvc_service = DVCService(tenant.id)
         success = dvc_service.pull_dataset(dataset.file_path)

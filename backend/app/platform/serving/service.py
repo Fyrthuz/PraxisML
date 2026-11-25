@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Tuple, Union
 
 from sqlalchemy.orm import Session
 
-from app.core.event_bus import get_event_bus
+from app.platform.events.event_bus import get_event_bus
 from app.models.endpoint_invocation_log import EndpointInvocationLog
 from app.models.ml_model import MLModel
 from app.models.model_endpoint import ModelEndpoint

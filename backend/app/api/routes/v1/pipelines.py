@@ -25,8 +25,8 @@ from app.api.deps import (
     require_editor,
     require_viewer,
 )
-from app.compute.base import EnvironmentSpec
-from app.compute.environment_runner import get_environment_runner_registry
+from app.platform.compute.base import EnvironmentSpec
+from app.platform.compute.environment_runner import get_environment_runner_registry
 from app.core_ml.preprocessing import apply_pipeline, build_pipeline, save_pipeline
 from app.core_ml.tabular_parser import is_tabular, read_tabular
 from app.database import get_db
@@ -36,7 +36,7 @@ from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.user_pipeline import UserPipeline
 from app.platform.audit.service import record_audit_event
-from app.services.storage_service import StorageService
+from app.platform.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -355,7 +355,7 @@ def run_pipeline(
         .count()
     )
     new_version = existing_count + 1
-    from app.services.storage_service import StorageKeyBuilder
+    from app.platform.storage.service import StorageKeyBuilder
 
     out_name = (body.output_dataset_name or "").strip() or f"{dataset.name} [{pipe.slug} v{pipe.version}]"
     storage_key = StorageKeyBuilder.dataset_pipeline(
@@ -393,7 +393,7 @@ def run_pipeline(
     mlflow_run_id: Optional[str] = None
     try:
         import mlflow
-        from app.services.mlflow_service import MLFlowService
+        from app.platform.tracker.mlflow_service import MLFlowService
 
         mlflow_svc = MLFlowService()
         mlflow_svc.ensure_tenant_experiment(

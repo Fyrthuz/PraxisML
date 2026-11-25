@@ -46,7 +46,7 @@
 
 [![Ver Demo de PraxisML (720p MP4)](docs/demo/architecture_overview.png)](docs/demo/praxisml_demo.mp4)
 
-- 🎥 [**Demo Completa en Vídeo (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4) · [**Guía por capítulos y capturas (`docs/demo/README.md`)**](docs/demo/README.md): Recorrido por la arquitectura modular, los 7 registros pluggables, Guardia de Compatibilidad Tabular vs NLP, NLP Studio, Model Serving Tabular/NLP con Canary, Observabilidad Total (11 servicios) y vistas en vivo de **MLflow**, **Prometheus**, **Grafana** y **MinIO** (`2m 27s`, 720p H.264 Main@3.1 + AAC, `2.68 MB`).
+- 🎥 [**Demo Completa en Vídeo (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4) · [**Guía por capítulos y capturas (`docs/demo/README.md`)**](docs/demo/README.md): Recorrido por la arquitectura modular reorganizada, los 7 registros pluggables, Guardia de Compatibilidad Tabular vs NLP, NLP Studio + atribución por palabra, Model Serving Tabular/NLP con Canary y **SHAP `TreeExplainer` en vivo**, Observabilidad Total (11 servicios) y vistas en vivo de **MLflow**, **Prometheus**, **Grafana** y **MinIO** (`2m 38s`, 720p H.264 Main@3.1 + AAC, `2.75 MB`).
 - 🗺️ [**Roadmap de Evolución v2.0 (`roadmap.md`)**](roadmap.md): Fases 0, 1 y 2 completadas; hoja de ruta detallada hacia **Fase 3 (Lakehouse Delta + DuckDB/Polars + Monitoring)**, **Fase 4 (Ray Serve + Notebooks + CV/TS)** y **Fase 5 (Agentic Copilot + MCP + K8s/BYOC)**.
 
 ---
@@ -102,13 +102,20 @@ PraxisML/
 │   │   │   ├── rls.py          # PostgreSQL Row-Level Security (SET LOCAL app.current_tenant_id)
 │   │   │   ├── rate_limit.py   # Rate limiting distribuido en Redis por tenant / API Key
 │   │   │   └── security.py     # JWT + bcrypt + JWKS + PATs (px_...)
-│   │   ├── platform/           # Capa desacoplada Fase 2 (sin vendor lock-in)
-│   │   │   ├── compute/        # ComputeBackendRegistry (Celery → Ray/K8s)
-│   │   │   ├── copilot/        # ToolRegistry + PolicyEngine 4-Tier
+│   │   ├── platform/           # Capa desacoplada Fase 2 (7 registros pluggables + transversal)
+│   │   │   ├── storage/        # StorageBackendRegistry (local/minio/s3) + StorageKeyBuilder
+│   │   │   ├── compute/        # ComputeBackendRegistry (Celery → Ray/K8s) + EnvironmentRunner (uv/docker)
+│   │   │   ├── serving/        # ModelRuntimeRegistry (tabular_generic / nlp / pyfunc) + Canary service
 │   │   │   ├── data_engine/    # DataEngineRegistry (Pandas → DuckDB/Polars)
-│   │   │   ├── environments/   # EnvironmentRunnerRegistry (uv_isolated / docker)
-│   │   │   ├── serving/        # ModelRuntimeRegistry (tabular_generic / nlp / pyfunc)
-│   │   │   └── tracker/        # TrackerRegistry (MLflow → W&B/ClearML)
+│   │   │   ├── tracker/        # TrackerRegistry + MLFlowService (experimentos jerárquicos)
+│   │   │   ├── events/         # EventBusRegistry (Redis Streams + DLQ / memoria)
+│   │   │   ├── audit/          # Audit Log append-only
+│   │   │   ├── cache/          # ModelCache LRU/TTL + BackgroundCache
+│   │   │   └── copilot/        # ToolRegistry + PolicyEngine 4-Tier
+│   │   ├── domains/            # Servicios de negocio agrupados por vertical
+│   │   │   ├── tabular/        # training_service, training_utils, inference_service
+│   │   │   ├── nlp/            # trainer (HF+ONNX), inference, embedding_service, llm_gateway, rag_service, profiler
+│   │   │   └── data/           # dvc_service, data_profiler
 │   │   ├── plugins/            # Domain Plugin Registry (ENABLED_PLUGINS=tabular,nlp)
 │   │   ├── core_ml/            # Motor de ML e inferencia
 │   │   │   ├── factory.py      # PredictionFactory — selecciona estimador
@@ -134,19 +141,6 @@ PraxisML/
 │   │   │   ├── cost_calculator.py  # Estimación de costes con precios dinámicos
 │   │   │   ├── alert_engine.py # Motor de evaluación y despacho de alertas
 │   │   │   └── reports.py      # Generación de reportes PDF/CSV
-│   │   ├── services/           # Lógica de negocio (MLflow, storage, training, DVC)
-│   │   │   ├── mlflow_service.py      # MLflow + Model Registry
-│   │   │   ├── dvc_service.py         # DVC data versioning
-│   │   │   ├── training_service.py    # Entrenamiento de modelos
-│   │   │   ├── drift_service.py       # Cálculo de drift con Evidently
-│   │   │   ├── data_profiler.py       # Profiling con ydata-profiling
-│   │   │   ├── nlp_trainer.py         # Entrenamiento NLP (transformers + ONNX, Fase 1)
-│   │   │   ├── nlp_inference.py       # Inferencia NLP (ONNX Runtime, Fase 1)
-│   │   │   ├── embedding_service.py   # Embeddings + semantic search (Fase 1)
-│   │   │   ├── llm_gateway.py         # Gateway LLM multi-provider (Fase 1)
-│   │   │   ├── rag_service.py         # RAG sobre metadatos internos (Fase 1)
-│   │   │   ├── nlp_profiler.py        # Detección de columnas de texto (Fase 1)
-│   │   │   └── storage_service.py     # Factory de almacenamiento (Local/MinIO/S3)
 │   │   ├── worker/             # Workers Celery
 │   │   │   └── tasks/          # Tareas async (predict, train, train_nlp, predict_nlp, scheduled_checks)
 │   │   ├── utils/              # Utilidades
@@ -187,12 +181,13 @@ PraxisML/
 │   ├── scripts/                # Scripts utilitarios
 │   │   └── validate_model.py   # Validación de modelos para CI/CD
 │   └── pyproject.toml
-├── frontend/                   # Next.js frontend
-│   └── frontend/
-│       ├── src/app/            # App Router (Login, Dashboards)
-│       ├── src/components/     # UI Components (ExplainabilityPanel, DriftPanel)
-│       ├── src/hooks/          # Custom Hooks (useDrift, useStreamingInference)
-│       └── src/lib/            # API Client (api.ts) y utilidades
+├── frontend/                   # Next.js frontend (organizado por features de dominio)
+│   └── src/
+│       ├── app/                # App Router
+│       ├── components/         # Layout (DashboardMVP, Sidebar, CommandPalette), auth, shared, ui
+│       ├── features/           # Módulos por dominio: overview, datasets, preprocessing, environments, tabular, nlp, models, serving, observability, governance
+│       ├── hooks/              # Custom Hooks (useModels, usePredictions, useNLP, useObservability, useDrift)
+│       └── lib/                # API Client (api.ts), config.ts, modelCompatibility.ts
 ├── docs/                       # Documentación técnica y vídeo demo
 │   ├── architecture.md
 │   └── demo/                   # Vídeo walkthrough (praxisml_demo.mp4) y capturas
@@ -581,7 +576,7 @@ docker compose up -d db redis mlflow minio minio-init
 
 ### 3. Levantar frontend (desarrollo)
 ```bash
-cd frontend/frontend
+cd frontend
 npm i
 npm run dev
 ```

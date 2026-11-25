@@ -52,7 +52,7 @@ def run_nlp_batch_inference(
         if not ml_model:
             raise ValueError(f"Modelo {model_id} no encontrado para tenant {tenant_id}")
 
-        from app.services.nlp_inference import get_nlp_inference_service
+        from app.domains.nlp.inference import get_nlp_inference_service
 
         service = get_nlp_inference_service()
         handle = service.load_model(ml_model)

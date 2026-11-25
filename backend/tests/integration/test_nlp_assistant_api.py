@@ -129,8 +129,8 @@ async def test_assistant_chat_json(client, db_session):
 
     gateway = _mock_gateway()
     rag = _mock_rag()
-    with patch("app.services.llm_gateway.get_llm_gateway", return_value=gateway), patch(
-        "app.services.rag_service.get_rag_service", return_value=rag
+    with patch("app.domains.nlp.llm_gateway.get_llm_gateway", return_value=gateway), patch(
+        "app.domains.nlp.rag_service.get_rag_service", return_value=rag
     ):
         response = await client.post(
             "/api/v1/nlp/assistant/chat",
@@ -152,8 +152,8 @@ async def test_assistant_chat_stream(client, db_session):
 
     gateway = _mock_gateway("Hola desde streaming")
     rag = _mock_rag()
-    with patch("app.services.llm_gateway.get_llm_gateway", return_value=gateway), patch(
-        "app.services.rag_service.get_rag_service", return_value=rag
+    with patch("app.domains.nlp.llm_gateway.get_llm_gateway", return_value=gateway), patch(
+        "app.domains.nlp.rag_service.get_rag_service", return_value=rag
     ):
         async with client.stream(
             "POST",

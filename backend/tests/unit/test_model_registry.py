@@ -52,7 +52,7 @@ class TestMLFlowServiceRegistry:
 
     def test_mlflow_service_has_registry_methods(self):
         """Verify MLFlowService has registry methods."""
-        from app.services.mlflow_service import MLFlowService
+        from app.platform.tracker.mlflow_service import MLFlowService
 
         assert hasattr(MLFlowService, "register_model_to_registry")
         assert hasattr(MLFlowService, "transition_model_stage")
@@ -66,7 +66,7 @@ class TestDVCService:
     @patch("subprocess.run")
     @patch("pathlib.Path.mkdir")
     def test_init_repository(self, mock_mkdir, mock_run):
-        from app.services.dvc_service import DVCService
+        from app.domains.data.dvc_service import DVCService
         
         mock_run.return_value = MagicMock(returncode=0, stdout="")
         
@@ -80,7 +80,7 @@ class TestDVCService:
     @patch("subprocess.run")
     @patch("pathlib.Path.mkdir")
     def test_get_file_hash(self, mock_mkdir, mock_run):
-        from app.services.dvc_service import DVCService
+        from app.domains.data.dvc_service import DVCService
         import tempfile
         import os
 
@@ -98,7 +98,7 @@ class TestDVCService:
 
     def test_dvc_service_imports(self):
         """Verify DVC service functions are importable."""
-        from app.services.dvc_service import get_dvc_service, track_dataset_with_dvc
+        from app.domains.data.dvc_service import get_dvc_service, track_dataset_with_dvc
 
         assert callable(get_dvc_service)
         assert callable(track_dataset_with_dvc)

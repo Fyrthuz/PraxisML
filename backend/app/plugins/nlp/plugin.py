@@ -41,7 +41,7 @@ class NLPTrainerAdapter(BaseTrainer):
         return NLP_ALGORITHMS
 
     def train(self, ctx: TrainingContext) -> TrainingResult:
-        from app.services.nlp_trainer import NLPTrainer
+        from app.domains.nlp.trainer import NLPTrainer
 
         df = ctx.extra.get("dataframe")
         text_column = ctx.extra.get("text_column")
@@ -84,7 +84,7 @@ class NLPInferenceAdapter(BaseInferenceEngine):
         return model_record
 
     def predict(self, loaded_model: Any, payload: Any, **kwargs) -> Dict[str, Any]:
-        from app.services.nlp_inference import get_nlp_inference_service
+        from app.domains.nlp.inference import get_nlp_inference_service
 
         svc = get_nlp_inference_service()
         text = payload if isinstance(payload, str) else payload.get("text", "")
@@ -108,7 +108,7 @@ def _tool_list_nlp_algorithms(_args: _NLPAlgorithmsArgs, **_ctx: Any) -> Dict[st
 
 
 def _tool_semantic_search(args: _SemanticSearchArgs, **ctx: Any) -> Dict[str, Any]:
-    from app.services.embedding_service import get_embedding_service
+    from app.domains.nlp.embedding_service import get_embedding_service
 
     db = ctx.get("db")
     identity = ctx.get("identity")
@@ -153,7 +153,7 @@ class NLPPlugin(DomainPlugin):
         return NLPInferenceAdapter()
 
     def get_profiler(self) -> Optional[Any]:
-        from app.services.nlp_profiler import profile_text_columns
+        from app.domains.nlp.profiler import profile_text_columns
 
         return profile_text_columns
 

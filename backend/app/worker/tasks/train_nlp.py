@@ -61,7 +61,7 @@ def run_nlp_training(
         if not dataset:
             raise ValueError(f"Dataset {dataset_id} no encontrado.")
 
-        from app.services.storage_service import get_storage
+        from app.platform.storage.service import get_storage
 
         storage = get_storage()
         data_bytes = storage.download(dataset.file_path)
@@ -76,7 +76,7 @@ def run_nlp_training(
             f"{algo_info['display_name']} — {dataset.name}"
         )
 
-        from app.services.nlp_trainer import NLPTrainer
+        from app.domains.nlp.trainer import NLPTrainer
 
         trainer = NLPTrainer(
             tenant_id=tenant_id,
@@ -112,7 +112,7 @@ def run_nlp_training(
         mlflow_version = None
         if registry_name:
             try:
-                from app.services.mlflow_service import MLFlowService
+                from app.platform.tracker.mlflow_service import MLFlowService
 
                 mlflow_svc = MLFlowService()
                 try:
@@ -233,7 +233,7 @@ def run_nlp_training(
 
         # 6. Indexar embedding (best-effort)
         try:
-            from app.services.embedding_service import get_embedding_service
+            from app.domains.nlp.embedding_service import get_embedding_service
 
             get_embedding_service().index_model(db, new_model)
             db.commit()

@@ -7,14 +7,14 @@ import pytest
 
 class TestInferenceService:
     def test_load_preprocessing_pipeline_none(self):
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         service = InferenceService()
         result = service.load_preprocessing_pipeline(None)
         assert result is None
 
     def test_preprocess_features_with_pipeline_none(self):
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         service = InferenceService()
         features = {"age": 25.0, "income": 50000.0}
@@ -23,7 +23,7 @@ class TestInferenceService:
         assert result.shape[1] == 2
 
     def test_preprocess_features_missing_features_defaults_zero(self):
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         service = InferenceService()
         features = {"age": 25.0}
@@ -60,7 +60,7 @@ class TestLoadModel:
         except ImportError:
             pytest.skip("PyTorch no está instalado")
 
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         class MockMLModel:
             id = "model_ts_1"
@@ -83,8 +83,8 @@ class TestLoadModel:
         except ImportError:
             pytest.skip("PyTorch no está instalado")
 
-        from app.services.inference_service import InferenceService
-        from app.services.model_cache import ModelCache
+        from app.domains.tabular.inference_service import InferenceService
+        from app.platform.cache.model_cache import ModelCache
 
         class MockMLModel:
             id = "model_cache_1"
@@ -98,7 +98,7 @@ class TestLoadModel:
         test_cache = ModelCache(max_size=10)
         test_cache.set(cache_key, cached_model, ttl=3600)
         monkeypatch.setattr(
-            "app.services.inference_service.get_model_cache",
+            "app.domains.tabular.inference_service.get_model_cache",
             lambda: test_cache,
         )
 
@@ -113,8 +113,8 @@ class TestLoadModel:
         except ImportError:
             pytest.skip("PyTorch no está instalado")
 
-        from app.services.inference_service import InferenceService
-        from app.services.model_cache import ModelCache
+        from app.domains.tabular.inference_service import InferenceService
+        from app.platform.cache.model_cache import ModelCache
 
         class MockMLModel:
             id = "model_miss_1"
@@ -128,7 +128,7 @@ class TestLoadModel:
 
         test_cache = ModelCache(max_size=10)
         monkeypatch.setattr(
-            "app.services.inference_service.get_model_cache",
+            "app.domains.tabular.inference_service.get_model_cache",
             lambda: test_cache,
         )
 
@@ -147,7 +147,7 @@ class TestLoadModel:
         except ImportError:
             pytest.skip("PyTorch no está instalado")
 
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         class MockMLModel:
             id = "model_nf"
@@ -170,7 +170,7 @@ class TestPreprocessFeatures:
         except ImportError:
             pytest.skip("scikit-learn no está instalado")
 
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         pipeline = ColumnTransformer(
             transformers=[
@@ -193,7 +193,7 @@ class TestPreprocessFeatures:
         assert result.dtype == np.float32
 
     def test_preprocess_features_extra_features(self):
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         features = {"age": 25.0, "income": 50000.0, "extra_col": "ignored"}
         service = InferenceService()
@@ -212,7 +212,7 @@ class TestRunInference:
         except ImportError:
             pytest.skip("PyTorch no está instalado")
 
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
         import numpy as np
 
         model = nn.Linear(10, 2)
@@ -239,7 +239,7 @@ class TestRunInference:
         except ImportError:
             pytest.skip("PyTorch no está instalado")
 
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
         import numpy as np
 
         model = nn.Linear(10, 2)

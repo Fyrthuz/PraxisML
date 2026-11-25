@@ -15,7 +15,7 @@ from celery import Task
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.services.storage_service import get_storage
+from app.platform.storage.service import get_storage
 from app.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ def run_heavy_inference(
     from app.models.dataset import Dataset
     from app.models.ml_model import MLModel
     from app.models.prediction import Prediction
-    from app.services.mlflow_service import MLFlowService
+    from app.platform.tracker.mlflow_service import MLFlowService
 
     db: Session = SessionLocal()
     storage = get_storage()
@@ -181,7 +181,7 @@ def run_heavy_inference(
             import json as _json
 
             from app.core_ml.explainability import explain_tabular_fast
-            from app.services.storage_service import StorageKeyBuilder
+            from app.platform.storage.service import StorageKeyBuilder
 
             try:
                 feature_names = (ml_model.metrics_metadata or {}).get("feature_names", [])
@@ -217,7 +217,7 @@ def run_heavy_inference(
         mlflow_inference_run_id = None
         if not ml_model.is_torchscript and ml_model.mlflow_run_id:
             try:
-                from app.services.mlflow_service import MLFlowService
+                from app.platform.tracker.mlflow_service import MLFlowService
 
                 mlflow_svc = MLFlowService()
                 with mlflow_svc.start_inference_run(

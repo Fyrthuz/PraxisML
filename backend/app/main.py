@@ -40,7 +40,7 @@ def _start_mlflow_ui() -> None:
         logger.debug("Embedded MLFlow UI desactivado (ENABLE_EMBEDDED_MLFLOW_UI=False).")
         return
 
-    from app.services.mlflow_service import MLFlowService
+    from app.platform.tracker.mlflow_service import MLFlowService
 
     try:
         tracking_uri = MLFlowService().get_tracking_uri()

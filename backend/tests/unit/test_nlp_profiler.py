@@ -4,7 +4,7 @@ Tests del NLPProfiler: detección de columnas, idioma, longitud y sugerencias.
 
 import pandas as pd
 
-from app.services.nlp_profiler import NLPProfiler
+from app.domains.nlp.profiler import NLPProfiler
 
 
 def _df_textual():

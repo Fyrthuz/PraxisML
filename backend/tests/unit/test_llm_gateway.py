@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.services.llm_gateway import LLMGateway
+from app.domains.nlp.llm_gateway import LLMGateway
 
 
 class FakeCompletions:
@@ -45,13 +45,13 @@ def mock_openai(monkeypatch):
         "openai.AsyncOpenAI", lambda *a, **k: FakeOpenAI()
     )
     monkeypatch.setattr(
-        "app.services.llm_gateway.settings.VLLM_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"
+        "app.domains.nlp.llm_gateway.settings.VLLM_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct"
     )
     monkeypatch.setattr(
-        "app.services.llm_gateway.settings.LLM_MODEL_NAME", "llama3"
+        "app.domains.nlp.llm_gateway.settings.LLM_MODEL_NAME", "llama3"
     )
     monkeypatch.setattr(
-        "app.services.llm_gateway.settings.LLM_PROVIDER", "vllm"
+        "app.domains.nlp.llm_gateway.settings.LLM_PROVIDER", "vllm"
     )
 
 

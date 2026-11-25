@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.services.nlp_trainer import NLPTrainer
+from app.domains.nlp.trainer import NLPTrainer
 
 
 class MockRun:
@@ -84,20 +84,20 @@ def mock_transformers(monkeypatch):
 
     monkeypatch.setattr(ms, "train_test_split", lambda *a, **k: (a[0].iloc[:10], a[0].iloc[10:]))
     monkeypatch.setattr(
-        "app.services.nlp_trainer.AutoTokenizer",
+        "app.domains.nlp.trainer.AutoTokenizer",
         SimpleNamespace(from_pretrained=lambda *a, **k: FakeTokenizer()),
     )
     monkeypatch.setattr(
-        "app.services.nlp_trainer.AutoModelForSequenceClassification",
+        "app.domains.nlp.trainer.AutoModelForSequenceClassification",
         SimpleNamespace(from_pretrained=lambda *a, **k: FakeModel()),
     )
     monkeypatch.setattr(
-        "app.services.nlp_trainer.AutoModelForTokenClassification",
+        "app.domains.nlp.trainer.AutoModelForTokenClassification",
         SimpleNamespace(from_pretrained=lambda *a, **k: FakeModel()),
     )
-    monkeypatch.setattr("app.services.nlp_trainer.Trainer", FakeTrainer)
+    monkeypatch.setattr("app.domains.nlp.trainer.Trainer", FakeTrainer)
     monkeypatch.setattr(
-        "app.services.nlp_trainer.TrainingArguments", lambda **k: SimpleNamespace(**k)
+        "app.domains.nlp.trainer.TrainingArguments", lambda **k: SimpleNamespace(**k)
     )
     return True
 
@@ -120,7 +120,7 @@ def mock_mlflow(monkeypatch):
 @pytest.fixture
 def mock_onnx(monkeypatch):
     monkeypatch.setattr(
-        "app.services.nlp_trainer.export_model_to_onnx",
+        "app.domains.nlp.trainer.export_model_to_onnx",
         lambda model, tokenizer, out_dir, max_seq_length=128: Path(out_dir) / "model.onnx",
     )
     return

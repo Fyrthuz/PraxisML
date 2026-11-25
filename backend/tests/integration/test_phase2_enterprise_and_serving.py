@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.core.event_bus import DomainEventBus
+from app.platform.events.event_bus import DomainEventBus
 from app.core.security import create_access_token, get_password_hash
 from app.database import get_db
 from app.main import app
@@ -297,7 +297,7 @@ def test_event_bus_local_dispatch_and_drift_helpers():
 
 def test_runtime_environments_and_custom_python_pipeline_execution(auth_context):
     from app.models.dataset import Dataset
-    from app.services.storage_service import get_storage
+    from app.platform.storage.service import get_storage
 
     client = TestClient(app)
     headers = auth_context["headers"]

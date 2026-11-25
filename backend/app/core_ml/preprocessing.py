@@ -30,7 +30,7 @@ from sklearn.preprocessing import (
     StandardScaler,
 )
 
-from app.services.mlflow_service import MLFlowService
+from app.platform.tracker.mlflow_service import MLFlowService
 
 logger = logging.getLogger(__name__)
 

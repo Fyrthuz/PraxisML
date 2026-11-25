@@ -28,7 +28,7 @@ from app.database import get_db
 from app.models.dataset import Dataset
 from app.models.tenant import Tenant
 from app.models.user import User
-from app.services.storage_service import StorageService
+from app.platform.storage.service import StorageService
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -186,7 +186,7 @@ def apply_preprocessing(
     if y is not None and config.target_column:
         df_transformed[config.target_column] = y.values
 
-    from app.services.storage_service import StorageKeyBuilder
+    from app.platform.storage.service import StorageKeyBuilder
 
     new_filename = f"{dataset.name}_v{new_version}_preprocessed.csv"
     storage_key = StorageKeyBuilder.dataset_processed(tenant.id, new_filename)
@@ -207,7 +207,7 @@ def apply_preprocessing(
         new_file_path = storage_key # La ruta en BD será la storage key
 
         # ── Registrar en DVC (opcional si está configurado) ──────────────────
-        from app.services.dvc_service import DVCService, track_dataset_with_dvc
+        from app.domains.data.dvc_service import DVCService, track_dataset_with_dvc
 
         registry_name = dataset.dvc_registry_name or dataset.name
         dvc_info = {}
@@ -325,7 +325,7 @@ def get_dataset_pipeline_config(
         try:
             from mlflow.tracking import MlflowClient
 
-            from app.services.mlflow_service import MLFlowService
+            from app.platform.tracker.mlflow_service import MLFlowService
 
             run_id = dataset.pipeline_path.split("/")[1]
             mlflow_svc = MLFlowService()

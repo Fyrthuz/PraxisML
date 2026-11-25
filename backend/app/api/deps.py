@@ -35,7 +35,7 @@ from app.database import get_db
 from app.models.api_key import APIKey
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
-from app.services.storage_service import StorageService, get_storage
+from app.platform.storage.service import StorageService, get_storage
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 

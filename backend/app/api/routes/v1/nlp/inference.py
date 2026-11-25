@@ -114,7 +114,7 @@ def predict_nlp(
     ml_model = _get_nlp_model(db, req.model_id, tenant.id)
     metadata = ml_model.metrics_metadata or {}
 
-    from app.services.nlp_inference import get_nlp_inference_service
+    from app.domains.nlp.inference import get_nlp_inference_service
 
     service = get_nlp_inference_service()
     handle = service.load_model(ml_model)
@@ -310,7 +310,7 @@ async def websocket_nlp_predict(
             await websocket.close(code=1008, reason="Modelo no encontrado")
             return
 
-        from app.services.nlp_inference import get_nlp_inference_service
+        from app.domains.nlp.inference import get_nlp_inference_service
 
         service = get_nlp_inference_service()
         handle = service.load_model(ml_model)

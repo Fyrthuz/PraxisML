@@ -15,8 +15,8 @@ from app.core.security import decode_token
 from app.database import SessionLocal
 from app.models.ml_model import MLModel
 from app.models.user import User
-from app.services.background_cache import get_background_cache
-from app.services.model_cache import get_model_cache
+from app.platform.cache.background_cache import get_background_cache
+from app.platform.cache.model_cache import get_model_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -188,7 +188,7 @@ async def websocket_predict(
                     model = torch.jit.load(torchscript_path, map_location=device)
                 else:
                     logger.info(f"Cargando MLFlow model para run {mlflow_run_id}...")
-                    from app.services.mlflow_service import MLFlowService
+                    from app.platform.tracker.mlflow_service import MLFlowService
 
                     mlflow_svc = MLFlowService()
                     model = mlflow_svc.load_model(mlflow_run_id, device=device)
@@ -319,7 +319,7 @@ async def _load_background_data(db, metadata, preprocessing_pipeline, feature_na
         import pandas as pd
 
         from app.models.dataset import Dataset
-        from app.services.storage_service import get_storage
+        from app.platform.storage.service import get_storage
 
         dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
         if not dataset:

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_tenant, require_viewer
-from app.core.event_bus import get_event_bus
+from app.platform.events.event_bus import get_event_bus
 from app.database import get_db
 from app.models.audit_log import AuditLog
 from app.models.tenant import Tenant

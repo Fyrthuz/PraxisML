@@ -42,7 +42,7 @@ class TabularTrainerAdapter(BaseTrainer):
 
     def train(self, ctx: TrainingContext) -> TrainingResult:
         from app.core_ml.hyperparams import get_algorithm_info
-        from app.services.training_service import PyTorchTrainer, SklearnTrainer
+        from app.domains.tabular.training_service import PyTorchTrainer, SklearnTrainer
 
         algo_info = get_algorithm_info(ctx.algorithm)
         framework = algo_info.get("framework", "sklearn")
@@ -83,12 +83,12 @@ class TabularInferenceAdapter(BaseInferenceEngine):
     domain = "tabular"
 
     def load(self, model_record: Any, storage: Optional[Any] = None) -> Any:
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         return InferenceService().load_model(model_record)
 
     def predict(self, loaded_model: Any, payload: Any, **kwargs) -> Dict[str, Any]:
-        from app.services.inference_service import InferenceService
+        from app.domains.tabular.inference_service import InferenceService
 
         method = kwargs.get("method", "ensemble")
         return InferenceService().run_inference(
@@ -170,7 +170,7 @@ class TabularPlugin(DomainPlugin):
         return TabularInferenceAdapter()
 
     def get_profiler(self) -> Optional[Any]:
-        from app.services.data_profiler import profile_dataframe
+        from app.domains.data.data_profiler import profile_dataframe
 
         return profile_dataframe
 
