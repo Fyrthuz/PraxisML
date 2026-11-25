@@ -9,8 +9,8 @@
 > 📁 **Especificaciones detalladas por fase:**
 > - ✅ [Fase 0 — Observabilidad, Cost Tracking & FinOps](roadmap/phase-0-observability.md) · [Catálogo de métricas](roadmap/metrics-catalog.md) · [Plan de implementación F0](roadmap/phase-0-implementation-plan.md)
 > - ✅ [Fase 1 — NLP Engine (Clásico + Embeddings + LLM RAG)](roadmap/phase-1-nlp.md) · [Plan ejecutado F1](docs/plan-fase-1-nlp-engine.md)
-> - 🚧 [Fase 2 — Modularización del Core, Compute Plane & Fundaciones Enterprise](roadmap/phase-2-modular-core-compute.md)
-> - 📐 [Fase 3 — Data Lakehouse, Praxis Catalog, Workflows & Feature Store](roadmap/phase-3-lakehouse-catalog-workflows.md)
+> - ✅ [Fase 2 — Modularización del Core, Compute Plane, Runtime Environments & Model Serving v1](roadmap/phase-2-modular-core-compute.md)
+> - 🚧 [Fase 3 — Data Lakehouse, Praxis Catalog, Workflows & Feature Store](roadmap/phase-3-lakehouse-catalog-workflows.md)
 > - 📐 [Fase 4 — Dedicated Model Serving, Workspace Interactivo & Verticales CV/TS](roadmap/phase-4-serving-workspace-verticals.md) · [Detalle CV & Time Series](roadmap/phase-2-cv-timeseries.md)
 > - 📐 [Fase 5 — Smart Platform, Agentic Copilot & Cloud-Native Scale](roadmap/phase-3-smart-platform.md) · [AI DevOps & Copilot](roadmap/phase-4-ai-devops.md)
 
@@ -180,7 +180,7 @@ flowchart LR
 
 ---
 
-### 🚧 Fase 2 — Modularización del Core, Compute Plane & Fundaciones Enterprise (Q2 2027)
+### ✅ Fase 2 — Modularización del Core, Compute Plane, Runtime Environments & Model Serving v1 (COMPLETADA)
 
 > 📖 Especificación técnica completa: [phase-2-modular-core-compute.md](roadmap/phase-2-modular-core-compute.md)
 
@@ -254,8 +254,8 @@ flowchart LR
 |---|---|---|---|
 | **Completado ✅** | **Fase 0** | Observabilidad, Cost Tracking, Alertas, API Tabular | — |
 | **Completado ✅** | **Fase 1** | NLP Engine (Transformers + ONNX + pgvector + vLLM RAG) | Fase 0 |
-| **Q2 2027** | **Fase 2** | **Core Modular (Plugins), Compute Plane, Event Bus, RLS/PAT/Audit, App Router** | Fases 0–1 |
-| **Q3 2027** | **Fase 3** | **Delta Lakehouse (DuckDB/Polars), Praxis Catalog + Lineage, Workflows DAGs, Feature Store** | Fase 2 |
+| **Completado ✅** | **Fase 2** | **Core Modular (Plugins + 7 Registros), Runtime Environments, User Pipelines, Model Serving v1, RLS/PAT/Audit, LocalStack IaC** | Fases 0–1 |
+| **Siguiente 🚧** | **Fase 3** | **Delta Lakehouse (DuckDB/Polars), Praxis Catalog + Lineage, Workflows DAGs, Feature Store & Lakehouse Monitoring** | Fase 2 |
 | **Q4 2027** | **Fase 4** | **Dedicated Model Serving, AI Gateway v2, Notebooks/SDK/Bundles, Plugins CV & Time Series** | Fases 2–3 |
 | **Q1–Q2 2028** | **Fase 5** | **Recommender/AutoML, Predictive Drift, Intelligent Gate, Agentic Copilot, K8s/Helm/KEDA/BYOC** | Fases 3–4 |
 

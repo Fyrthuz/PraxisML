@@ -53,6 +53,21 @@ El tab **NLP** de la Sidebar (`Sparkles`) contiene 4 sub-tabs gestionados por `u
 
 Tipos compartidos en `src/lib/api.ts` (`NLPAlgorithm`, `NLPPrediction`, `SemanticSearchResult`, `ChatResponse`, `ColumnTypesAnalysis`, etc.).
 
-## 5. UI/UX: Modos Claros/Oscuros y Componentes Base
+## 6. Evolución UX/UI y Nuevas Vistas (Fase 2)
 
-El proyecto soporta modales nativos Tailwind CSS utilizando `clsx` y `tailwind-merge` (`twMerge`) para fusionar clases estables con inyectadas. Aportando animaciones a los botones (e.g `class-variance-authority`), asegurando uniformidad transversal (botones, badges para roles de equipo de trabajo, etc).
+El frontend ha sido unificado bajo una estética oscura de ingeniería de alto contraste (`#0b0c0f` / `#101217`, bordes `zinc-800` de `1px`, tipografía monoespaciada `tabular-nums`, CTAs monocromos y acento naranja `#f97316` puntual).
+
+### Navegación y Productividad
+- **Sincronización con URL (`?view=...`)**: `DashboardMVP.tsx` sincroniza la pestaña activa con la query string y soporta historial del navegador (`popstate`), evitando perder la vista al recargar.
+- **Command Palette (`Cmd+K` / `Ctrl+K`)**: componente `CommandPalette.tsx` para saltar instantáneamente con teclado entre vistas, datasets, acciones rápidas o desplegar cualquier modelo.
+
+### Nuevas Vistas y Componentes Clave
+| Vista / Componente | Archivo | Funcionalidad |
+|---|---|---|
+| **Workspace Overview** | `WorkspaceOverviewTab.tsx` | Resumen ejecutivo de datasets, modelos, predicciones y plugins activos. |
+| **Model Endpoints** | `ServingEndpointsTab.tsx` | Despliegue en 1 clic de endpoints dedicados, tráfico Canary (`0–100%`), consola JSON en vivo, snippet `curl` y visor de **Recent Invocation Logs**. |
+| **Environments & Code** | `EnvironmentsPipelinesTab.tsx` | Gestión de `RuntimeEnvironments` (paquetes PyPI/uv, imagen base), editor de pipelines Python `def transform(df)` y panel de **Pluggable Backends** (7 registros). |
+| **API Keys & Audit** | `GovernanceTab.tsx` | Creación/revocación de PATs (`px_...`), gestión de Workspaces, Audit Log y stream en vivo de eventos Redis Streams. |
+| **Side-by-Side Compare** | `ModelCompareModal.tsx` | Comparador de 2–4 modelos en `ModelsTab` con resaltado de mejor métrica MLflow, hiperparámetros y acciones directas (*Deploy* / *Promote*). |
+| **Preprocessing Builder** | `PipelineBuilder.tsx` | Botón **Auto-suggest**, chips clicables con tipo/nulos y editor interactivo para renombrar cualquier columna de salida. |
+| **Plugins & Tools** | `CopilotStudioTab.tsx` | Inspección de plugins de dominio activos y catálogo de herramientas del Copilot gobernadas por RBAC. |

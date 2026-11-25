@@ -32,6 +32,20 @@
 - **Semantic Search (pgvector)**: Embeddings con `sentence-transformers` (MiniLM-L6-v2, 384 dims) almacenados en PostgreSQL + pgvector para búsqueda semántica sobre modelos y datasets.
 - **Asistente LLM + RAG**: Chatbot con gateway multi-provider (**vLLM** default, OpenAI/Ollama/Anthropic), RAG sobre metadatos internos y respuestas en streaming (SSE).
 - **NLP Profiler**: Detección automática de columnas de texto, idioma y sugerencia de pipeline al subir datasets.
+- **Arquitectura Modular y 7 Registros Pluggables (Fase 2)**: Dominios 100% opcionales (`ENABLED_PLUGINS`) y desacople total mediante registros extensibles: `StorageBackendRegistry` (Local/MinIO/S3 → GCS/Azure), `ComputeBackendRegistry` (Celery → Ray/K8s), `EnvironmentRunnerRegistry` (`uv_isolated` / `docker`), `ModelRuntimeRegistry` (`tabular_generic`, `nlp`, `pyfunc` universal), `EventBusRegistry` (Redis Streams → SQS/Kafka), `DataEngineRegistry` (`pandas` → DuckDB/Polars) y `TrackerRegistry` (`mlflow` → W&B/ClearML).
+- **Runtime Environments & User Pipelines (Estilo Databricks)**: Entornos declarativos con dependencias PyPI propias (`RuntimeEnvironment`) y pipelines reutilizables en modo declarativo, Python personalizado (`def transform(df)`) o híbrido ejecutados en aislamiento (`uv` / Docker).
+- **Preprocessing Avanzado con Renombrado Libre**: Encadenado secuencial por columna sin prefijos técnicos de scikit-learn, botón **Auto-suggest**, chips clicables y renombrado personalizado de cualquier columna de salida.
+- **Model Serving Endpoints bajo Demanda**: Despliegue en 1 clic desde `Models` o `Model Registry` en `POST /serving/v1/{slug}/invocations`, autenticación con **API Keys (`px_...`)**, **Canary / A-B traffic splitting**, auto-preprocesamiento para payloads crudos, consola de prueba JSON y **Invocation Logs** por endpoint.
+- **Enterprise Security & Governance**: Workspaces (`dev/staging/prod`), **Personal Access Tokens (`px_...`)** con scopes, **PostgreSQL Row-Level Security (RLS)**, rate limiting distribuido en Redis, **Audit Log** append-only y **Event Bus** sobre Redis Streams.
+- **UX de Ingeniería Unificada**: Interfaz oscura de alto contraste, **Comparador Side-by-Side de modelos** (métricas MLflow + hiperparámetros), sincronización de vista en URL (`?view=...`) y **Command Palette (`Cmd+K` / `Ctrl+K`)**.
+- **Local AWS Sandbox (Terraform + LocalStack)**: Módulos Terraform reutilizables (`infra/terraform/`) para aprovisionar S3, DynamoDB lock, IAM/STS, Secrets Manager y SQS/SNS a coste `$0` en local.
+
+---
+
+## 🎬 Vídeo Demo & Roadmap
+
+- 🎥 [**Demo Completa en Vídeo 1080p (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4): Recorrido por la arquitectura modular, los 7 registros pluggables y exploración en vivo de todas las pantallas de la GUI.
+- 🗺️ [**Roadmap de Evolución v2.0 (`roadmap.md`)**](roadmap.md): Fases 0, 1 y 2 completadas; hoja de ruta detallada hacia **Fase 3 (Lakehouse Delta + DuckDB/Polars + Monitoring)**, **Fase 4 (Ray Serve + Notebooks + CV/TS)** y **Fase 5 (Agentic Copilot + MCP + K8s/BYOC)**.
 
 ---
 
@@ -192,7 +206,13 @@ Toda la configuración se gestiona mediante variables de entorno. El archivo `ba
 | `ENVIRONMENT` | `development` | `{development, staging, production, testing}` | Entorno — controla seguridad y logging |
 | `DATABASE_URL` | `postgresql://...localhost...` | Debe empezar con `postgresql://` | Conexión PostgreSQL |
 | `SECRET_KEY` | *(default inseguro)* | **Bloqueado en production** si no se cambia | Clave JWT — generar con `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
-| `STORAGE_BACKEND` | `local` | `{local, minio, s3}` | Backend de almacenamiento |
+| `STORAGE_BACKEND` | `local` | `{local, minio, s3}` (+ plugins) | Backend de almacenamiento multi-cloud (`StorageBackendRegistry`) |
+| `ENABLED_PLUGINS` | `*` | `*`, `""` o lista CSV (`tabular,nlp`) | Plugins de dominio activos (todos 100% opcionales) |
+| `COMPUTE_BACKEND` | `celery` | `{celery}` (+ plugins) | Backend de cómputo asíncrono (`ComputeBackendRegistry`) |
+| `DATA_ENGINE` | `pandas` | `{pandas}` (+ plugins) | Motor tabular (`DataEngineRegistry`) |
+| `EXPERIMENT_TRACKER` | `mlflow` | `{mlflow}` (+ plugins) | Backend de experiment tracking (`TrackerRegistry`) |
+| `ENABLE_EMBEDDED_MLFLOW_UI` | `false` | `true/false` | Desactivado por defecto para despliegues stateless |
+| `AWS_ENDPOINT_URL_S3` | *(vacío)* | URL opcional | Endpoint S3 personalizado (LocalStack `:4566` o MinIO) |
 | `PRAXISML_ENV_FILE` | `.env` | Ruta a archivo `.env` | Path personalizado al archivo de entorno |
 | `DVC_REMOTE_NAME` | `minio` | Cualquier string | Nombre del remote DVC para dataset versioning |
 | `RATE_LIMIT_TRAINING` | `10/minute` | `N/{second,minute,hour,day}` | Rate limit para endpoints de entrenamiento |

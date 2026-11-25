@@ -118,3 +118,37 @@ LLM:    Client ──► API ──► RAGService + LLMGateway ──► SSE str
 7. **VectorType dual** — `vector(384)` en PostgreSQL (pgvector) / `JSON` en SQLite para poder testear sin servidor pgvector
 8. **LLM via OpenAI-compatible** — vLLM/OpenAI/Ollama comparten el SDK `openai` con distinta `base_url`; Anthropic usa SDK nativo
 9. **RAG solo-metadatos** — el LLM nunca recibe datos crudos de los datasets (privacidad multi-tenant)
+
+---
+
+## Modular Core, Pluggable Registries & Model Serving (Fase 2)
+
+A partir de Fase 2, el Control Plane en FastAPI queda completamente desacoplado de librerías y proveedores concretos mediante **7 registros pluggables** inspeccionables en vivo en `GET /api/v1/environments/capabilities`:
+
+| Registro | Contrato ABC | Backends incluidos | Extensible a |
+|---|---|---|---|
+| **Storage** | `StorageService` | `local`, `minio`, `s3` | `gcs`, `azure`, `obstore` |
+| **Compute** | `ComputeBackend` | `celery` (colas `cpu-light`, `cpu-heavy`, `gpu-train`, `system-beat`) | `ray`, `k8s_jobs` |
+| **Environment Runners** | `EnvironmentRunner` | `uv_isolated`, `docker` (`--network=none`) | `k8s_pod`, `ray_runtime_env` |
+| **Serving Runtimes** | `ModelRuntime` | `tabular_generic`, `nlp`, `pyfunc` (universal MLflow) | `onnxruntime`, `triton`, `vllm` |
+| **Event Bus** | `EventBusBackend` | `redis` (Redis Streams + DLQ), `memory` | `sqs`, `kafka`, `nats` |
+| **Data Engine** | `DataEngine` | `pandas` | `duckdb`, `polars`, `spark` |
+| **Experiment Tracker** | `ExperimentTracker` | `mlflow` | `wandb`, `clearml` |
+
+### Runtime Environments & User-Defined Pipelines
+- **`RuntimeEnvironment`** (`/api/v1/environments/*`): define versión de Python, imagen base, paquetes PyPI/uv, variables de entorno y runner (`uv_isolated` o `docker`).
+- **`UserPipeline`** (`/api/v1/pipelines/*`): pipelines reutilizables en modo `declarative`, `python` (`def transform(df)`) o `hybrid`, ejecutables sobre cualquier dataset del tenant con linaje (`parent_dataset_id`).
+
+### Dedicated Model Serving Endpoints (Lite Serving v1)
+```text
+Client (X-API-Key: px_... o JWT)
+   └─► POST /serving/v1/{slug}/invocations
+         ├─► Canary / A-B Router (model_id vs secondary_model_id según traffic_split_pct)
+         ├─► Auto-Preprocess (aplica preprocessing_pipeline_path si el payload llega crudo)
+         ├─► ModelRuntimeRegistry (tabular_generic | nlp | pyfunc)
+         └─► EndpointInvocationLog + EventBus (endpoint.invoked) + Métricas de latencia
+```
+
+### Enterprise Security & IaC Local
+- **Aislamiento reforzado**: `Workspaces` (`dev`/`staging`/`prod`), **API Keys (`px_...`)** con hash SHA-256 y scopes, **PostgreSQL Row-Level Security (RLS)** (`SET LOCAL app.current_tenant_id`), Rate Limiting distribuido en Redis por tenant/API key y tabla append-only `audit_log`.
+- **IaC Local ($0)**: Módulos Terraform reutilizables en `infra/terraform/` + perfil Docker `aws-local` (LocalStack Community `:4566`).

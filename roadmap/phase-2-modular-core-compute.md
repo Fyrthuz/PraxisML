@@ -273,10 +273,27 @@ Permite exponer cualquier modelo registrado (`MLModel`) bajo demanda como un **e
 - **Control Plane:** `GET/POST /api/v1/serving/endpoints`, `GET/PATCH/DELETE /api/v1/serving/endpoints/{id}` para desplegar, pausar, cambiar de versión o ajustar pesos Canary/A-B (`0–100%`).
 - **Invocación dedicada:** `POST /serving/v1/{slug}/invocations` (y alias `/api/v1/serving/endpoints/{slug}/invocations`) autenticado vía **API Key (`X-API-Key` / `Bearer px_...`)** o JWT.
   - Acepta registro único (`{"inputs": {...}}`) o batch (`{"inputs": [{...}, ...]}`).
-  - Aplica automáticamente el `preprocessing_pipeline_path` vinculado al endpoint/modelo si el payload llega en formato crudo.
+  - Aplica automáticamente el `preprocessing_pipeline_path` vinculado al endpoint/modelo (propagado automáticamente al entrenar) si el payload llega en formato crudo.
   - Enruta entre `model_id` (primario) y `secondary_model_id` (canary) según `traffic_split_pct`.
-  - Registra latencia media, contadores de peticiones/errores, eventos en el Event Bus y trazabilidad en `audit_log`.
-- **UI:** Pestaña **Model Endpoints** para desplegar modelos en 1 clic, probar invocaciones JSON en vivo y copiar snippets `curl` listos para integrar en aplicaciones externas.
+  - Registra latencia media, contadores de peticiones/errores, **historial ligero de invocaciones (`endpoint_invocation_logs` + `GET /api/v1/serving/endpoints/{id}/logs`)**, eventos en el Event Bus y trazabilidad en `audit_log`.
+- **UI:** Pestaña **Model Endpoints** + botón directo **Deploy Endpoint** desde `Models` y `Model Registry`, **Comparador Side-by-Side** de 2–4 modelos, consola JSON en vivo, snippet `curl`, visor de **Recent Invocation Logs**, sync de vista en URL (`?view=...`) y **Command Palette (`Cmd+K`)**.
+
+---
+
+## 8.6 Runtime Environments, User Pipelines & 7 Registros Pluggables (Sub-fase 2.9)
+
+Elimina el acoplamiento a librerías fijas y habilita el modelo estilo Databricks donde el usuario define sus propios entornos y pipelines:
+
+- **7 Registros Pluggables Core (`GET /api/v1/environments/capabilities`):**
+  1. `StorageBackendRegistry` (`local`, `minio`, `s3` → `gcs`/`azure`/`obstore`)
+  2. `ComputeBackendRegistry` (`celery` → `ray`/`k8s`)
+  3. `EnvironmentRunnerRegistry` (`uv_isolated`, `docker` `--network=none`)
+  4. `ModelRuntimeRegistry` (`tabular_generic`, `nlp`, `pyfunc` universal MLflow)
+  5. `EventBusRegistry` (`redis`, `memory` → `sqs`/`kafka`/`nats`)
+  6. `DataEngineRegistry` (`pandas` → `duckdb`/`polars`/`spark`)
+  7. `TrackerRegistry` (`mlflow` → `wandb`/`clearml`)
+- **`RuntimeEnvironment` (`/api/v1/environments/*`):** entornos declarativos por tenant con `python_version`, `base_image`, lista `packages` PyPI/uv, `env_vars`, `compute_profile` y `runner_type`, protegidos por RLS.
+- **`UserPipeline` (`/api/v1/pipelines/*`):** pipelines reutilizables en modo `declarative`, `python` (`def transform(df)`) o `hybrid`, más encadenado secuencial y renombrado libre de variables en `preprocessing.py` (`register_preprocessing_step`).
 
 ---
 
