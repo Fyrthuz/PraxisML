@@ -146,3 +146,31 @@ llm_latency_ms = Histogram(
     buckets=[100, 250, 500, 1000, 2500, 5000, 10000, 30000, 60000],
 )
 
+# ── Model Serving Endpoints & User Pipelines ────────────────────────────────────
+
+serving_requests_total = Counter(
+    "praxisml_serving_requests_total",
+    "Total de invocaciones a Model Serving Endpoints por slug, variante y estado",
+    ["tenant_id", "endpoint_slug", "variant", "status"],
+)
+
+serving_latency_ms = Histogram(
+    "praxisml_serving_latency_ms",
+    "Latencia de invocaciones a Model Serving Endpoints en milisegundos",
+    ["tenant_id", "endpoint_slug", "runtime"],
+    buckets=[5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000],
+)
+
+pipeline_runs_total = Counter(
+    "praxisml_pipeline_runs_total",
+    "Total de ejecuciones de UserPipelines por engine y estado",
+    ["tenant_id", "engine", "status"],
+)
+
+pipeline_duration_seconds = Histogram(
+    "praxisml_pipeline_duration_seconds",
+    "Duración de ejecuciones de UserPipelines en segundos",
+    ["tenant_id", "engine"],
+    buckets=[0.1, 0.5, 1, 2, 5, 15, 30, 60, 180],
+)
+

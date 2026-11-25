@@ -257,6 +257,16 @@ def test_model_endpoint_deploy_canary_and_invoke_with_api_key(auth_context):
     assert logs[0]["variant"] == "canary"
     assert logs[0]["sample_output"]["predictions"] == [1]
 
+    # Unified platform observability summary reflects deployed endpoints & serving usage
+    summary_res = client.get("/api/v1/observability/platform-summary", headers=headers)
+    assert summary_res.status_code == 200
+    summary = summary_res.json()
+    assert summary["serving"]["total_endpoints"] == 1
+    assert summary["serving"]["total_requests"] == 1
+    assert summary["usage_by_domain"].get("serving", 0) >= 1
+    assert "postgres" in summary["services_health"]
+    assert "mlflow" in summary["services_health"]
+
 
 def test_event_bus_local_dispatch_and_drift_helpers():
     bus = DomainEventBus()

@@ -96,6 +96,76 @@ class UsageCollector:
     def record_ws_connection(self, tenant_id: str, delta: int = 1) -> None:
         m.ws_connections_active.labels(tenant_id=tenant_id).inc(delta)
 
+    def record_serving_invocation(
+        self,
+        db: Session,
+        tenant_id: str,
+        model_id: str,
+        endpoint_slug: str,
+        variant: str,
+        runtime: str,
+        latency_ms: float,
+        success: bool = True,
+        input_count: int = 1,
+    ) -> None:
+        """Registra una invocación de Model Endpoint en usage_metrics y Prometheus."""
+        self.record_inference(
+            db=db,
+            tenant_id=tenant_id,
+            model_id=model_id,
+            domain="serving",
+            latency_ms=latency_ms,
+            success=success,
+            tags={
+                "endpoint_slug": endpoint_slug,
+                "variant": variant,
+                "runtime": runtime,
+                "input_count": input_count,
+                "algorithm": runtime,
+            },
+        )
+        m.serving_requests_total.labels(
+            tenant_id=tenant_id,
+            endpoint_slug=endpoint_slug,
+            variant=variant,
+            status="success" if success else "error",
+        ).inc()
+        m.serving_latency_ms.labels(
+            tenant_id=tenant_id,
+            endpoint_slug=endpoint_slug,
+            runtime=runtime,
+        ).observe(latency_ms)
+
+    def record_pipeline_run(
+        self,
+        db: Session,
+        tenant_id: str,
+        pipeline_id: str,
+        engine: str,
+        duration_s: float,
+        success: bool = True,
+        tags: Optional[dict] = None,
+    ) -> None:
+        """Registra una ejecución de UserPipeline en usage_metrics y Prometheus."""
+        metric = UsageMetric(
+            tenant_id=tenant_id,
+            model_id=None,
+            domain="pipelines",
+            metric_name="pipeline_duration_s",
+            metric_value=duration_s,
+            tags={"pipeline_id": pipeline_id, "engine": engine, "success": success, **(tags or {})},
+        )
+        db.add(metric)
+        m.pipeline_runs_total.labels(
+            tenant_id=tenant_id,
+            engine=engine,
+            status="success" if success else "error",
+        ).inc()
+        m.pipeline_duration_seconds.labels(
+            tenant_id=tenant_id,
+            engine=engine,
+        ).observe(duration_s)
+
 
 _usage_collector: UsageCollector | None = None
 

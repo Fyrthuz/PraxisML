@@ -609,3 +609,194 @@ def get_tenant_report(
             media_type="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=monthly_report_{month}.pdf"},
         )
+
+
+# ── Unified Platform Observability Summary ────────────────────────────────────
+
+
+@router.get("/platform-summary")
+def get_platform_summary(
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+    _user: User = Depends(require_viewer),
+):
+    """
+    Resumen integral de observabilidad de la plataforma para el tenant:
+    salud de servicios (PostgreSQL, Redis/colas, Storage, MLflow),
+    Model Serving Endpoints, Tracking/DVC/Storage, Runtime Environments,
+    Pipelines, Governance y distribución de UsageMetric por dominio.
+    """
+    import urllib.request
+    from sqlalchemy import text
+
+    from app.core.config import settings
+    from app.core.redis import create_sync_redis_client
+    from app.models.api_key import APIKey
+    from app.models.audit_log import AuditLog
+    from app.models.dataset import Dataset
+    from app.models.ml_model import MLModel
+    from app.models.model_endpoint import ModelEndpoint
+    from app.models.runtime_environment import RuntimeEnvironment
+    from app.models.user_pipeline import UserPipeline
+    from app.models.workspace import Workspace
+    from app.services.storage_service import get_storage
+
+    # 1. Live infrastructure health probes
+    pg_status = "ok"
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception:
+        pg_status = "error"
+
+    redis_status = "unavailable"
+    queue_depths: dict[str, int] = {}
+    try:
+        rclient = create_sync_redis_client()
+        if rclient is not None and rclient.ping():
+            redis_status = "ok"
+            for q in ("cpu-light", "cpu-heavy", "gpu-train", "system-beat", "celery"):
+                queue_depths[q] = int(rclient.llen(q) or 0)
+    except Exception:
+        redis_status = "degraded"
+
+    storage_status = "ok"
+    try:
+        _ = get_storage()
+    except Exception:
+        storage_status = "error"
+
+    mlflow_uri = settings.MLFLOW_TRACKING_URI or "local-file"
+    mlflow_status = "ok"
+    if mlflow_uri.startswith("http"):
+        try:
+            with urllib.request.urlopen(f"{mlflow_uri.rstrip('/')}/health", timeout=1.5) as resp:
+                mlflow_status = "ok" if resp.status < 400 else "degraded"
+        except Exception:
+            mlflow_status = "degraded"
+
+    # 2. Deployed Model Serving Endpoints
+    endpoints = (
+        db.query(ModelEndpoint)
+        .filter(ModelEndpoint.tenant_id == tenant.id)
+        .order_by(ModelEndpoint.request_count.desc())
+        .all()
+    )
+    active_eps = sum(1 for e in endpoints if e.status == "active")
+    paused_eps = len(endpoints) - active_eps
+    total_reqs = sum(e.request_count or 0 for e in endpoints)
+    total_errs = sum(e.error_count or 0 for e in endpoints)
+    weighted_lat = (
+        round(
+            sum((e.avg_latency_ms or 0.0) * (e.request_count or 0) for e in endpoints) / total_reqs,
+            2,
+        )
+        if total_reqs > 0
+        else 0.0
+    )
+    error_rate_pct = round((total_errs / total_reqs) * 100.0, 2) if total_reqs > 0 else 0.0
+
+    # 3. Tracking, Datasets & Storage footprint
+    datasets = db.query(Dataset).filter(Dataset.tenant_id == tenant.id).all()
+    dvc_tracked = sum(1 for d in datasets if d.is_dvc_tracked)
+    total_bytes = sum(d.file_size_bytes or 0 for d in datasets)
+
+    models = (
+        db.query(MLModel)
+        .filter(MLModel.tenant_id == tenant.id, MLModel.is_active.is_(True))
+        .all()
+    )
+    models_by_stage: dict[str, int] = {"Production": 0, "Staging": 0, "Archived": 0}
+    for mdl in models:
+        st = mdl.stage or "Staging"
+        models_by_stage[st] = models_by_stage.get(st, 0) + 1
+
+    # 4. Compute, Environments, Pipelines & Governance
+    env_count = (
+        db.query(func.count(RuntimeEnvironment.id))
+        .filter(RuntimeEnvironment.tenant_id == tenant.id)
+        .scalar()
+        or 0
+    )
+    pipe_count = (
+        db.query(func.count(UserPipeline.id))
+        .filter(UserPipeline.tenant_id == tenant.id)
+        .scalar()
+        or 0
+    )
+    ws_count = (
+        db.query(func.count(Workspace.id))
+        .filter(Workspace.tenant_id == tenant.id)
+        .scalar()
+        or 0
+    )
+    active_keys = (
+        db.query(func.count(APIKey.id))
+        .filter(APIKey.tenant_id == tenant.id, APIKey.revoked_at.is_(None))
+        .scalar()
+        or 0
+    )
+    since_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    audit_24h = (
+        db.query(func.count(AuditLog.id))
+        .filter(AuditLog.tenant_id == tenant.id, AuditLog.created_at >= since_24h)
+        .scalar()
+        or 0
+    )
+
+    # 5. Usage metrics count by domain (serving, tabular, nlp, pipelines, llm)
+    domain_rows = (
+        db.query(UsageMetric.domain, func.count(UsageMetric.id))
+        .filter(UsageMetric.tenant_id == tenant.id)
+        .group_by(UsageMetric.domain)
+        .all()
+    )
+    usage_by_domain = {str(dom or "unknown"): int(cnt) for dom, cnt in domain_rows}
+
+    return {
+        "tenant_id": tenant.id,
+        "services_health": {
+            "postgres": {"status": pg_status},
+            "redis": {"status": redis_status, "queues": queue_depths},
+            "storage": {"status": storage_status, "backend": settings.STORAGE_BACKEND},
+            "mlflow": {"status": mlflow_status, "tracking_uri": mlflow_uri},
+        },
+        "serving": {
+            "total_endpoints": len(endpoints),
+            "active_endpoints": active_eps,
+            "paused_endpoints": paused_eps,
+            "total_requests": total_reqs,
+            "total_errors": total_errs,
+            "error_rate_pct": error_rate_pct,
+            "avg_latency_ms": weighted_lat,
+            "endpoints": [
+                {
+                    "id": e.id,
+                    "name": e.name,
+                    "slug": e.slug,
+                    "status": e.status,
+                    "traffic_split_pct": e.traffic_split_pct,
+                    "request_count": e.request_count or 0,
+                    "error_count": e.error_count or 0,
+                    "avg_latency_ms": e.avg_latency_ms or 0.0,
+                    "last_invoked_at": e.last_invoked_at.isoformat() if e.last_invoked_at else None,
+                }
+                for e in endpoints
+            ],
+        },
+        "tracking_and_data": {
+            "total_datasets": len(datasets),
+            "dvc_tracked_datasets": dvc_tracked,
+            "datasets_storage_bytes": total_bytes,
+            "datasets_storage_mb": round(total_bytes / (1024 * 1024), 3),
+            "total_models": len(models),
+            "models_by_stage": models_by_stage,
+        },
+        "compute_and_governance": {
+            "runtime_environments": int(env_count),
+            "user_pipelines": int(pipe_count),
+            "workspaces": int(ws_count),
+            "active_api_keys": int(active_keys),
+            "audit_events_24h": int(audit_24h),
+        },
+        "usage_by_domain": usage_by_domain,
+    }

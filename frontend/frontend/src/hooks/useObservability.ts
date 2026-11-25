@@ -23,11 +23,14 @@ export function useObservability(token: string | null) {
     const [isLoading, setIsLoading] = useState(false);
     const [activeTab, setActiveTab] = useState<"overview" | "usage" | "costs" | "alerts" | "pricing">("overview");
 
-    const fetchUsage = useCallback(async () => {
+    const fetchUsage = useCallback(async (domain?: string) => {
         if (!token) return;
         setIsLoading(true);
         try {
-            const res = await fetch(`${API}/usage`, {
+            const url = domain
+                ? `${API}/usage?domain=${encodeURIComponent(domain)}`
+                : `${API}/usage`;
+            const res = await fetch(url, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (res.ok) setUsageMetrics(await res.json());

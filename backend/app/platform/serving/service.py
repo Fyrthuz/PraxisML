@@ -100,6 +100,42 @@ def invoke_model_endpoint(
             },
         )
         db.add(log_row)
+
+        try:
+            from app.observability.cost_calculator import get_cost_calculator
+            from app.observability.usage_collector import get_usage_collector
+
+            get_usage_collector().record_serving_invocation(
+                db=db,
+                tenant_id=endpoint.tenant_id,
+                model_id=target_model.id,
+                endpoint_slug=endpoint.slug,
+                variant=variant,
+                runtime=runtime.runtime_name,
+                latency_ms=latency_ms,
+                success=True,
+                input_count=count,
+            )
+            calc = get_cost_calculator()
+            cost = calc.estimate_inference_cost(
+                db=db, domain="tabular", latency_ms=latency_ms
+            )
+            if cost > 0:
+                now = datetime.now(timezone.utc)
+                calc.record_cost(
+                    db=db,
+                    tenant_id=endpoint.tenant_id,
+                    cost_type="serving",
+                    amount=cost,
+                    source=endpoint.slug,
+                    period_start=now,
+                    period_end=now,
+                    model_id=target_model.id,
+                    metadata={"endpoint_id": endpoint.id, "variant": variant},
+                )
+        except Exception as obs_exc:
+            logger.debug("Serving observability hook skipped: %s", obs_exc)
+
         db.commit()
 
         get_event_bus().publish(
@@ -149,6 +185,22 @@ def invoke_model_endpoint(
                     error_message=str(exc)[:400],
                 )
             )
+            try:
+                from app.observability.usage_collector import get_usage_collector
+
+                get_usage_collector().record_serving_invocation(
+                    db=db,
+                    tenant_id=endpoint.tenant_id,
+                    model_id=target_model.id,
+                    endpoint_slug=endpoint.slug,
+                    variant=variant,
+                    runtime=runtime.runtime_name,
+                    latency_ms=latency_ms,
+                    success=False,
+                    input_count=len(inputs) if isinstance(inputs, list) else 1,
+                )
+            except Exception:
+                pass
             db.commit()
         except Exception:
             db.rollback()

@@ -10,6 +10,7 @@ import logging
 import os
 import re
 import tempfile
+import time
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any, Dict, List, Optional
@@ -299,6 +300,7 @@ def run_pipeline(
     pipeline_artifact_uri: Optional[str] = None
     exec_stdout = ""
     df_out = df
+    t0 = time.perf_counter()
 
     try:
         # 1. Ejecutar parte declarativa (si existe)
@@ -383,6 +385,20 @@ def run_pipeline(
         parent_dataset_id=dataset.id,
     )
     db.add(new_ds)
+    try:
+        from app.observability.usage_collector import get_usage_collector
+
+        get_usage_collector().record_pipeline_run(
+            db=db,
+            tenant_id=tenant.id,
+            pipeline_id=pipe.id,
+            engine=pipe.engine,
+            duration_s=round(time.perf_counter() - t0, 4),
+            success=True,
+            tags={"slug": pipe.slug, "output_rows": len(df_out)},
+        )
+    except Exception:
+        pass
     db.commit()
     db.refresh(new_ds)
 
