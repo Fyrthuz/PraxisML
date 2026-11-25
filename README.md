@@ -46,7 +46,7 @@
 
 [![Ver Demo de PraxisML (720p MP4)](docs/demo/architecture_overview.png)](docs/demo/praxisml_demo.mp4)
 
-- 🎥 [**Demo Completa en Vídeo (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4) · [**Guía por capítulos y capturas (`docs/demo/README.md`)**](docs/demo/README.md): Recorrido por la arquitectura modular, los 7 registros pluggables y exploración en vivo de todas las pantallas de la GUI (`1m 44s`, H.264 Main@3.1 + AAC, `3.0 MB`).
+- 🎥 [**Demo Completa en Vídeo (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4) · [**Guía por capítulos y capturas (`docs/demo/README.md`)**](docs/demo/README.md): Recorrido por la arquitectura modular, los 7 registros pluggables, Guardia de Compatibilidad Tabular vs NLP, NLP Studio, Model Serving Tabular/NLP con Canary, Observabilidad Total (11 servicios) y vistas en vivo de **MLflow**, **Prometheus**, **Grafana** y **MinIO** (`2m 27s`, 720p H.264 Main@3.1 + AAC, `2.68 MB`).
 - 🗺️ [**Roadmap de Evolución v2.0 (`roadmap.md`)**](roadmap.md): Fases 0, 1 y 2 completadas; hoja de ruta detallada hacia **Fase 3 (Lakehouse Delta + DuckDB/Polars + Monitoring)**, **Fase 4 (Ray Serve + Notebooks + CV/TS)** y **Fase 5 (Agentic Copilot + MCP + K8s/BYOC)**.
 
 ---
@@ -77,23 +77,39 @@ PraxisML/
 │   │   │   ├── profiling.py    # Profiling de datasets
 │   │   │   ├── drift.py        # Monitorización de data drift
 │   │   │   ├── users.py        # Creación/eliminación de usuarios
-│   │   │   ├── observability/  # Observability API (Fase 0)
-│   │   │   │   └── observability.py  # Usage, costs, pricing, alerts, health
+│   │   │   ├── observability.py # Usage, costs, pricing, alerts, health y platform-summary (11 probes)
+│   │   │   ├── serving.py      # Model Serving Endpoints (/serving/v1/{slug}/invocations, Canary, P50/P95/P99)
+│   │   │   ├── environments.py # RuntimeEnvironments (uv/Docker) y /capabilities (7 registros pluggables)
+│   │   │   ├── pipelines.py    # UserPipelines (declarative / Python def transform(df) / hybrid)
+│   │   │   ├── workspaces.py   # Workspaces (dev/staging/prod)
+│   │   │   ├── api_keys.py     # Personal Access Tokens (px_...) con SHA-256 y scopes
+│   │   │   ├── audit.py        # Audit Log append-only + Redis Streams EventBus
+│   │   │   ├── copilot.py      # Plugins activos + Copilot Tool Registry (PolicyEngine 4-Tier)
 │   │   │   ├── nlp/            # NLP Engine (Fase 1)
-│   │   │   │   ├── training.py       # Entrenamiento de transformers (BERT/RoBERTa)
-│   │   │   │   ├── inference.py      # Predict, batch y streaming WS NLP
+│   │   │   │   ├── training.py       # Entrenamiento de transformers (DistilBERT/BERT/RoBERTa)
+│   │   │   │   ├── inference.py      # Predict, batch y streaming WS NLP (con guardia de dominio)
 │   │   │   │   ├── embeddings.py     # Embeddings y búsqueda semántica (pgvector)
-│   │   │   │   └── assistant.py      # Chatbot LLM + RAG (vLLM/OpenAI/Ollama)
-│   │   │   └── tabular/        # Tabular ML domain (renombrado desde root)
+│   │   │   │   └── assistant.py      # Chatbot LLM + RAG (vLLM/OpenAI/Ollama + fallback RAG local)
+│   │   │   └── tabular/        # Tabular ML domain
 │   │   │       ├── training.py       # Entrenamiento Sklearn / PyTorch
-│   │   │       ├── predictions.py    # Inferencia async y single-image + XAI
-│   │   │       ├── preprocessing.py  # Pipelines de preprocesamiento
+│   │   │       ├── predictions.py    # Inferencia async, single y batch + XAI (con guardia de dominio)
+│   │   │       ├── preprocessing.py  # Pipelines de preprocesamiento y renombrado libre
 │   │   │       └── streaming.py      # Inferencia en tiempo real via WebSockets
-│   │   ├── core/               # Seguridad / Config / JWT / Rate Limiting
+│   │   ├── core/               # Seguridad / Config / JWT / Rate Limiting / RLS / EventBus
 │   │   │   ├── config.py       # Configuración centralizada con validadores
 │   │   │   ├── exceptions.py   # Jerarquía de excepciones de dominio
-│   │   │   ├── rate_limit.py   # Instancia slowapi Limiter
-│   │   │   └── security.py     # JWT + bcrypt + JWKS
+│   │   │   ├── event_bus.py    # EventBusRegistry (Redis Streams + DLQ / memoria)
+│   │   │   ├── rls.py          # PostgreSQL Row-Level Security (SET LOCAL app.current_tenant_id)
+│   │   │   ├── rate_limit.py   # Rate limiting distribuido en Redis por tenant / API Key
+│   │   │   └── security.py     # JWT + bcrypt + JWKS + PATs (px_...)
+│   │   ├── platform/           # Capa desacoplada Fase 2 (sin vendor lock-in)
+│   │   │   ├── compute/        # ComputeBackendRegistry (Celery → Ray/K8s)
+│   │   │   ├── copilot/        # ToolRegistry + PolicyEngine 4-Tier
+│   │   │   ├── data_engine/    # DataEngineRegistry (Pandas → DuckDB/Polars)
+│   │   │   ├── environments/   # EnvironmentRunnerRegistry (uv_isolated / docker)
+│   │   │   ├── serving/        # ModelRuntimeRegistry (tabular_generic / nlp / pyfunc)
+│   │   │   └── tracker/        # TrackerRegistry (MLflow → W&B/ClearML)
+│   │   ├── plugins/            # Domain Plugin Registry (ENABLED_PLUGINS=tabular,nlp)
 │   │   ├── core_ml/            # Motor de ML e inferencia
 │   │   │   ├── factory.py      # PredictionFactory — selecciona estimador
 │   │   │   ├── hyperparams.py  # Registro de algoritmos y defaults
@@ -110,10 +126,11 @@ PraxisML/
 │   │   ├── schemas/            # Schemas Pydantic (request/response)
 │   │   │   ├── observability.py  # Schemas de observabilidad (Fase 0)
 │   │   │   └── pricing.py      # Schemas de pricing dinámico (Fase 0)
-│   │   ├── observability/      # Paquete de observabilidad (Fase 0)
+│   │   ├── observability/      # Paquete de observabilidad (Fase 0 + Fase 2)
 │   │   │   ├── models.py       # ORM: UsageMetric, CostRecord, DriftHistory, AlertConfig, ResourcePricing
-│   │   │   ├── metrics.py      # 19 métricas Prometheus custom (incl. NLP/LLM)
-│   │   │   ├── usage_collector.py  # Captura métricas de uso
+│   │   │   ├── metrics.py      # 25 métricas Prometheus custom (HTTP, ML, NLP, Serving, Pipelines, Health)
+│   │   │   ├── bootstrap.py    # Bootstrap inicial de gauges Prometheus en arranque
+│   │   │   ├── usage_collector.py  # Captura métricas de uso por dominio
 │   │   │   ├── cost_calculator.py  # Estimación de costes con precios dinámicos
 │   │   │   ├── alert_engine.py # Motor de evaluación y despacho de alertas
 │   │   │   └── reports.py      # Generación de reportes PDF/CSV
@@ -176,9 +193,13 @@ PraxisML/
 │       ├── src/components/     # UI Components (ExplainabilityPanel, DriftPanel)
 │       ├── src/hooks/          # Custom Hooks (useDrift, useStreamingInference)
 │       └── src/lib/            # API Client (api.ts) y utilidades
-├── infra/                      # Configuración de infraestructura
-│   ├── prometheus/             # Scraping de métricas
-│   └── grafana/                # Dashboards y provisioning
+├── docs/                       # Documentación técnica y vídeo demo
+│   ├── architecture.md
+│   └── demo/                   # Vídeo walkthrough (praxisml_demo.mp4) y capturas
+├── infra/                      # Configuración de infraestructura e IaC
+│   ├── prometheus/             # Scraping (api, minio, grafana, prometheus) + 5 reglas de alerta
+│   ├── grafana/                # 18 dashboards provisionados y datasources
+│   └── terraform/              # Módulos IaC AWS / LocalStack (S3, DynamoDB, IAM, Secrets, SQS)
 ├── .dvc/                       # Configuración DVC
 │   ├── config                  # Config DVC (MinIO/S3)
 │   └── config.local           # Overrides locales
@@ -445,37 +466,17 @@ El tab **Observability** en el frontend muestra:
 
 ### Métricas Prometheus
 
-19 métricas custom expuestas en `/metrics`:
-- `praxisml_inference_latency_ms` (Histogram)
-- `praxisml_inference_tokens_total` (Counter)
-- `praxisml_inference_cost_usd` (Counter)
-- `praxisml_training_duration_seconds` (Histogram)
-- `praxisml_training_cost_usd` (Counter)
-- `praxisml_model_storage_bytes` (Gauge)
-- `praxisml_ws_connections_active` (Gauge)
-- `praxisml_drift_score` (Gauge)
-- `praxisml_quota_usage_pct` (Gauge)
-- `praxisml_cost_budget_remaining` (Gauge)
-- `praxisml_predictions_total` (Counter)
-- `praxisml_errors_total` (Counter)
-- `praxisml_nlp_inference_latency_ms` (Histogram, Fase 1)
-- `praxisml_nlp_predictions_total` (Counter, Fase 1)
-- `praxisml_embeddings_total` (Counter, Fase 1)
-- `praxisml_semantic_search_latency_ms` (Histogram, Fase 1)
-- `praxisml_llm_tokens_total` (Counter, Fase 1)
-- `praxisml_llm_requests_total` (Counter, Fase 1)
-- `praxisml_llm_latency_ms` (Histogram, Fase 1)
+25 métricas custom expuestas en `/metrics` (más métricas nativas de `prometheus-fastapi-instrumentator`, MinIO y Grafana):
+- **Core ML & Costes**: `praxisml_inference_latency_ms`, `praxisml_inference_tokens_total`, `praxisml_inference_cost_usd_total`, `praxisml_training_duration_seconds`, `praxisml_training_cost_usd_total`, `praxisml_model_storage_bytes`, `praxisml_ws_connections_active`, `praxisml_drift_score`, `praxisml_quota_usage_pct`, `praxisml_cost_budget_remaining`, `praxisml_predictions_total`, `praxisml_errors_total`
+- **NLP & LLM (Fase 1)**: `praxisml_nlp_inference_latency_ms`, `praxisml_nlp_predictions_total`, `praxisml_embeddings_total`, `praxisml_semantic_search_latency_ms`, `praxisml_llm_tokens_total`, `praxisml_llm_requests_total`, `praxisml_llm_latency_ms`
+- **Model Serving, Pipelines & Infraestructura (Fase 2)**: `praxisml_serving_requests_total`, `praxisml_serving_latency_ms`, `praxisml_pipeline_runs_total`, `praxisml_pipeline_duration_seconds`, `praxisml_service_health` (11 servicios), `praxisml_celery_queue_depth` (5 colas)
 
-### Grafana Dashboards
+### Grafana Dashboards & Alertas Prometheus
 
-6 dashboards nuevos + 5 existentes enriquecidos:
-- **Cost Center**: Costes por tenant, breakdown por modelo, forecast vs budget
-- **Model Performance**: Latencia p50/p95/p99, throughput, error rate, drift score
-- **Tenant Usage**: Requests/día, entrenamientos, almacenamiento, cuotas
-- **LLM Spend**: Tokens input/output, coste por modelo, budget burn rate
-- **Training Dashboard**: Duración por algoritmo, coste por entrenamiento, GPU utilization
-- **Drift Timeline**: PSI/KS timeline, forecast line, alert annotations
-- **NLP Engine** (Fase 1): Entrenamiento NLP (p95), latencia inferencia, predicciones, embeddings, latencia búsqueda semántica, tokens/latencia/requests LLM
+**18 dashboards provisionados** en `infra/grafana/provisioning/dashboards/` (todos validados contra PromQL en vivo) + **5 reglas de alerta** en `infra/prometheus/alerts.yml`:
+- **PraxisML — Global Overview**: RPS y latencia HTTP p50/p95, errores 4xx/5xx, **Prometheus Targets UP**, **11 Servicios de Plataforma**, objetos/buckets **MinIO**, Serving RPS y User Pipelines
+- **PraxisML — Model Serving & User Pipelines**: Invocaciones Primary vs Canary, tasa de error, percentiles P50/P95/P99 por endpoint/runtime y duración de pipelines
+- **Cost Center**, **Model Performance**, **Tenant Usage**, **LLM Spend**, **Training Dashboard**, **Drift Timeline**, **NLP Engine** y dashboards específicos por dominio de rutas API (`auth`, `datasets`, `models`, `predictions`, `preprocessing`, `profiling`, `tenants`, `training`, `api`)
 
 ---
 
@@ -511,6 +512,48 @@ El tab **NLP** del dashboard incluye 4 sub-tabs:
 - **Assistant**: chat con streaming SSE, fuentes citadas y borrado de historial.
 
 > 📖 Plan de implementación completo en [`docs/plan-fase-1-nlp-engine.md`](docs/plan-fase-1-nlp-engine.md).
+
+---
+
+## 🚀 Arquitectura Modular, Model Serving & Observabilidad Total (Fase 2)
+
+La Fase 2 convierte el Control Plane de FastAPI en una plataforma modular estilo Databricks, desacoplada de librerías y proveedores cloud, con serving productivo Tabular + NLP y gobierno enterprise.
+
+### 1. 7 Registros Pluggables (`GET /api/v1/environments/capabilities`)
+
+| Registro | Backends incluidos | Extensible a |
+|----------|--------------------|--------------|
+| `StorageBackendRegistry` | `local`, `minio`, `s3` | `gcs`, `azure`, `obstore` |
+| `ComputeBackendRegistry` | `celery` (`cpu-light`, `cpu-heavy`, `gpu-train`, `system-beat`) | `ray`, `k8s_jobs` |
+| `EnvironmentRunnerRegistry` | `uv_isolated`, `docker` (`--network=none`) | `k8s_pod`, `ray_runtime_env` |
+| `ModelRuntimeRegistry` | `tabular_generic`, `nlp` (ONNX/HF), `pyfunc` | `onnxruntime`, `triton`, `vllm` |
+| `EventBusRegistry` | `redis` (Redis Streams + DLQ), `memory` | `sqs`, `kafka`, `nats` |
+| `DataEngineRegistry` | `pandas` | `duckdb`, `polars`, `spark` |
+| `TrackerRegistry` | `mlflow` | `wandb`, `clearml` |
+
+### 2. Runtime Environments & User Pipelines
+- **`RuntimeEnvironment`** (`/api/v1/environments/*`): define versión de Python, imagen base, dependencias PyPI y runner aislado (`uv_isolated` o `docker`).
+- **`UserPipeline`** (`/api/v1/pipelines/*`): ejecuta transformaciones declarativas, código Python propio (`def transform(df)`) o híbridas sobre datasets con trazabilidad en MLflow (`{tenant}/pipelines`) y linaje (`parent_dataset_id`).
+
+### 3. Dedicated Model Serving Endpoints & Observabilidad por Endpoint
+- Despliegue en 1 clic desde **Models** o **Model Registry** en `POST /serving/v1/{slug}/invocations` (soporta JWT y API Keys `X-API-Key: px_...`).
+- **Canary / A-B traffic splitting** ajustable en vivo (`traffic_split_pct`) entre modelo primario y secundario compatible.
+- **Auto-preprocesamiento** para modelos tabulares con payloads crudos y runtime **NLP ONNX** en CPU (~6 ms).
+- Métricas detalladas en `GET /api/v1/serving/endpoints/{id}/metrics`: percentiles **P50/P95/P99**, success/error rate, tráfico 1h/24h, desglose Primary vs Canary, sparkline de latencia, coste FinOps y logs filtrables por estado y variante.
+
+### 4. Guardias de Compatibilidad Tabular vs NLP
+- **Comparador de modelos (`ModelsTab` / `ModelCompareModal`)**: al seleccionar un modelo, los modelos de distinto dominio o familia de tarea (p. ej. `tabular · classification` vs `nlp · sentiment_analysis`) se bloquean automáticamente para evitar comparaciones incongruentes; se avisa también si dos modelos compatibles proceden de datasets distintos.
+- **Canary & Serving**: el emparejamiento Primary ↔ Canary exige mismo `(domain, task_family)` tanto en UI como en `POST/PATCH /api/v1/serving/endpoints`, y desactiva pipelines de preprocesamiento tabular para endpoints NLP.
+- **Inferencia Tabular vs NLP**: los selectores de inferencia tabular (`PredictionsTab`, `SingleTabularInference`, `StreamingInference`) filtran modelos NLP y los endpoints backend `/api/v1/tabular/predictions/*` y `/api/v1/nlp/predict*` rechazan cruces de dominio con `HTTP 400`.
+
+### 5. Organización Jerárquica Multi-Tenant (MLflow & MinIO)
+- **MLflow (`MLFlowService.ensure_tenant_experiment`)**: experimentos jerárquicos `{tenant_slug}/{domain}` (o `tenant-{short_id}/{domain}`) agrupados en `tabular-training`, `nlp-training`, `preprocessing`, `pipelines`, `models` e `inference`, etiquetados con `praxisml.tenant_id`, `praxisml.domain` y `praxisml.managed_by=praxisml`.
+- **MinIO / S3 (`StorageKeyBuilder`)**: estructura limpia por ciclo de vida bajo `tenants/{tenant_id}/datasets/{raw|processed|pipelines|configs}/`, `tenants/{tenant_id}/artifacts/models/{model_id}/` y `tenants/{tenant_id}/predictions/{prediction_id}/`, más bucket dedicado `praxisml-dvc`.
+
+### 6. Observabilidad Total (11 Servicios), Governance e IaC Local
+- **`GET /api/v1/observability/platform-summary`**: monitoriza en tiempo real **11 servicios** (`postgres`, `redis`, `celery_workers`, `serving_plane`, `storage`, `mlflow`, `prometheus`, `grafana`, `vector_search`, `llm_gateway`, `event_bus`) y profundidades de cola Celery.
+- **Enterprise Governance**: Workspaces (`dev`/`staging`/`prod`), API Keys `px_...` con scopes, PostgreSQL Row-Level Security (RLS), Audit Log append-only y Command Palette (`Cmd+K` / `Ctrl+K`).
+- **IaC Local ($0)**: módulos Terraform en `infra/terraform/` + perfil Docker `aws-local` (LocalStack `:4566`).
 
 ---
 
@@ -723,6 +766,23 @@ Documentación interactiva en **`http://localhost:8000/docs`**
 | POST | `/api/v1/nlp/assistant/chat` | editor | Chat con el asistente (JSON o SSE streaming) |
 | GET | `/api/v1/nlp/assistant/history` | viewer | Historial de conversaciones |
 | DELETE | `/api/v1/nlp/assistant/history` | editor | Borrar historial del asistente |
+
+### Model Serving, Environments, Pipelines & Governance (Fase 2)
+| Método | Path | Rol | Descripción |
+|--------|------|-----|-------------|
+| GET | `/api/v1/environments/capabilities` | viewer | Inspeccionar los 7 registros pluggables activos |
+| GET / POST | `/api/v1/environments/` | viewer / editor | Gestionar `RuntimeEnvironments` (`uv_isolated` / `docker`) |
+| GET / POST | `/api/v1/pipelines/` | viewer / editor | Gestionar `UserPipelines` (`declarative` / `python` / `hybrid`) |
+| POST | `/api/v1/pipelines/{id}/execute` | editor | Ejecutar pipeline sobre dataset con tracking MLflow |
+| GET / POST / PATCH | `/api/v1/serving/endpoints` | viewer / editor | Crear/gestionar endpoints con Canary split y validación de dominio |
+| POST | `/serving/v1/{slug}/invocations` | editor / API Key | Invocar endpoint Tabular o NLP ONNX en tiempo real |
+| GET | `/api/v1/serving/endpoints/{id}/metrics` | viewer | Percentiles P50/P95/P99, Primary vs Canary, serie de latencia y FinOps |
+| GET | `/api/v1/serving/endpoints/{id}/logs` | viewer | Invocation logs filtrables por `?status=` y `?variant=` |
+| GET | `/api/v1/observability/platform-summary` | viewer | Health probes en vivo de los 11 servicios + resumen de plataforma |
+| GET / POST / DELETE | `/api/v1/api-keys/` | admin / editor | Gestionar API Keys (`px_...`) con scopes |
+| GET / POST | `/api/v1/workspaces/` | viewer / admin | Gestionar workspaces (`dev`/`staging`/`prod`) |
+| GET | `/api/v1/audit/` & `/api/v1/audit/events` | viewer | Consultar Audit Log y eventos recientes en Redis Streams |
+| GET | `/api/v1/copilot/plugins` & `/tools` | viewer | Catálogo de plugins activos y herramientas del PolicyEngine |
 
 ---
 
