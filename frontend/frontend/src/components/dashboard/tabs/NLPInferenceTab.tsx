@@ -7,7 +7,7 @@ interface Props {
     nlpModels: MLModel[];
     isPredicting: boolean;
     prediction: NLPPrediction | null;
-    onPredict: (modelId: string, text: string) => void;
+    onPredict: (modelId: string, text: string, explain?: boolean) => void;
     onBatch: (modelId: string, textColumn: string, file: File) => void;
 }
 
@@ -26,6 +26,7 @@ export default function NLPInferenceTab({
 }: Props) {
     const [modelId, setModelId] = React.useState("");
     const [text, setText] = React.useState("");
+    const [explain, setExplain] = React.useState(true);
     const [textColumn, setTextColumn] = React.useState("text");
     const [file, setFile] = React.useState<File | null>(null);
 
@@ -92,8 +93,21 @@ export default function NLPInferenceTab({
                     />
                 </div>
 
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                        type="checkbox"
+                        checked={explain}
+                        onChange={(e) => setExplain(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded border-zinc-700 bg-[#0b0c0f] accent-orange-500"
+                    />
+                    <span className="text-xs text-zinc-300">
+                        Include Explainability
+                        <span className="text-[11px] text-zinc-500 ml-1">(word attribution)</span>
+                    </span>
+                </label>
+
                 <button
-                    onClick={() => onPredict(modelId, text)}
+                    onClick={() => onPredict(modelId, text, explain)}
                     disabled={isPredicting || !modelId || !text.trim()}
                     className="w-full h-9 flex items-center justify-center gap-2 px-4 bg-zinc-100 hover:bg-white disabled:opacity-40 text-zinc-950 rounded-md text-xs font-medium transition-colors"
                 >
@@ -176,6 +190,68 @@ export default function NLPInferenceTab({
                                 </div>
                             </div>
                         )}
+
+                        {prediction.explanation && prediction.explanation.tokens && prediction.explanation.tokens.length > 0 && (() => {
+                            const toks = prediction.explanation.tokens;
+                            const maxAbs = Math.max(...toks.map((t) => Math.abs(t.contribution)), 0.0001);
+                            const ranked = prediction.explanation.top_tokens || [...toks].sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution)).slice(0, 6);
+                            return (
+                                <div className="space-y-2.5 pt-2 border-t border-zinc-800">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider">
+                                            Explainability · Word Attribution
+                                        </span>
+                                        <span className="text-[10px] font-mono text-zinc-500">
+                                            {prediction.explanation.method}
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 bg-[#0b0c0f] border border-zinc-800 rounded-md p-2.5">
+                                        {toks.map((item, idx) => {
+                                            const norm = Math.min(1, Math.abs(item.contribution) / maxAbs);
+                                            const isPos = item.contribution >= 0;
+                                            const alpha = (0.12 + norm * 0.45).toFixed(2);
+                                            return (
+                                                <span
+                                                    key={idx}
+                                                    title={`Contribution: ${item.contribution >= 0 ? "+" : ""}${item.contribution.toFixed(4)}`}
+                                                    className="px-1.5 py-0.5 rounded text-xs font-mono text-zinc-100 border"
+                                                    style={{
+                                                        backgroundColor: isPos
+                                                            ? `rgba(16, 185, 129, ${alpha})`
+                                                            : `rgba(239, 68, 68, ${alpha})`,
+                                                        borderColor: isPos
+                                                            ? "rgba(16, 185, 129, 0.35)"
+                                                            : "rgba(239, 68, 68, 0.35)",
+                                                    }}
+                                                >
+                                                    {item.token}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="space-y-1">
+                                        {ranked.slice(0, 5).map((item, idx) => {
+                                            const pct = Math.min(100, (Math.abs(item.contribution) / maxAbs) * 100);
+                                            const isPos = item.contribution >= 0;
+                                            return (
+                                                <div key={idx} className="grid grid-cols-12 items-center gap-2 text-[11px] font-mono">
+                                                    <span className="col-span-3 truncate text-zinc-300">{item.token}</span>
+                                                    <div className="col-span-6 h-1.5 bg-zinc-900 rounded overflow-hidden">
+                                                        <div
+                                                            className={isPos ? "h-full bg-emerald-400" : "h-full bg-red-400"}
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className={`col-span-3 text-right tabular-nums ${isPos ? "text-emerald-400" : "text-red-400"}`}>
+                                                        {isPos ? "+" : ""}{item.contribution.toFixed(4)}
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {prediction.tokens && prediction.tokens.length > 0 && (
                             <div className="space-y-1.5">

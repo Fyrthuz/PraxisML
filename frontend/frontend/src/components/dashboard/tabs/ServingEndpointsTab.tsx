@@ -163,6 +163,7 @@ export default function ServingEndpointsTab({
 
     // Live invocation console
     const [payloadJson, setPayloadJson] = useState("");
+    const [invokeExplain, setInvokeExplain] = useState(true);
     const [invoking, setInvoking] = useState(false);
     const [invokeResult, setInvokeResult] = useState<any>(null);
 
@@ -384,13 +385,17 @@ export default function ServingEndpointsTab({
         }
         setInvoking(true);
         try {
+            const payloadToSend =
+                parsed && typeof parsed === "object" && !Array.isArray(parsed)
+                    ? { ...parsed, explain: parsed.explain ?? invokeExplain }
+                    : { inputs: parsed, explain: invokeExplain };
             const res = await fetch(`${API}/serving/endpoints/${selected.slug}/invocations`, {
                 method: "POST",
                 headers: {
                     Authorization: `Bearer ${token}`,
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(parsed),
+                body: JSON.stringify(payloadToSend),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -932,22 +937,33 @@ export default function ServingEndpointsTab({
 
                             {/* Live Test Console */}
                             <div className="space-y-2">
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
                                     <label className="text-xs font-medium text-zinc-300">
                                         Test Invocation Payload (JSON)
                                     </label>
-                                    <button
-                                        onClick={handleInvoke}
-                                        disabled={invoking || selected.status !== "active"}
-                                        className="h-7 px-3 text-xs font-medium rounded-md bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-50 flex items-center gap-1.5"
-                                    >
-                                        {invoking ? (
-                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                        ) : (
-                                            <Send className="w-3 h-3" />
-                                        )}
-                                        Send Request
-                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 cursor-pointer select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={invokeExplain}
+                                                onChange={(e) => setInvokeExplain(e.target.checked)}
+                                                className="w-3.5 h-3.5 rounded border-zinc-700 bg-[#0b0c0f] accent-orange-500"
+                                            />
+                                            <span>Explainability (XAI)</span>
+                                        </label>
+                                        <button
+                                            onClick={handleInvoke}
+                                            disabled={invoking || selected.status !== "active"}
+                                            className="h-7 px-3 text-xs font-medium rounded-md bg-zinc-100 text-zinc-950 hover:bg-white disabled:opacity-50 flex items-center gap-1.5"
+                                        >
+                                            {invoking ? (
+                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                            ) : (
+                                                <Send className="w-3 h-3" />
+                                            )}
+                                            Send Request
+                                        </button>
+                                    </div>
                                 </div>
                                 <textarea
                                     rows={5}
@@ -956,9 +972,113 @@ export default function ServingEndpointsTab({
                                     className="w-full p-3 rounded-md bg-[#0b0c0f] border border-zinc-800 font-mono text-xs text-zinc-200 focus:outline-none focus:border-zinc-600"
                                 />
                                 {invokeResult && (
-                                    <pre className="p-3 rounded-md bg-[#0b0c0f] border border-zinc-800 font-mono text-xs text-emerald-300 overflow-x-auto max-h-48">
-                                        {JSON.stringify(invokeResult, null, 2)}
-                                    </pre>
+                                    <div className="space-y-2.5">
+                                        {Array.isArray(invokeResult.explanations) &&
+                                            invokeResult.explanations.length > 0 && (() => {
+                                                const exp = invokeResult.explanations[0];
+                                                // Tabular feature attributions
+                                                if (Array.isArray(exp.features) && exp.features.length > 0) {
+                                                    const feats = exp.features.slice(0, 8);
+                                                    const maxAbs = Math.max(
+                                                        ...feats.map((f: any) => Math.abs(Number(f.contribution || 0))),
+                                                        0.0001
+                                                    );
+                                                    return (
+                                                        <div className="p-3 rounded-md bg-[#0b0c0f] border border-zinc-800 space-y-2">
+                                                            <div className="flex items-center justify-between text-[11px] font-mono">
+                                                                <span className="text-zinc-300 font-semibold flex items-center gap-1.5">
+                                                                    <BarChart3 className="w-3.5 h-3.5 text-orange-400" />
+                                                                    SHAP Feature Contributions (Sample #1)
+                                                                </span>
+                                                                <span className="text-zinc-500">
+                                                                    {exp.method} · base={Number(exp.expected_value ?? 0).toFixed(3)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="space-y-1.5">
+                                                                {feats.map((f: any, i: number) => {
+                                                                    const c = Number(f.contribution || 0);
+                                                                    const isPos = c >= 0;
+                                                                    const pct = Math.min(100, (Math.abs(c) / maxAbs) * 100);
+                                                                    return (
+                                                                        <div
+                                                                            key={i}
+                                                                            className="grid grid-cols-12 items-center gap-2 text-[11px] font-mono"
+                                                                        >
+                                                                            <span className="col-span-4 truncate text-zinc-300" title={`${f.name} = ${f.value}`}>
+                                                                                {f.name}
+                                                                                <span className="text-zinc-500 ml-1">({f.value})</span>
+                                                                            </span>
+                                                                            <div className="col-span-6 h-1.5 rounded bg-zinc-900 overflow-hidden">
+                                                                                <div
+                                                                                    className={isPos ? "h-full bg-emerald-400" : "h-full bg-red-400"}
+                                                                                    style={{ width: `${pct}%` }}
+                                                                                />
+                                                                            </div>
+                                                                            <span
+                                                                                className={`col-span-2 text-right tabular-nums ${
+                                                                                    isPos ? "text-emerald-400" : "text-red-400"
+                                                                                }`}
+                                                                            >
+                                                                                {isPos ? "+" : ""}
+                                                                                {c.toFixed(4)}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                // NLP token attributions
+                                                if (Array.isArray(exp.tokens) && exp.tokens.length > 0) {
+                                                    const toks = exp.tokens;
+                                                    const maxAbs = Math.max(
+                                                        ...toks.map((t: any) => Math.abs(Number(t.contribution || 0))),
+                                                        0.0001
+                                                    );
+                                                    return (
+                                                        <div className="p-3 rounded-md bg-[#0b0c0f] border border-zinc-800 space-y-2">
+                                                            <div className="flex items-center justify-between text-[11px] font-mono">
+                                                                <span className="text-zinc-300 font-semibold flex items-center gap-1.5">
+                                                                    <BarChart3 className="w-3.5 h-3.5 text-orange-400" />
+                                                                    NLP Token Attribution ({exp.base_label})
+                                                                </span>
+                                                                <span className="text-zinc-500">{exp.method}</span>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-1.5">
+                                                                {toks.map((t: any, i: number) => {
+                                                                    const c = Number(t.contribution || 0);
+                                                                    const norm = Math.min(1, Math.abs(c) / maxAbs);
+                                                                    const isPos = c >= 0;
+                                                                    const alpha = (0.12 + norm * 0.45).toFixed(2);
+                                                                    return (
+                                                                        <span
+                                                                            key={i}
+                                                                            title={`Impact: ${isPos ? "+" : ""}${c.toFixed(4)}`}
+                                                                            className="px-1.5 py-0.5 rounded text-xs font-mono text-zinc-100 border"
+                                                                            style={{
+                                                                                backgroundColor: isPos
+                                                                                    ? `rgba(16, 185, 129, ${alpha})`
+                                                                                    : `rgba(239, 68, 68, ${alpha})`,
+                                                                                borderColor: isPos
+                                                                                    ? "rgba(16, 185, 129, 0.35)"
+                                                                                    : "rgba(239, 68, 68, 0.35)",
+                                                                            }}
+                                                                        >
+                                                                            {t.token}
+                                                                        </span>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        <pre className="p-3 rounded-md bg-[#0b0c0f] border border-zinc-800 font-mono text-xs text-emerald-300 overflow-x-auto max-h-48">
+                                            {JSON.stringify(invokeResult, null, 2)}
+                                        </pre>
+                                    </div>
                                 )}
                             </div>
 

@@ -72,7 +72,7 @@ export function usePredictions(
     }, [predictions, token, onPredictionComplete]);
 
     const runInference = useCallback(
-        async (batchFile?: File) => {
+        async (batchFile?: File, explain = false) => {
             if ((!selectedDataset && !batchFile) || !selectedModel || !token) return;
             setIsActionLoading(true);
             try {
@@ -83,6 +83,7 @@ export function usePredictions(
                     formData.append("file", batchFile);
                     formData.append("model_id", selectedModel);
                     formData.append("uncertainty_method", uncertaintyMethod);
+                    formData.append("explain", String(explain));
                     res = await fetch(`${API}/tabular/predictions/predict/batch`, {
                         method: "POST",
                         headers: { Authorization: `Bearer ${token}` },
@@ -99,6 +100,7 @@ export function usePredictions(
                             dataset_id: selectedDataset,
                             model_id: selectedModel,
                             uncertainty_method: uncertaintyMethod,
+                            explain,
                         }),
                     });
                 }

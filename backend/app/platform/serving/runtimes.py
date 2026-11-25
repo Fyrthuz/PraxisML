@@ -85,8 +85,9 @@ class ModelRuntime(ABC):
         ml_model: MLModel,
         inputs: Union[Dict[str, Any], List[Dict[str, Any]], List[str]],
         pipeline_path: Optional[str] = None,
+        explain: bool = False,
     ) -> Dict[str, Any]:
-        """Devuelve {'predictions': [...], 'probabilities': [...] | None, 'count': int}."""
+        """Devuelve {'predictions': [...], 'probabilities': [...] | None, 'count': int, 'explanations'?: [...]}."""
         ...
 
 
@@ -105,6 +106,7 @@ class NLPRuntime(ModelRuntime):
         ml_model: MLModel,
         inputs: Union[Dict[str, Any], List[Dict[str, Any]], List[str]],
         pipeline_path: Optional[str] = None,
+        explain: bool = False,
     ) -> Dict[str, Any]:
         from app.services.nlp_inference import get_nlp_inference_service
 
@@ -124,10 +126,22 @@ class NLPRuntime(ModelRuntime):
         handle = svc.load_model(ml_model)
         results = [svc.predict(handle, text) for text in texts]
         probabilities = [r.get("confidence") for r in results if r.get("confidence") is not None]
+        explanations = None
+        if explain:
+            try:
+                from app.core_ml.explainability import explain_nlp_text
+
+                explanations = [
+                    explain_nlp_text(svc, handle, text, res)
+                    for text, res in zip(texts[:5], results[:5])
+                ]
+            except Exception as exc:
+                logger.warning("NLP serving explainability skipped: %s", exc)
         return {
             "predictions": results,
             "probabilities": probabilities or None,
             "count": len(results),
+            "explanations": explanations,
         }
 
 
@@ -144,6 +158,7 @@ class TabularMLRuntime(ModelRuntime):
         ml_model: MLModel,
         inputs: Union[Dict[str, Any], List[Dict[str, Any]], List[str]],
         pipeline_path: Optional[str] = None,
+        explain: bool = False,
     ) -> Dict[str, Any]:
         rows = [inputs] if isinstance(inputs, dict) else list(inputs)
         if not rows or not all(isinstance(r, dict) for r in rows):
@@ -154,6 +169,23 @@ class TabularMLRuntime(ModelRuntime):
         inference_svc = get_inference_service()
         loaded_model = inference_svc.load_model(ml_model)
         df = prepare_tabular_dataframe(rows, ml_model, pipeline_path)
+        task_type = (ml_model.metrics_metadata or {}).get("task_type") or "classification"
+
+        def _maybe_explain() -> Optional[List[Dict[str, Any]]]:
+            if not explain:
+                return None
+            try:
+                from app.core_ml.explainability import explain_tabular_fast
+
+                return explain_tabular_fast(
+                    loaded_model,
+                    df,
+                    feature_names=list(df.columns),
+                    task_type=task_type,
+                )
+            except Exception as exc:
+                logger.warning("Tabular serving explainability skipped: %s", exc)
+                return None
 
         # PyTorch nn.Module / TorchScript
         try:
@@ -182,6 +214,7 @@ class TabularMLRuntime(ModelRuntime):
                     "predictions": preds,
                     "probabilities": probabilities,
                     "count": len(rows),
+                    "explanations": _maybe_explain(),
                 }
         except ImportError:
             pass
@@ -203,6 +236,7 @@ class TabularMLRuntime(ModelRuntime):
             "predictions": preds,
             "probabilities": probabilities,
             "count": len(rows),
+            "explanations": _maybe_explain(),
         }
 
 
@@ -220,6 +254,7 @@ class MLflowPyFuncRuntime(ModelRuntime):
         ml_model: MLModel,
         inputs: Union[Dict[str, Any], List[Dict[str, Any]], List[str]],
         pipeline_path: Optional[str] = None,
+        explain: bool = False,
     ) -> Dict[str, Any]:
         import mlflow.pyfunc
         from app.services.mlflow_service import MLFlowService

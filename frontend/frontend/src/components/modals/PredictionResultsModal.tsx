@@ -36,7 +36,7 @@ export default function PredictionResultsModal({
         if (!token) return;
         setLoading(true);
         setError(null);
-        fetch(config.getFullApiUrl(`/predictions/${prediction.id}/data`), {
+        fetch(config.getFullApiUrl(`/tabular/predictions/${prediction.id}/data`), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((res) => {
@@ -301,37 +301,47 @@ export default function PredictionResultsModal({
                         <div className="space-y-4">
                             {renderTable()}
                             
-                            {/* Botón para mostrar explicabilidad */}
-                            {prediction.explain && (
-                                <div className="flex justify-center">
-                                    <Button
-                                        variant="outline"
-                                        onClick={() => setShowExplain(!showExplain)}
-                                        className="bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700 rounded-xl px-6"
-                                    >
-                                        <BarChart3 className="w-4 h-4 mr-2" />
-                                        {showExplain ? 'Ocultar Explicabilidad' : 'Mostrar Explicabilidad (SHAP)'}
-                                    </Button>
-                                </div>
-                            )}
+                            {/* Botón para mostrar explicabilidad SHAP (precomputada u on-demand) */}
+                            <div className="flex justify-center">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowExplain(!showExplain)}
+                                    className="bg-[#101217] border-zinc-700 text-zinc-200 hover:bg-zinc-800 rounded-lg px-5 text-xs"
+                                >
+                                    <BarChart3 className="w-4 h-4 mr-2 text-orange-400" />
+                                    {showExplain ? 'Hide SHAP Explainability' : 'Show SHAP Explainability'}
+                                </Button>
+                            </div>
                             
                             {/* Panel de explicabilidad */}
                             {showExplain && (
                                 <div className="mt-4">
                                     {loadingShap ? (
                                         <div className="flex items-center justify-center py-8">
-                                            <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+                                            <Loader2 className="w-6 h-6 animate-spin text-orange-400" />
                                         </div>
                                     ) : shapData ? (
                                         <ExplainabilityPanel
-                                            shapValues={shapData.shap_values}
+                                            shapValues={
+                                                Array.isArray(shapData.shap_values?.[0])
+                                                    ? (shapData.shap_values[0] as unknown as number[])
+                                                    : shapData.shap_values
+                                            }
                                             featureNames={shapData.feature_names}
-                                            expectedValue={shapData.expected_value}
-                                            prediction={data?.prediction?.[0]?.[0] || 0}
+                                            expectedValue={
+                                                Array.isArray(shapData.expected_value)
+                                                    ? Number(shapData.expected_value[0] ?? 0)
+                                                    : Number(shapData.expected_value ?? 0)
+                                            }
+                                            prediction={Number(
+                                                Array.isArray(data?.prediction?.[0])
+                                                    ? data?.prediction?.[0]?.[0]
+                                                    : data?.prediction?.[0] ?? 0
+                                            )}
                                         />
                                     ) : (
-                                        <div className="text-center text-neutral-500 py-8">
-                                            No se pudieron cargar los datos de explicabilidad
+                                        <div className="text-center text-zinc-500 text-xs py-6">
+                                            No SHAP attributions available for this prediction.
                                         </div>
                                     )}
                                 </div>

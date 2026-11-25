@@ -88,14 +88,14 @@ export function useNLP(token: string | null) {
 
     // ── Inference ─────────────────────────────────────────────────────────
     const predictNLP = useCallback(
-        async (modelId: string, text: string) => {
+        async (modelId: string, text: string, explain = false) => {
             if (!token) return;
             setIsPredicting(true);
             try {
                 const res = await fetch(`${API}/predict`, {
                     method: "POST",
                     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({ model_id: modelId, text }),
+                    body: JSON.stringify({ model_id: modelId, text, explain }),
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.detail || "Error en la predicción");

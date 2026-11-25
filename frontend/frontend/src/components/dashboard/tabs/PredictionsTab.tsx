@@ -21,7 +21,7 @@ interface PredictionsTabProps {
     uncertaintyMethod: string;
     setUncertaintyMethod: (val: string) => void;
     isActionLoading: boolean;
-    handleRunInference: (batchFile?: File) => void;
+    handleRunInference: (batchFile?: File, explain?: boolean) => void;
 }
 
 export default function PredictionsTab({
@@ -41,6 +41,7 @@ export default function PredictionsTab({
     handleRunInference
 }: PredictionsTabProps) {
     const [batchFile, setBatchFile] = React.useState<File | null>(null);
+    const [batchExplain, setBatchExplain] = React.useState<boolean>(true);
     const tabularModels = React.useMemo(
         () => models.filter((m) => getModelCompatibilityProfile(m).domain === 'tabular'),
         [models]
@@ -215,6 +216,18 @@ export default function PredictionsTab({
                                 <option value="conformal">Conformal Prediction</option>
                             </select>
                         </div>
+                        <label className="flex items-center gap-2.5 pt-1 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={batchExplain}
+                                onChange={(e) => setBatchExplain(e.target.checked)}
+                                className="w-3.5 h-3.5 rounded border-zinc-700 bg-[#0b0c0f] accent-orange-500"
+                            />
+                            <span className="text-xs text-zinc-300">
+                                Include SHAP Explainability
+                                <span className="text-[11px] text-zinc-500 ml-1">(feature attributions)</span>
+                            </span>
+                        </label>
                     </div>
                 </div>
 
@@ -222,7 +235,7 @@ export default function PredictionsTab({
                     type="button"
                     className="w-full h-10 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2 transition-colors"
                     disabled={(!selectedDataset && !batchFile) || !selectedModel || isActionLoading}
-                    onClick={() => handleRunInference(batchFile || undefined)}
+                    onClick={() => handleRunInference(batchFile || undefined, batchExplain)}
                 >
                     {isActionLoading ? (
                         <><Loader2 className="w-4 h-4 animate-spin" /> Processing Batch...</>

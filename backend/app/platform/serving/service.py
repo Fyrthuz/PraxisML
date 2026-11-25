@@ -56,6 +56,7 @@ def invoke_model_endpoint(
     endpoint: ModelEndpoint,
     inputs: Union[Dict[str, Any], List[Dict[str, Any]], List[str]],
     db: Session,
+    explain: bool = False,
 ) -> Dict[str, Any]:
     """Ejecuta una invocación síncrona contra un ModelEndpoint y persiste métricas y log."""
     start = time.perf_counter()
@@ -67,11 +68,19 @@ def invoke_model_endpoint(
             endpoint.preprocessing_pipeline_path
             or target_model.preprocessing_pipeline_path
         )
-        output = runtime.predict(
-            ml_model=target_model,
-            inputs=inputs,
-            pipeline_path=pipeline_path,
-        )
+        try:
+            output = runtime.predict(
+                ml_model=target_model,
+                inputs=inputs,
+                pipeline_path=pipeline_path,
+                explain=explain,
+            )
+        except TypeError:
+            output = runtime.predict(
+                ml_model=target_model,
+                inputs=inputs,
+                pipeline_path=pipeline_path,
+            )
         count = output["count"]
 
         latency_ms = round((time.perf_counter() - start) * 1000.0, 2)
@@ -153,7 +162,7 @@ def invoke_model_endpoint(
             source="serving",
         )
 
-        return {
+        resp_payload: Dict[str, Any] = {
             "endpoint_id": endpoint.id,
             "endpoint_slug": endpoint.slug,
             "model_id": target_model.id,
@@ -166,6 +175,9 @@ def invoke_model_endpoint(
             "predictions": output["predictions"],
             "probabilities": output["probabilities"],
         }
+        if output.get("explanations") is not None:
+            resp_payload["explanations"] = output["explanations"]
+        return resp_payload
     except Exception as exc:
         latency_ms = round((time.perf_counter() - start) * 1000.0, 2)
         endpoint.error_count = (endpoint.error_count or 0) + 1

@@ -20,6 +20,7 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
     const [isUploading, setIsUploading] = useState(false);
     const [selectedModel, setSelectedModel] = useState<string>(tabularModels.length > 0 ? tabularModels[0].id : '');
     const [uncertaintyMethod, setUncertaintyMethod] = useState('none');
+    const [explain, setExplain] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -46,6 +47,7 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
             formData.append('model_id', selectedModel);
             formData.append('uncertainty_method', uncertaintyMethod);
             formData.append('features', JSON.stringify(featureValues));
+            formData.append('explain', String(explain));
 
             const res = await fetch(config.getFullApiUrl('/tabular/predictions/predict/single'), {
                 method: 'POST',
@@ -128,6 +130,18 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
                             </select>
                         </div>
                     </div>
+
+                    <label className="flex items-center gap-2.5 px-1 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={explain}
+                            onChange={(e) => setExplain(e.target.checked)}
+                            className="w-4 h-4 rounded border-neutral-700 bg-black/40 accent-orange-500"
+                        />
+                        <span className="text-xs text-neutral-300">
+                            Include SHAP Explainability
+                        </span>
+                    </label>
 
                     <Button
                         className="w-full h-14 bg-zinc-100 hover:bg-white text-zinc-950 font-medium rounded-2xl font-bold mt-4 shadow-lg  transition-all hover:scale-[1.02] active:scale-[0.98]"

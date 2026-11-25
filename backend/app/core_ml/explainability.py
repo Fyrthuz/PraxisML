@@ -193,3 +193,251 @@ def explain_prediction(
     except Exception as e:
         logger.error(f"Error explicando predicción: {e}")
         raise
+
+
+def _extract_1d_shap(raw_sv: Any, row_idx: int = 0) -> List[float]:
+    """Normaliza la salida de SHAP (1D, 2D o 3D multiclase) a un vector 1D por fila."""
+    if isinstance(raw_sv, list):
+        # Lista por clase (clasificación binaria/multiclase): usar clase positiva (índice 1 si existe)
+        chosen = raw_sv[1] if len(raw_sv) > 1 else raw_sv[0]
+        arr = np.asarray(chosen)
+    else:
+        arr = np.asarray(raw_sv)
+
+    if arr.ndim == 3:
+        # (n_samples, n_features, n_classes)
+        class_idx = 1 if arr.shape[2] > 1 else 0
+        vec = arr[row_idx, :, class_idx]
+    elif arr.ndim == 2:
+        vec = arr[row_idx]
+    else:
+        vec = arr
+    return [round(float(v), 6) for v in vec]
+
+
+def _extract_expected_scalar(expected: Any) -> float:
+    if expected is None:
+        return 0.0
+    arr = np.asarray(expected).ravel()
+    if arr.size == 0:
+        return 0.0
+    return round(float(arr[1] if arr.size > 1 else arr[0]), 6)
+
+
+def explain_tabular_fast(
+    model: Any,
+    data: Union[np.ndarray, pd.DataFrame],
+    feature_names: Optional[List[str]] = None,
+    task_type: str = "classification",
+    max_rows: int = 5,
+) -> List[Dict[str, Any]]:
+    """
+    Explicabilidad tabular rápida y compatible con inferencia online (1 o más filas).
+
+    Prioridad:
+      1. `shap.TreeExplainer` para modelos basados en árboles (exacto, ~3 ms incluso con 1 fila).
+      2. Atribución lineal exacta (`coef_ * x`) para modelos lineales.
+      3. Perturbación por feature (`f(x) - f(x_i=0)`) como fallback universal sin background trap.
+    """
+    if isinstance(data, pd.DataFrame):
+        if feature_names is None:
+            feature_names = [str(c) for c in data.columns.tolist()]
+        X_df = data.iloc[:max_rows].copy()
+        for col in X_df.select_dtypes(["object", "category"]).columns:
+            X_df[col] = X_df[col].astype("category").cat.codes
+        X_np = X_df.to_numpy(dtype=np.float32)
+    else:
+        X_np = np.asarray(data, dtype=np.float32)
+        if X_np.ndim == 1:
+            X_np = X_np.reshape(1, -1)
+        X_np = X_np[:max_rows]
+        if feature_names is None:
+            feature_names = [f"feature_{i}" for i in range(X_np.shape[1])]
+
+    n_rows, n_feats = X_np.shape
+    names = list(feature_names)[:n_feats] + [
+        f"feature_{i}" for i in range(len(feature_names), n_feats)
+    ]
+
+    # 1. TreeExplainer (RandomForest, GradientBoosting, DecisionTree, XGBoost, LightGBM...)
+    try:
+        is_tree = any(
+            hasattr(model, attr)
+            for attr in ("tree_", "estimators_", "get_booster", "booster_")
+        )
+        if is_tree:
+            explainer = shap.TreeExplainer(model)
+            raw_sv = explainer.shap_values(X_np)
+            expected = _extract_expected_scalar(explainer.expected_value)
+            out: List[Dict[str, Any]] = []
+            for r in range(n_rows):
+                contribs = _extract_1d_shap(raw_sv, r)
+                feats = sorted(
+                    [
+                        {
+                            "name": names[i],
+                            "value": round(float(X_np[r, i]), 6),
+                            "contribution": contribs[i],
+                        }
+                        for i in range(n_feats)
+                    ],
+                    key=lambda item: abs(item["contribution"]),
+                    reverse=True,
+                )
+                out.append(
+                    {
+                        "method": "shap_tree",
+                        "expected_value": expected,
+                        "shap_values": contribs,
+                        "feature_names": names,
+                        "features": feats,
+                    }
+                )
+            return out
+    except Exception as exc:
+        logger.debug("TreeExplainer fallback (%s)", exc)
+
+    # 2. Modelos lineales con coef_
+    if hasattr(model, "coef_"):
+        try:
+            coef = np.asarray(model.coef_, dtype=np.float64)
+            if coef.ndim > 1:
+                coef = coef[0]
+            intercept = _extract_expected_scalar(getattr(model, "intercept_", 0.0))
+            out = []
+            for r in range(n_rows):
+                contribs = [round(float(coef[i] * X_np[r, i]), 6) for i in range(n_feats)]
+                feats = sorted(
+                    [
+                        {
+                            "name": names[i],
+                            "value": round(float(X_np[r, i]), 6),
+                            "contribution": contribs[i],
+                        }
+                        for i in range(n_feats)
+                    ],
+                    key=lambda item: abs(item["contribution"]),
+                    reverse=True,
+                )
+                out.append(
+                    {
+                        "method": "linear_attribution",
+                        "expected_value": intercept,
+                        "shap_values": contribs,
+                        "feature_names": names,
+                        "features": feats,
+                    }
+                )
+            return out
+        except Exception as exc:
+            logger.debug("Linear attribution fallback (%s)", exc)
+
+    # 3. Fallback universal: perturbación por oclusión (f(x) - f(x con feature=0))
+    def _score_row(arr_2d: np.ndarray) -> float:
+        try:
+            import torch
+
+            if isinstance(model, torch.nn.Module):
+                with torch.no_grad():
+                    out_t = model(torch.from_numpy(arr_2d).float())
+                    if isinstance(out_t, (tuple, list)):
+                        out_t = out_t[0]
+                    vals = out_t.detach().cpu().numpy().ravel()
+                    return float(vals[1] if vals.size > 1 else vals[0])
+        except Exception:
+            pass
+        if task_type == "classification" and hasattr(model, "predict_proba"):
+            probs = np.asarray(model.predict_proba(arr_2d)).ravel()
+            return float(probs[1] if probs.size > 1 else probs[0])
+        pred = np.asarray(model.predict(arr_2d)).ravel()
+        return float(pred[0])
+
+    out = []
+    zero_baseline = _score_row(np.zeros((1, n_feats), dtype=np.float32))
+    for r in range(n_rows):
+        row = X_np[r : r + 1]
+        base_score = _score_row(row)
+        contribs = []
+        for i in range(n_feats):
+            perturbed = row.copy()
+            perturbed[0, i] = 0.0
+            delta = base_score - _score_row(perturbed)
+            contribs.append(round(float(delta), 6))
+        feats = sorted(
+            [
+                {
+                    "name": names[i],
+                    "value": round(float(X_np[r, i]), 6),
+                    "contribution": contribs[i],
+                }
+                for i in range(n_feats)
+            ],
+            key=lambda item: abs(item["contribution"]),
+            reverse=True,
+        )
+        out.append(
+            {
+                "method": "feature_perturbation",
+                "expected_value": round(zero_baseline, 6),
+                "shap_values": contribs,
+                "feature_names": names,
+                "features": feats,
+            }
+        )
+    return out
+
+
+def explain_nlp_text(
+    service: Any,
+    handle: Dict[str, Any],
+    text: str,
+    base_result: Dict[str, Any],
+    max_words: int = 16,
+) -> Dict[str, Any]:
+    """
+    Explicabilidad NLP por oclusión de palabras (leave-one-out).
+    Mide cuánto cae la confianza de la clase predicha al omitir cada palabra.
+    """
+    words = [w for w in str(text).split() if w.strip()]
+    base_label = base_result.get("label")
+    base_conf = float(base_result.get("confidence") or 0.0)
+    if not words or base_label is None:
+        return {
+            "method": "token_occlusion",
+            "base_label": base_label,
+            "base_confidence": round(base_conf, 6),
+            "tokens": [],
+        }
+
+    step = max(1, len(words) // max_words) if len(words) > max_words else 1
+    eval_indices = list(range(0, len(words), step))[:max_words]
+    token_scores: List[Dict[str, Any]] = []
+
+    for idx in eval_indices:
+        reduced = " ".join(w for j, w in enumerate(words) if j != idx).strip()
+        if not reduced:
+            contrib = base_conf
+        else:
+            res_occ = service.predict(handle, reduced)
+            occ_conf = float(res_occ.get("confidence") or 0.0)
+            if res_occ.get("label") == base_label:
+                contrib = base_conf - occ_conf
+            else:
+                # Si quitar la palabra invierte la predicción, su contribución es fuertemente positiva
+                contrib = base_conf + occ_conf * 0.5
+        token_scores.append(
+            {
+                "token": words[idx],
+                "position": idx,
+                "contribution": round(float(contrib), 6),
+            }
+        )
+
+    ranked = sorted(token_scores, key=lambda t: abs(t["contribution"]), reverse=True)
+    return {
+        "method": "token_occlusion",
+        "base_label": base_label,
+        "base_confidence": round(base_conf, 6),
+        "tokens": token_scores,
+        "top_tokens": ranked[:8],
+    }

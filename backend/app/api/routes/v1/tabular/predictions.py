@@ -77,6 +77,7 @@ class PredictionRequest(BaseModel):
     dataset_id: str
     model_id: str
     uncertainty_method: str = "mc_dropout"
+    explain: bool = False
 
 
 @router.post("/predict", status_code=status.HTTP_202_ACCEPTED)
@@ -129,6 +130,7 @@ def request_prediction(
         model_id=req.model_id,
         method=req.uncertainty_method,
         prediction_id=prediction.id,
+        explain=req.explain,
     )
 
     # Guardar el task_id de Celery en el registro
@@ -214,6 +216,7 @@ def request_batch_prediction(
     request: Request,
     model_id: str = Form(...),
     uncertainty_method: str = Form("none"),
+    explain: bool = Form(False),
     file: UploadFile = File(...),
     _user: User = Depends(require_editor),
     tenant: Tenant = Depends(check_prediction_quota),
@@ -256,7 +259,8 @@ def request_batch_prediction(
         model_id=model_id,
         method=uncertainty_method,
         prediction_id=prediction.id,
-        input_file_path=file_path,  # Nuevo argumento para la tarea
+        input_file_path=file_path,
+        explain=explain,
     )
 
     prediction.task_id = task.id
@@ -541,14 +545,20 @@ def get_prediction_explainability(
             detail=f"Explicabilidad disponible solo en predicciones COMPLETED (actual: {prediction.status}).",
         )
 
-    # 1. Intentar artefacto SHAP guardado en storage
-    shap_key = f"{tenant.id}/predictions/{prediction_id}/shap.json"
-    try:
-        if storage.exists(shap_key):
-            data = _json.loads(storage.download(shap_key).decode("utf-8"))
-            return {"prediction_id": prediction_id, **data}
-    except Exception as exc:
-        logger.debug("No hay SHAP precomputado para %s: %s", prediction_id, exc)
+    # 1. Intentar artefacto SHAP guardado en storage (ambos prefijos: nuevo y legacy)
+    from app.services.storage_service import StorageKeyBuilder
+
+    candidate_keys = [
+        StorageKeyBuilder.prediction_output(tenant.id, prediction_id, "shap.json"),
+        f"{tenant.id}/predictions/{prediction_id}/shap.json",
+    ]
+    for shap_key in candidate_keys:
+        try:
+            if storage.exists(shap_key):
+                data = _json.loads(storage.download(shap_key).decode("utf-8"))
+                return {"prediction_id": prediction_id, **data}
+        except Exception as exc:
+            logger.debug("No hay SHAP precomputado en %s: %s", shap_key, exc)
 
     # 2. Fallback: calcular sobre input_data tabular guardado si existe modelo
     ml_model = db.query(MLModel).filter(MLModel.id == prediction.model_id).first()
@@ -561,21 +571,29 @@ def get_prediction_explainability(
         and prediction.input_image_path.endswith(".npy")
     ):
         try:
-            from app.core_ml.explainability import get_shap_values
+            from app.core_ml.explainability import explain_tabular_fast
             from app.services.inference_service import InferenceService
 
             arr = np.load(prediction.input_image_path)
             if arr.ndim == 1:
                 arr = arr.reshape(1, -1)
             loaded = InferenceService().load_model(ml_model)
-            shap_res = get_shap_values(
-                loaded, arr, feature_names=feature_names or [f"f_{i}" for i in range(arr.shape[1])]
+            task_type = (ml_model.metrics_metadata or {}).get("task_type") or "classification"
+            exps = explain_tabular_fast(
+                loaded,
+                arr,
+                feature_names=feature_names or [f"f_{i}" for i in range(arr.shape[1])],
+                task_type=task_type,
+                max_rows=1,
             )
+            first = exps[0] if exps else {}
             return {
                 "prediction_id": prediction_id,
-                "shap_values": shap_res.get("shap_values", []),
-                "expected_value": shap_res.get("expected_value", 0.0),
-                "feature_names": shap_res.get("feature_names", feature_names),
+                "method": first.get("method", "shap"),
+                "shap_values": first.get("shap_values", []),
+                "expected_value": first.get("expected_value", 0.0),
+                "feature_names": first.get("feature_names", feature_names),
+                "features": first.get("features", []),
             }
         except Exception as exc:
             logger.warning("SHAP on-the-fly falló para %s: %s", prediction_id, exc)

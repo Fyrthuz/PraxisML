@@ -707,6 +707,13 @@ export interface NLPPrediction {
     entities: { entity: string; label: string }[];
     tokens: string[];
     latency_ms: number;
+    explanation?: {
+        method: string;
+        base_label?: string | null;
+        base_confidence?: number;
+        tokens: { token: string; position?: number; contribution: number }[];
+        top_tokens?: { token: string; position?: number; contribution: number }[];
+    } | null;
 }
 
 export interface EmbeddingResponse {

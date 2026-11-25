@@ -51,6 +51,7 @@ router = APIRouter()
 class PredictRequest(BaseModel):
     model_id: str
     text: str
+    explain: bool = False
 
 
 class PredictResponse(BaseModel):
@@ -59,6 +60,7 @@ class PredictResponse(BaseModel):
     entities: list = []
     tokens: list = []
     latency_ms: float = 0.0
+    explanation: Optional[dict] = None
 
 
 _NLP_TASK_TYPES = {"text_classification", "token_classification", "sentiment_analysis", "ner"}
@@ -117,6 +119,14 @@ def predict_nlp(
     service = get_nlp_inference_service()
     handle = service.load_model(ml_model)
     result = service.predict(handle, req.text)
+
+    if req.explain:
+        try:
+            from app.core_ml.explainability import explain_nlp_text
+
+            result["explanation"] = explain_nlp_text(service, handle, req.text, result)
+        except Exception as exc:
+            logger.warning("NLP explainability skipped: %s", exc)
 
     try:
         tokens_in = len(result.get("tokens", []))

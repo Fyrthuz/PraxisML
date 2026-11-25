@@ -89,21 +89,39 @@ def run_single_tabular_inference(
         result_dict = estimator.estimate_uncertainty(input_data)
         inference_time_s = time.perf_counter() - t_start
 
-        # 5. Calcular SHAP values si se solicita
+        # 5. Calcular y persistir SHAP values si se solicita
         if explain:
-            from app.core_ml.explainability import get_shap_values
+            import json as _json
+
+            from app.core_ml.explainability import explain_tabular_fast
+            from app.services.storage_service import StorageKeyBuilder, get_storage
 
             try:
-                feature_names = ml_model.metrics_metadata.get("feature_names", [])
+                feature_names = (ml_model.metrics_metadata or {}).get("feature_names", [])
                 if not feature_names:
                     feature_names = [f"feature_{i}" for i in range(input_data.shape[1])]
+                task_type = (ml_model.metrics_metadata or {}).get("task_type") or "classification"
 
-                shap_result = get_shap_values(model, input_data, feature_names)
-                result_dict["shap_values"] = shap_result["shap_values"]
-                result_dict["shap_expected_value"] = shap_result["expected_value"]
-                result_dict["feature_names"] = feature_names
+                exps = explain_tabular_fast(
+                    model, input_data, feature_names=feature_names, task_type=task_type, max_rows=1
+                )
+                if exps:
+                    first = exps[0]
+                    shap_payload = {
+                        "method": first.get("method", "shap"),
+                        "shap_values": first.get("shap_values", []),
+                        "expected_value": first.get("expected_value", 0.0),
+                        "feature_names": first.get("feature_names", feature_names),
+                        "features": first.get("features", []),
+                    }
+                    shap_key = StorageKeyBuilder.prediction_output(tenant_id, prediction_id, "shap.json")
+                    get_storage().upload(
+                        shap_key,
+                        _json.dumps(shap_payload).encode("utf-8"),
+                        content_type="application/json",
+                    )
             except Exception as e:
-                logger.warning(f"No se pudieron calcular SHAP values: {e}")
+                logger.warning(f"No se pudieron calcular/guardar SHAP values: {e}")
 
         # 6. Guardar predicciones numpy
         out_dir = Path(settings.DATA_DIR) / "tenants" / tenant_id / "predictions"

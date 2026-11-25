@@ -29,7 +29,8 @@ def run_heavy_inference(
     model_id: str,
     method: str,
     prediction_id: str,
-    input_file_path: str = None,  # Soporta subida directa de archivo
+    input_file_path: str = None,
+    explain: bool = False,
 ) -> dict:
     """
     Tarea pesada que NO bloquea la API FastAPI.
@@ -174,6 +175,42 @@ def run_heavy_inference(
         np.save(result_path, pred_array)
         np.save(uncertainty_path, unc_array)
         np.save(input_data_path, input_data)
+
+        # ── 5b. Calcular y guardar SHAP values si se solicita ───────────────
+        if explain:
+            import json as _json
+
+            from app.core_ml.explainability import explain_tabular_fast
+            from app.services.storage_service import StorageKeyBuilder
+
+            try:
+                feature_names = (ml_model.metrics_metadata or {}).get("feature_names", [])
+                task_type = (ml_model.metrics_metadata or {}).get("task_type") or "classification"
+                exps = explain_tabular_fast(
+                    model,
+                    input_data,
+                    feature_names=feature_names or None,
+                    task_type=task_type,
+                    max_rows=5,
+                )
+                if exps:
+                    first = exps[0]
+                    shap_payload = {
+                        "method": first.get("method", "shap"),
+                        "shap_values": first.get("shap_values", []),
+                        "expected_value": first.get("expected_value", 0.0),
+                        "feature_names": first.get("feature_names", feature_names),
+                        "features": first.get("features", []),
+                        "rows": exps,
+                    }
+                    shap_key = StorageKeyBuilder.prediction_output(tenant_id, prediction_id, "shap.json")
+                    storage.upload(
+                        shap_key,
+                        _json.dumps(shap_payload).encode("utf-8"),
+                        content_type="application/json",
+                    )
+            except Exception as shap_exc:
+                logger.warning("SHAP batch computation failed (non-critical): %s", shap_exc)
 
         # ── 6. Loguear run de inferencia en MLFlow (Si no es TorchScript local) ─────────
         self.update_state(state="PROGRESS", meta={"status": "Registrando en MLFlow..."})

@@ -122,3 +122,41 @@ class TestCrossDomainModelGuards:
             metrics_metadata={"domain": "nlp", "framework": "huggingface", "task_type": "text_classification"},
         )
         assert _get_nlp_model(self._mock_db(nlp_model), "m-nlp", "t1") is nlp_model
+
+
+class TestFastExplainability:
+    def test_explain_tabular_fast_tree_model(self):
+        import numpy as np
+        import pandas as pd
+        from sklearn.ensemble import RandomForestClassifier
+
+        from app.core_ml.explainability import explain_tabular_fast
+
+        rng = np.random.default_rng(42)
+        X = pd.DataFrame({"age": rng.normal(30, 10, 40), "fare": rng.normal(50, 20, 40)})
+        y = (X["fare"] > 50).astype(int)
+        clf = RandomForestClassifier(n_estimators=10, random_state=42).fit(X, y)
+
+        res = explain_tabular_fast(clf, X.iloc[:1], feature_names=["age", "fare"])
+        assert len(res) == 1
+        assert res[0]["method"] == "shap_tree"
+        assert len(res[0]["shap_values"]) == 2
+        assert len(res[0]["features"]) == 2
+        assert res[0]["features"][0]["name"] in {"age", "fare"}
+
+    def test_explain_nlp_text_occlusion(self):
+        from app.core_ml.explainability import explain_nlp_text
+
+        class DummyNLPService:
+            def predict(self, handle, text):
+                score = 0.9 if "great" in text else 0.35
+                return {"label": "positive" if score > 0.5 else "negative", "confidence": score}
+
+        svc = DummyNLPService()
+        base = svc.predict({}, "great product overall")
+        exp = explain_nlp_text(svc, {}, "great product overall", base)
+        assert exp["method"] == "token_occlusion"
+        assert len(exp["tokens"]) == 3
+        top_token = exp["top_tokens"][0]["token"]
+        assert top_token == "great"
+        assert exp["top_tokens"][0]["contribution"] > 0

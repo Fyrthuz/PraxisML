@@ -58,6 +58,7 @@ class EndpointUpdate(BaseModel):
 
 class EndpointInvokeRequest(BaseModel):
     inputs: Union[Dict[str, Any], List[Dict[str, Any]], List[str]]
+    explain: bool = False
 
 
 def _slugify(value: str) -> str:
@@ -588,7 +589,7 @@ def _handle_invocation(
         )
 
     try:
-        return invoke_model_endpoint(ep, body.inputs, db)
+        return invoke_model_endpoint(ep, body.inputs, db, explain=body.explain)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
