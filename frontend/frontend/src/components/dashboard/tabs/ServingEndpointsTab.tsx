@@ -21,6 +21,7 @@ import {
 import toast from "react-hot-toast";
 import { Dataset, MLModel } from "@/lib/api";
 import { config } from "@/lib/config";
+import { areModelsCompatible } from "@/lib/modelCompatibility";
 
 interface ModelEndpoint {
     id: string;
@@ -541,7 +542,11 @@ export default function ServingEndpointsTab({
                             >
                                 <option value="">None (100% primary)</option>
                                 {models
-                                    .filter((m) => m.id !== modelId)
+                                    .filter((m) => {
+                                        if (m.id === modelId) return false;
+                                        const primary = models.find((pm) => pm.id === modelId);
+                                        return primary ? areModelsCompatible(primary, m) : true;
+                                    })
                                     .map((m) => (
                                         <option key={m.id} value={m.id}>
                                             {m.name} (v{m.version || "1.0.0"})

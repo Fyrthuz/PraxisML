@@ -136,6 +136,24 @@ def list_endpoints(
     return {"total": len(items), "items": [_serialize_endpoint(ep, db) for ep in items]}
 
 
+def _model_compat_key(m: MLModel) -> tuple[str, str]:
+    meta = m.metrics_metadata or {}
+    fw = str(meta.get("framework") or "").lower()
+    dom = str(meta.get("domain") or "").lower() or (
+        "nlp" if fw in {"huggingface", "onnx_nlp"} else "tabular"
+    )
+    raw_task = str(meta.get("task_type") or "").lower()
+    if "token" in raw_task or raw_task == "ner":
+        task = "token_classification"
+    elif "class" in raw_task or "sentiment" in raw_task:
+        task = "classification"
+    elif "regress" in raw_task:
+        task = "regression"
+    else:
+        task = raw_task or "general"
+    return (dom, task)
+
+
 @router.post("/endpoints", status_code=201)
 def create_endpoint(
     body: EndpointCreate,
@@ -160,6 +178,15 @@ def create_endpoint(
         )
         if not secondary:
             raise HTTPException(status_code=404, detail="Modelo secundario (canary) no encontrado.")
+        p_key, s_key = _model_compat_key(primary), _model_compat_key(secondary)
+        if p_key != s_key:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Modelo canary incompatible ({s_key[0]}/{s_key[1]}) "
+                    f"con el modelo principal ({p_key[0]}/{p_key[1]})."
+                ),
+            )
 
     base_slug = _slugify(body.slug or body.name)
     slug = base_slug

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Cpu, ArrowUpCircle, Archive, Server, GitCompare, CheckSquare, Square } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Cpu, ArrowUpCircle, Archive, Server, GitCompare, CheckSquare, Square, Lock } from 'lucide-react';
 import { MLModel, api } from '../../../lib/api';
+import { areModelsCompatible, getModelCompatibilityProfile } from '../../../lib/modelCompatibility';
 import ModelDetailsModal from '../ModelDetailsModal';
 import ModelCompareModal from '../ModelCompareModal';
 
@@ -33,13 +34,37 @@ export default function ModelsTab({
     const [promotingId, setPromotingId] = useState<string | null>(null);
     const [compareIds, setCompareIds] = useState<string[]>([]);
     const [showCompare, setShowCompare] = useState(false);
+    const [domainFilter, setDomainFilter] = useState<string>('all');
 
-    const toggleCompare = (modelId: string, e: React.MouseEvent) => {
+    const anchorModel = useMemo(
+        () => (compareIds.length > 0 ? models.find((m) => m.id === compareIds[0]) || null : null),
+        [compareIds, models]
+    );
+    const anchorProfile = useMemo(
+        () => (anchorModel ? getModelCompatibilityProfile(anchorModel) : null),
+        [anchorModel]
+    );
+
+    const availableDomains = useMemo(() => {
+        const set = new Set<string>();
+        models.forEach((m) => set.add(getModelCompatibilityProfile(m).domain));
+        return ['all', ...Array.from(set).sort()];
+    }, [models]);
+
+    const visibleModels = useMemo(() => {
+        if (domainFilter === 'all') return models;
+        return models.filter((m) => getModelCompatibilityProfile(m).domain === domainFilter);
+    }, [models, domainFilter]);
+
+    const toggleCompare = (model: MLModel, e: React.MouseEvent) => {
         e.stopPropagation();
+        if (anchorModel && !compareIds.includes(model.id) && !areModelsCompatible(anchorModel, model)) {
+            return;
+        }
         setCompareIds((prev) => {
-            if (prev.includes(modelId)) return prev.filter((id) => id !== modelId);
+            if (prev.includes(model.id)) return prev.filter((id) => id !== model.id);
             if (prev.length >= 4) return prev;
-            return [...prev, modelId];
+            return [...prev, model.id];
         });
     };
 
@@ -75,12 +100,36 @@ export default function ModelsTab({
 
     return (
         <div className="space-y-4">
-            {/* Toolbar with Compare trigger */}
+            {/* Toolbar with Domain Filter & Compare trigger */}
             {models.length > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs text-zinc-500">
-                        Select 2–4 models to compare metrics & hyperparameters side by side.
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex items-center gap-1">
+                            {availableDomains.map((dom) => (
+                                <button
+                                    key={dom}
+                                    type="button"
+                                    onClick={() => setDomainFilter(dom)}
+                                    className={`h-7 px-2.5 rounded-md text-xs font-medium border transition-colors capitalize ${
+                                        domainFilter === dom
+                                            ? 'bg-zinc-100 text-zinc-950 border-zinc-100'
+                                            : 'bg-[#101217] text-zinc-400 border-zinc-800 hover:text-zinc-200'
+                                    }`}
+                                >
+                                    {dom === 'all' ? `All (${models.length})` : dom}
+                                </button>
+                            ))}
+                        </div>
+                        {anchorProfile ? (
+                            <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/30 text-orange-300">
+                                Comparing scope: {anchorProfile.scopeLabel}
+                            </span>
+                        ) : (
+                            <span className="text-xs text-zinc-500">
+                                Select 2–4 compatible models (same domain &amp; task) to compare side by side.
+                            </span>
+                        )}
+                    </div>
                     <div className="flex items-center gap-2">
                         {compareIds.length > 0 && (
                             <button
@@ -112,24 +161,43 @@ export default function ModelsTab({
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {models.map(model => {
+                    {visibleModels.map(model => {
                         const isChecked = compareIds.includes(model.id);
+                        const profile = getModelCompatibilityProfile(model);
+                        const isIncompatible = Boolean(
+                            anchorModel && !isChecked && !areModelsCompatible(anchorModel, model)
+                        );
                         return (
                             <div
                                 key={model.id}
                                 onClick={() => setSelectedModel(model)}
                                 className={`bg-[#101217] border p-4 rounded-lg flex items-start gap-3.5 cursor-pointer transition-colors ${
-                                    isChecked ? 'border-orange-500/60 bg-zinc-900/60' : 'border-zinc-800 hover:border-zinc-700'
+                                    isChecked
+                                        ? 'border-orange-500/60 bg-zinc-900/60'
+                                        : isIncompatible
+                                        ? 'border-zinc-800/60 opacity-55 hover:opacity-80'
+                                        : 'border-zinc-800 hover:border-zinc-700'
                                 }`}
                             >
                                 <button
                                     type="button"
-                                    onClick={(e) => toggleCompare(model.id, e)}
-                                    title="Select for comparison"
-                                    className="mt-0.5 text-zinc-500 hover:text-zinc-200 shrink-0"
+                                    disabled={isIncompatible}
+                                    onClick={(e) => toggleCompare(model, e)}
+                                    title={
+                                        isIncompatible && anchorProfile
+                                            ? `Incompatible (${profile.scopeLabel}) — current comparison scope is ${anchorProfile.scopeLabel}`
+                                            : 'Select for comparison'
+                                    }
+                                    className={`mt-0.5 shrink-0 ${
+                                        isIncompatible
+                                            ? 'text-zinc-700 cursor-not-allowed'
+                                            : 'text-zinc-500 hover:text-zinc-200'
+                                    }`}
                                 >
                                     {isChecked ? (
                                         <CheckSquare className="w-4 h-4 text-orange-400" />
+                                    ) : isIncompatible ? (
+                                        <Lock className="w-4 h-4 text-zinc-600" />
                                     ) : (
                                         <Square className="w-4 h-4" />
                                     )}
