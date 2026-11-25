@@ -26,11 +26,23 @@ export function useDatasets(token: string | null) {
     const uploadDataset = useCallback(
         async (formData: FormData) => {
             if (!token) return;
-            await fetch(`${API}/datasets/`, {
+            const res = await fetch(`${API}/datasets/`, {
                 method: "POST",
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,
             });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || "Failed to upload dataset");
+            }
+            const created = await res.json();
+            if (formData.get("is_dvc_tracked") === "true" && !created.is_dvc_tracked) {
+                toast("Dataset uploaded, but DVC tracking could not be completed.", {
+                    icon: "!",
+                });
+            } else {
+                toast.success("Dataset uploaded successfully");
+            }
             await fetchDatasets();
         },
         [token, fetchDatasets]

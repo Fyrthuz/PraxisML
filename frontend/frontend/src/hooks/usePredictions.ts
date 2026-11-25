@@ -89,7 +89,7 @@ export function usePredictions(
                         body: formData,
                     });
                 } else {
-                    res = await fetch(`${API}/tabular/predictions/predict`, {
+                    res = await fetch(`${API}/tabular/predict`, {
                         method: "POST",
                         headers: {
                             Authorization: `Bearer ${token}`,

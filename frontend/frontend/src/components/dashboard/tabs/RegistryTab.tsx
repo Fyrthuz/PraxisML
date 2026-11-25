@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, Cpu, Trash2, Loader2, RefreshCw, ChevronRight, Info, ExternalLink, Activity, Database, Tag, Download } from 'lucide-react';
-import { api } from '../../../lib/api';
+import { Plus, Cpu, Trash2, Loader2, RefreshCw, ChevronRight, Info, ExternalLink, Activity, Database, Tag, Download, Server } from 'lucide-react';
+import { api, MLModel } from '../../../lib/api';
 import toast from 'react-hot-toast';
 
 interface RegisteredModel {
@@ -14,9 +14,11 @@ interface RegisteredModel {
 interface RegistryTabProps {
     token?: string | null;
     onRefresh?: () => void;
+    models?: MLModel[];
+    onDeployEndpoint?: (modelId: string) => void;
 }
 
-export default function RegistryTab({ token, onRefresh }: RegistryTabProps) {
+export default function RegistryTab({ token, onRefresh, models = [], onDeployEndpoint }: RegistryTabProps) {
     const [registeredModels, setRegisteredModels] = useState<RegisteredModel[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
@@ -160,43 +162,44 @@ export default function RegistryTab({ token, onRefresh }: RegistryTabProps) {
             </div>
 
             {!selectedModel && (
-                <div className="bg-neutral-800/40 border border-neutral-700 p-4 rounded-xl">
-                    <h4 className="text-sm font-medium text-neutral-300 mb-3">Create New Registered Model</h4>
-                    <div className="flex gap-3">
+                <div className="bg-[#101217] border border-zinc-800 p-4 rounded-lg">
+                    <h4 className="text-xs font-semibold text-zinc-300 mb-3">Create Registered Model</h4>
+                    <div className="flex flex-wrap gap-2.5">
                         <input
                             type="text"
-                            placeholder="Model name (e.g., unet-segmentation)"
+                            placeholder="Model name (e.g., titanic-classifier)"
                             value={newModelName}
                             onChange={(e) => setNewModelName(e.target.value)}
-                            className="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-white text-sm"
+                            className="flex-1 min-w-[200px] h-9 bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600"
                         />
                         <input
                             type="text"
                             placeholder="Description (optional)"
                             value={newModelDesc}
                             onChange={(e) => setNewModelDesc(e.target.value)}
-                            className="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-white text-sm"
+                            className="flex-1 min-w-[200px] h-9 bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 text-zinc-100 text-xs focus:outline-none focus:border-zinc-600"
                         />
-                        <Button 
-                            onClick={handleCreateModel} 
+                        <button
+                            type="button"
+                            onClick={handleCreateModel}
                             disabled={isCreating || !newModelName.trim()}
-                            className="bg-indigo-600 hover:bg-indigo-700"
+                            className="h-9 px-4 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium disabled:opacity-40 flex items-center gap-1.5"
                         >
-                            {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
+                            {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
                             Create
-                        </Button>
+                        </button>
                     </div>
                 </div>
             )}
 
             {isLoading ? (
-                <div className="text-center py-12 text-neutral-500">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4" />
-                    <p>Fetching models from MLflow...</p>
+                <div className="text-center py-12 text-zinc-500">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" />
+                    <p className="text-xs">Fetching models from MLflow...</p>
                 </div>
             ) : !selectedModel ? (
                 registeredModels.length === 0 ? (
-                    <div className="border-2 border-dashed border-neutral-700 rounded-xl p-12 text-center text-neutral-500">
+                    <div className="border border-dashed border-zinc-800 bg-[#101217] rounded-lg p-12 text-center text-xs text-zinc-500">
                         No registered models yet. Create one above to get started.
                     </div>
                 ) : (
@@ -205,38 +208,38 @@ export default function RegistryTab({ token, onRefresh }: RegistryTabProps) {
                             <div
                                 key={model.name}
                                 onClick={() => handleSelectModel(model)}
-                                className="bg-neutral-800/40 border border-neutral-700 p-5 rounded-xl hover:border-indigo-500/50 cursor-pointer transition-all group"
+                                className="bg-[#101217] border border-zinc-800 p-4 rounded-lg hover:border-zinc-700 cursor-pointer transition-colors"
                             >
                                 <div className="flex justify-between items-start">
-                                    <div className="flex items-start gap-4">
-                                        <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400 group-hover:scale-110 transition-transform">
-                                            <Cpu className="w-7 h-7" />
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-zinc-900 border border-zinc-800 rounded-md text-zinc-300">
+                                            <Cpu className="w-4 h-4" />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-white text-lg">
+                                            <h4 className="font-semibold text-zinc-100 text-sm">
                                                 {model.display_name || model.name}
                                             </h4>
-                                            <p className="text-sm text-neutral-400 mt-1 line-clamp-1">{model.description || "No description provided"}</p>
+                                            <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{model.description || "No description provided"}</p>
                                         </div>
                                     </div>
                                     <Button
                                         variant="ghost"
                                         size="icon"
                                         onClick={(e) => handleDeleteModel(e, model.name)}
-                                        className="text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg"
+                                        className="h-7 w-7 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md"
                                     >
-                                        <Trash2 className="w-4 h-4" />
+                                        <Trash2 className="w-3.5 h-3.5" />
                                     </Button>
                                 </div>
                                 
                                 {model.latest_versions && model.latest_versions.length > 0 && (
-                                    <div className="mt-5 pt-4 border-t border-neutral-700/50 flex flex-wrap gap-2">
+                                    <div className="mt-3.5 pt-3 border-t border-zinc-800/80 flex flex-wrap gap-1.5">
                                         {model.latest_versions.map((v) => (
                                             <span 
                                                 key={v.version}
-                                                className={`text-[10px] uppercase font-bold px-2.5 py-1 rounded-md border ${getStageBadge(v.stage)}`}
+                                                className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border ${getStageBadge(v.stage)}`}
                                             >
-                                                v{v.version} • {v.stage}
+                                                v{v.version} · {v.stage}
                                             </span>
                                         ))}
                                     </div>
@@ -246,37 +249,37 @@ export default function RegistryTab({ token, onRefresh }: RegistryTabProps) {
                     </div>
                 )
             ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                     {/* Versions List */}
-                    <div className="lg:col-span-1 space-y-4">
-                        <h4 className="text-sm font-bold text-neutral-500 uppercase tracking-wider ml-1">Versions History</h4>
+                    <div className="lg:col-span-1 space-y-3">
+                        <h4 className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Versions History</h4>
                         {isLoadingVersions ? (
-                            <div className="py-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-neutral-500" /></div>
+                            <div className="py-8 text-center"><Loader2 className="w-5 h-5 animate-spin mx-auto text-zinc-500" /></div>
                         ) : versions.length === 0 ? (
-                            <p className="text-sm text-neutral-500 italic p-4 bg-neutral-800/20 rounded-xl border border-dashed border-neutral-700">No versions found.</p>
+                            <p className="text-xs text-zinc-500 p-4 bg-[#101217] rounded-lg border border-dashed border-zinc-800">No versions found.</p>
                         ) : (
                             <div className="space-y-2">
                                 {versions.sort((a, b) => b.version - a.version).map((v) => (
                                     <div
                                         key={v.version}
                                         onClick={() => handleSelectVersion(v.run_id)}
-                                        className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                                        className={`p-3.5 rounded-lg border cursor-pointer transition-colors ${
                                             selectedRun?.run_id === v.run_id
-                                                ? 'bg-indigo-500/10 border-indigo-500 shadow-lg shadow-indigo-500/10'
-                                                : 'bg-neutral-800/40 border-neutral-700 hover:border-neutral-500'
+                                                ? 'bg-zinc-800/70 border-orange-500/60'
+                                                : 'bg-[#101217] border-zinc-800 hover:border-zinc-700'
                                         }`}
                                     >
                                         <div className="flex justify-between items-center">
                                             <div>
-                                                <span className="text-lg font-bold text-white">Version {v.version}</span>
-                                                <div className={`mt-1 text-[10px] w-fit px-1.5 py-0.5 rounded border ${getStageBadge(v.stage)}`}>
+                                                <span className="text-sm font-mono font-semibold text-zinc-100">v{v.version}</span>
+                                                <div className={`mt-1 text-[10px] font-mono w-fit px-1.5 py-0.5 rounded border ${getStageBadge(v.stage)}`}>
                                                     {v.stage}
                                                 </div>
                                             </div>
-                                            <ChevronRight className={`w-4 h-4 transition-transform ${selectedRun?.run_id === v.run_id ? 'translate-x-1 text-indigo-400' : 'text-neutral-600'}`} />
+                                            <ChevronRight className={`w-4 h-4 ${selectedRun?.run_id === v.run_id ? 'text-orange-400' : 'text-zinc-600'}`} />
                                         </div>
-                                        <p className="text-[10px] text-neutral-500 mt-3 flex items-center gap-1">
-                                            Created: {formatTimestamp(v.creation_timestamp)}
+                                        <p className="text-[10px] font-mono text-zinc-500 mt-2">
+                                            {formatTimestamp(v.creation_timestamp)}
                                         </p>
                                     </div>
                                 ))}
@@ -287,41 +290,55 @@ export default function RegistryTab({ token, onRefresh }: RegistryTabProps) {
                     {/* Run Details */}
                     <div className="lg:col-span-2">
                         {isLoadingRun ? (
-                            <div className="h-full flex flex-col items-center justify-center p-12 bg-neutral-800/20 rounded-2xl border border-neutral-800">
-                                <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-4" />
-                                <p className="text-neutral-400">Loading experiment data from MLflow...</p>
+                            <div className="h-full flex flex-col items-center justify-center p-12 bg-[#101217] rounded-lg border border-zinc-800">
+                                <Loader2 className="w-6 h-6 animate-spin text-zinc-400 mb-3" />
+                                <p className="text-xs text-zinc-400">Loading experiment data from MLflow...</p>
                             </div>
                         ) : selectedRun ? (
-                            <div className="bg-neutral-800/40 border border-neutral-700 rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                                <div className="p-6 bg-indigo-500/5 border-b border-neutral-700 flex justify-between items-center">
+                            <div className="bg-[#101217] border border-zinc-800 rounded-lg overflow-hidden">
+                                <div className="p-4 bg-[#0b0c0f] border-b border-zinc-800 flex justify-between items-center">
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-indigo-500 text-white rounded-lg">
-                                            <Activity className="w-5 h-5" />
+                                        <div className="p-2 bg-zinc-900 border border-zinc-800 text-zinc-200 rounded-md">
+                                            <Activity className="w-4 h-4" />
                                         </div>
                                         <div>
-                                            <h4 className="font-bold text-white">Experiment Details</h4>
-                                            <p className="text-xs text-neutral-400 font-mono">Run ID: {selectedRun.run_id}</p>
+                                            <h4 className="text-sm font-semibold text-zinc-100">Experiment Details</h4>
+                                            <p className="text-[11px] text-zinc-500 font-mono">run: {selectedRun.run_id}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
+                                        {onDeployEndpoint && (() => {
+                                            const matched = models.find((m) => m.mlflow_run_id === selectedRun.run_id);
+                                            if (!matched) return null;
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDeployEndpoint(matched.id)}
+                                                    className="h-8 px-3 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium inline-flex items-center gap-1.5"
+                                                >
+                                                    <Server className="w-3.5 h-3.5" />
+                                                    Deploy Endpoint
+                                                </button>
+                                            );
+                                        })()}
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={handleDownloadVersion}
-                                            className="text-indigo-400 border-indigo-500/30 hover:bg-indigo-500/10"
+                                            className="h-8 text-xs border-zinc-700 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
                                             title="Download this version"
                                         >
-                                            <Download className="w-4 h-4 mr-2" />
+                                            <Download className="w-3.5 h-3.5 mr-1.5" />
                                             Download
                                         </Button>
                                         <a 
                                             href={`http://localhost:5000/#/experiments/${selectedRun.experiment_id}/runs/${selectedRun.run_id}`} 
                                             target="_blank" 
                                             rel="noopener noreferrer"
-                                            className="p-2 hover:bg-neutral-700 rounded-lg text-neutral-400 transition-colors"
+                                            className="h-8 w-8 flex items-center justify-center hover:bg-zinc-800 rounded-md text-zinc-400 border border-zinc-800"
                                             title="View in MLflow UI"
                                         >
-                                            <ExternalLink className="w-5 h-5" />
+                                            <ExternalLink className="w-4 h-4" />
                                         </a>
                                     </div>
                                 </div>

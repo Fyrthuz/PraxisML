@@ -5,7 +5,6 @@ import { Dataset, DatasetProfile, PreprocessingConfig, api } from "@/lib/api";
 import DataProfiler from "../preprocessing/DataProfiler";
 import PipelineBuilder from "../preprocessing/PipelineBuilder";
 import { Database, Filter, Plus, ArrowLeft, Play, History } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
 
 interface PreprocessingTabProps {
@@ -52,41 +51,37 @@ export default function PreprocessingTab({ datasets, tenantId, onPreprocessingAp
 
     if (view === "create") {
         return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 w-full">
-                <div className="flex items-center justify-between bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-md">
-                    <div className="flex items-center gap-4">
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
+            <div className="space-y-6 w-full">
+                <div className="flex flex-wrap items-center justify-between gap-4 bg-[#101217] p-4 rounded-lg border border-zinc-800">
+                    <div className="flex items-center gap-3">
+                        <button
                             onClick={() => { setView("list"); setSelectedDatasetId(""); setProfile(null); }}
-                            className="text-neutral-400 hover:text-white"
+                            className="h-8 w-8 rounded-md border border-zinc-800 bg-[#0b0c0f] flex items-center justify-center text-zinc-400 hover:text-zinc-100"
                         >
-                            <ArrowLeft className="w-5 h-5" />
-                        </Button>
+                            <ArrowLeft className="w-4 h-4" />
+                        </button>
                         <div>
-                            <h2 className="text-xl font-bold text-white mb-1">Create New Pipeline</h2>
-                            <p className="text-sm text-indigo-200/60">Configure transformations for your tabular data.</p>
+                            <h3 className="text-sm font-semibold text-zinc-100">Create Preprocessing Pipeline</h3>
+                            <p className="text-xs text-zinc-500">Configure ColumnTransformer steps for a tabular dataset.</p>
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-3">
-                        <div className="relative w-64">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Database className="h-4 w-4 text-indigo-400" />
-                            </div>
-                            <select
-                                value={selectedDatasetId}
-                                onChange={(e) => handleDatasetSelect(e.target.value)}
-                                className="block w-full pl-10 pr-4 py-2 bg-neutral-900 border border-neutral-800 rounded-xl shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm text-white appearance-none"
-                            >
-                                <option value="">-- Select Tabular Dataset --</option>
-                                {tabularDatasets.map((ds) => (
-                                    <option key={ds.id} value={ds.id}>
-                                        {ds.name} (v{ds.version || 1})
-                                    </option>
-                                ))}
-                            </select>
+                    <div className="relative w-64">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Database className="h-3.5 w-3.5 text-zinc-500" />
                         </div>
+                        <select
+                            value={selectedDatasetId}
+                            onChange={(e) => handleDatasetSelect(e.target.value)}
+                            className="block w-full h-9 pl-9 pr-4 bg-[#0b0c0f] border border-zinc-800 rounded-md text-xs text-zinc-100 focus:outline-none focus:border-zinc-600"
+                        >
+                            <option value="">Select tabular dataset...</option>
+                            {tabularDatasets.map((ds) => (
+                                <option key={ds.id} value={ds.id}>
+                                    {ds.name} (v{ds.version || 1})
+                                </option>
+                            ))}
+                        </select>
                     </div>
                 </div>
 
@@ -103,17 +98,15 @@ export default function PreprocessingTab({ datasets, tenantId, onPreprocessingAp
                                 />
                             </>
                         ) : (
-                            <div className="animate-pulse bg-white/5 h-64 rounded-2xl border border-white/10 backdrop-blur-md"></div>
+                            <div className="animate-pulse bg-[#101217] h-48 rounded-lg border border-zinc-800" />
                         )}
                     </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center p-20 text-center bg-white/5 rounded-2xl border border-white/10 border-dashed backdrop-blur-md">
-                        <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4">
-                            <Database className="w-8 h-8 text-indigo-400" />
-                        </div>
-                        <h3 className="text-lg font-medium text-white mb-2">Select a Dataset</h3>
-                        <p className="text-neutral-400 max-w-sm">
-                            Pick a dataset to start building your preprocessing pipeline.
+                    <div className="flex flex-col items-center justify-center p-16 text-center bg-[#101217] rounded-lg border border-zinc-800 border-dashed">
+                        <Database className="w-7 h-7 text-zinc-600 mb-3" />
+                        <h3 className="text-sm font-medium text-zinc-200 mb-1">Select a Dataset</h3>
+                        <p className="text-xs text-zinc-500 max-w-sm">
+                            Pick a tabular dataset above to inspect column distributions and build a transformation pipeline.
                         </p>
                     </div>
                 )}
@@ -122,72 +115,77 @@ export default function PreprocessingTab({ datasets, tenantId, onPreprocessingAp
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 w-full">
-            <div className="flex justify-between items-center bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-md">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-indigo-500/20 rounded-xl">
-                        <Filter className="w-6 h-6 text-indigo-400" />
+        <div className="space-y-6 w-full">
+            <div className="flex justify-between items-center bg-[#101217] p-4 rounded-lg border border-zinc-800">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-zinc-900 border border-zinc-800 rounded-md">
+                        <Filter className="w-4 h-4 text-zinc-300" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-bold text-white mb-1">Preprocessing Pipelines</h2>
-                        <p className="text-sm text-indigo-200/60">View and manage existing data transformation pipelines.</p>
+                        <h3 className="text-sm font-semibold text-zinc-100">Saved Pipelines</h3>
+                        <p className="text-xs text-zinc-500">
+                            <span className="font-mono tabular-nums text-zinc-300">{preprocessedDatasets.length}</span> preprocessed dataset versions linked to MLflow pipelines.
+                        </p>
                     </div>
                 </div>
-                <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setView("create")}>
-                    <Plus className="w-4 h-4 mr-2" /> New Pipeline
-                </Button>
+                <button
+                    onClick={() => setView("create")}
+                    className="h-8 px-3 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-medium flex items-center gap-1.5"
+                >
+                    <Plus className="w-3.5 h-3.5" /> New Pipeline
+                </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {preprocessedDatasets.length === 0 ? (
-                    <div className="col-span-full flex flex-col items-center justify-center p-20 text-center bg-white/5 rounded-2xl border border-white/10 border-dashed backdrop-blur-md">
-                        <div className="w-16 h-16 rounded-full bg-indigo-500/10 flex items-center justify-center mb-4">
-                            <History className="w-8 h-8 text-indigo-400" />
-                        </div>
-                        <h3 className="text-lg font-medium text-white mb-2">No Pipelines Found</h3>
-                        <p className="text-neutral-400 max-w-sm">
-                            You haven't created any preprocessing pipelines yet. Click "New Pipeline" to get started.
+                    <div className="col-span-full flex flex-col items-center justify-center p-16 text-center bg-[#101217] rounded-lg border border-zinc-800 border-dashed">
+                        <History className="w-7 h-7 text-zinc-600 mb-3" />
+                        <h3 className="text-sm font-medium text-zinc-200 mb-1">No Pipelines Found</h3>
+                        <p className="text-xs text-zinc-500 max-w-sm">
+                            Create a preprocessing pipeline to impute missing values, encode categoricals and scale numeric features.
                         </p>
                     </div>
                 ) : (
                     preprocessedDatasets.map((ds) => (
-                        <div 
-                            key={ds.id} 
+                        <button
+                            key={ds.id}
                             onClick={() => { setSelectedDatasetId(ds.id); handleDatasetSelect(ds.id); }}
-                            className={`group bg-neutral-800/40 border p-5 rounded-2xl cursor-pointer transition-all hover:scale-[1.02] ${
-                                selectedDatasetId === ds.id ? "border-indigo-500 ring-1 ring-indigo-500" : "border-neutral-700 hover:border-indigo-500/50"
+                            className={`text-left bg-[#101217] border p-4 rounded-lg transition-colors ${
+                                selectedDatasetId === ds.id
+                                    ? "border-orange-500/70 bg-zinc-900/70"
+                                    : "border-zinc-800 hover:border-zinc-700"
                             }`}
                         >
-                            <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400 group-hover:bg-indigo-500/20 transition-colors">
-                                    <Play className="w-5 h-5" />
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="p-1.5 bg-zinc-900 border border-zinc-800 rounded text-zinc-300">
+                                    <Play className="w-3.5 h-3.5" />
                                 </div>
-                                <span className="text-[10px] px-2 py-0.5 bg-indigo-500/20 text-indigo-400 rounded-full border border-indigo-500/30">
-                                    ACTIVE
+                                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/30">
+                                    saved
                                 </span>
                             </div>
-                            <h4 className="font-bold text-white group-hover:text-indigo-300 transition-colors truncate">{ds.name}</h4>
-                            <p className="text-xs text-neutral-400 mt-2 line-clamp-2 min-h-[2.5rem]">{ds.description || "No description provided."}</p>
-                            
-                            <div className="mt-4 flex items-center justify-between text-[10px] text-neutral-500">
+                            <h4 className="text-sm font-medium text-zinc-100 truncate">{ds.name}</h4>
+                            <p className="text-xs text-zinc-500 mt-1.5 line-clamp-2 min-h-[2rem]">
+                                {ds.description || "Preprocessed tabular dataset."}
+                            </p>
+                            <div className="mt-3 pt-2.5 border-t border-zinc-800/80 flex items-center justify-between text-[11px] font-mono tabular-nums text-zinc-500">
                                 <span className="flex items-center gap-1">
-                                    <Database className="w-3 h-3" />
-                                    v{ds.version || 1}
+                                    <Database className="w-3 h-3" /> v{ds.version || 1}
                                 </span>
                                 <span>{new Date(ds.created_at).toLocaleDateString()}</span>
                             </div>
-                        </div>
+                        </button>
                     ))
                 )}
             </div>
 
             {selectedDatasetId && view === "list" && (
-                <div className="animate-in fade-in slide-in-from-top-4 duration-500">
+                <div className="pt-2">
                     {profile ? (
-                        <div className="space-y-6">
-                            <div className="flex items-center gap-2 text-indigo-400 mb-2">
-                                <History className="w-5 h-5" />
-                                <h3 className="text-lg font-bold">Pipeline Details</h3>
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-2 text-zinc-300">
+                                <History className="w-4 h-4 text-zinc-500" />
+                                <h3 className="text-sm font-semibold">Pipeline Details</h3>
                             </div>
                             <PipelineBuilder
                                 datasetId={selectedDatasetId}
@@ -197,7 +195,7 @@ export default function PreprocessingTab({ datasets, tenantId, onPreprocessingAp
                             />
                         </div>
                     ) : (
-                        <div className="animate-pulse bg-white/5 h-64 rounded-2xl border border-white/10 backdrop-blur-md"></div>
+                        <div className="animate-pulse bg-[#101217] h-48 rounded-lg border border-zinc-800" />
                     )}
                 </div>
             )}

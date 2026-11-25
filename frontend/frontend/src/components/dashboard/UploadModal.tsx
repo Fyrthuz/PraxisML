@@ -142,14 +142,14 @@ export default function UploadModal({
                                         placeholder={field.placeholder}
                                         value={formValues[field.name]}
                                         onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })}
-                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 min-h-[100px] resize-none"
+                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-600 min-h-[100px] resize-none"
                                     />
                                 ) : field.type === 'select' ? (
                                     <select
                                         required={field.required}
                                         value={formValues[field.name]}
                                         onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })}
-                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none"
+                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-600 appearance-none"
                                     >
                                         {field.options?.map(opt => (
                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -162,7 +162,7 @@ export default function UploadModal({
                                             required={field.required}
                                             checked={!!formValues[field.name]}
                                             onChange={e => setFormValues({ ...formValues, [field.name]: e.target.checked })}
-                                            className="w-4 h-4 text-indigo-600 focus:ring-indigo-500/50 rounded border-neutral-700 bg-neutral-900"
+                                            className="w-4 h-4 text-indigo-600 focus:ring-zinc-600 rounded border-neutral-700 bg-neutral-900"
                                         />
                                         <label className="text-sm font-medium text-neutral-300">
                                             {field.label}
@@ -175,7 +175,7 @@ export default function UploadModal({
                                         placeholder={field.placeholder}
                                         value={formValues[field.name]}
                                         onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })}
-                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-600"
                                     />
                                 )}
                             </div>
@@ -188,7 +188,7 @@ export default function UploadModal({
                                 Cancel
                             </Button>
                         )}
-                        <Button type="submit" className="flex-[2] bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg shadow-indigo-600/20" disabled={(requireFile && !file) || isUploading}>
+                        <Button type="submit" className="flex-[2] bg-zinc-100 hover:bg-white text-zinc-950 font-medium rounded-xl shadow-lg " disabled={(requireFile && !file) || isUploading}>
                             {isUploading ? (
                                 <>
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

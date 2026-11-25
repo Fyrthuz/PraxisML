@@ -55,7 +55,7 @@ export default function DriftPanel({ dataset, token }: DriftPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Activity className="w-5 h-5 text-indigo-400" />
+          <Activity className="w-5 h-5 text-zinc-300" />
           <h4 className="text-sm font-medium">Data Drift Monitor</h4>
         </div>
         <div className="flex items-center gap-2">
@@ -133,7 +133,7 @@ export default function DriftPanel({ dataset, token }: DriftPanelProps) {
             <Button
               size="sm"
               onClick={handleUpdateThresholds}
-              className="bg-indigo-600 hover:bg-indigo-500"
+              className="bg-zinc-100 hover:bg-white text-zinc-950 font-medium"
             >
               Guardar
             </Button>

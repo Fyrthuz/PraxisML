@@ -37,28 +37,16 @@ export default function NLPTab({ token, datasets, models }: NLPTabProps) {
     );
 
     return (
-        <div className="flex-1 flex flex-col">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                        <Sparkles className="w-7 h-7 text-indigo-400" />
-                        NLP Engine
-                    </h2>
-                    <p className="text-neutral-400 text-sm mt-1">
-                        Entrena modelos transformer, infiere, busca semánticamente y pregunta al asistente.
-                    </p>
-                </div>
-            </div>
-
-            <div className="flex gap-1 bg-neutral-900/50 p-1 rounded-xl mb-6 w-fit">
+        <div className="flex-1 flex flex-col space-y-5">
+            <div className="flex items-center gap-1 border-b border-zinc-800 pb-3">
                 {SUB_TABS.map((t) => (
                     <button
                         key={t.id}
                         onClick={() => setActiveTab(t.id)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                        className={`h-8 px-3 rounded-md text-xs font-medium transition-colors ${
                             activeTab === t.id
-                                ? "bg-indigo-600 text-white"
-                                : "text-neutral-400 hover:text-white"
+                                ? "bg-zinc-800 text-zinc-100"
+                                : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
                         }`}
                     >
                         {t.label}

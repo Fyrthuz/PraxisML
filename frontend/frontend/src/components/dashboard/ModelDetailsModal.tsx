@@ -160,7 +160,7 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
             <div className="bg-neutral-900 border border-neutral-800 w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl scale-in-center">
                 <div className="sticky top-0 z-10 p-6 border-b border-neutral-800 flex justify-between items-center bg-neutral-900/90 backdrop-blur">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                        <div className="p-3 bg-zinc-900 rounded-xl text-zinc-300">
                             <Cpu className="w-6 h-6" />
                         </div>
                         <div>
@@ -333,7 +333,7 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 {Object.entries(metrics).map(([key, value]) => (
                                     <div key={key} className="bg-indigo-500/5 border border-indigo-500/10 p-4 rounded-2xl">
-                                        <div className="text-indigo-300 text-xs font-bold uppercase mb-2 truncate" title={key}>
+                                        <div className="text-zinc-200 text-xs font-bold uppercase mb-2 truncate" title={key}>
                                             {key.replace(/cv_mean_|test_/g, '').replace(/_/g, ' ')}
                                         </div>
                                         <div className="text-white text-xl font-mono">
@@ -402,7 +402,7 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
                                 <h4 className="text-sm font-bold text-neutral-300 uppercase tracking-wider">
                                     Preprocessing Pipeline
                                 </h4>
-                                <span className="text-[10px] text-indigo-400 font-mono">Lineage: Dataset Transformation</span>
+                                <span className="text-[10px] text-zinc-300 font-mono">Lineage: Dataset Transformation</span>
                             </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -410,11 +410,11 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
                                     <div key={i} className="bg-neutral-950 border border-neutral-800 rounded-2xl p-4">
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Step {i + 1}</span>
-                                            <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-md text-[9px] font-bold uppercase">{step.type}</span>
+                                            <span className="px-2 py-0.5 bg-zinc-900 text-zinc-300 border border-zinc-800 rounded-md text-[9px] font-bold uppercase">{step.type}</span>
                                         </div>
                                         <div className="flex items-center gap-2 mb-2">
-                                            <div className="p-1 bg-indigo-500/20 rounded-md">
-                                                <ArrowRightCircle className="w-3 h-3 text-indigo-400" />
+                                            <div className="p-1 bg-zinc-800 rounded-md">
+                                                <ArrowRightCircle className="w-3 h-3 text-zinc-300" />
                                             </div>
                                             <p className="text-xs text-white font-medium capitalize">{step.method || step.strategy || 'Default'}</p>
                                         </div>
@@ -428,7 +428,7 @@ export default function ModelDetailsModal({ model, onClose, handleDeleteModel, t
                             {targetCol && (
                                 <div className="mt-4 p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-xl flex items-center justify-between">
                                     <span className="text-xs text-neutral-400">Target Column used in preprocessing:</span>
-                                    <span className="text-xs font-bold text-indigo-400 px-2 py-1 bg-indigo-500/10 rounded-lg">{targetCol}</span>
+                                    <span className="text-xs font-bold text-zinc-300 px-2 py-1 bg-zinc-900 rounded-lg">{targetCol}</span>
                                 </div>
                             )}
                         </div>

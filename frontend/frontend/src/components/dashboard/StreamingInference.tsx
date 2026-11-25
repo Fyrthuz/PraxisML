@@ -215,7 +215,7 @@ export default function StreamingInference({ models, token }: StreamingInference
             <select
               value={selectedModel}
               onChange={(e) => setSelectedModel(e.target.value)}
-              className="w-full bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500"
+              className="w-full bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-600"
               disabled={isConnected}
             >
               <option value="">Seleccionar modelo...</option>
@@ -233,7 +233,7 @@ export default function StreamingInference({ models, token }: StreamingInference
                 type="checkbox"
                 checked={explain}
                 onChange={(e) => setExplain(e.target.checked)}
-                className="w-4 h-4 rounded border-neutral-600 text-indigo-600 focus:ring-indigo-500"
+                className="w-4 h-4 rounded border-neutral-600 text-indigo-600 focus:ring-zinc-600"
               />
               <span className="text-sm text-neutral-300">Incluir explicabilidad (SHAP)</span>
             </label>
@@ -287,7 +287,7 @@ export default function StreamingInference({ models, token }: StreamingInference
               }}
               onKeyDown={handleKeyPress}
               placeholder='{"feature1": 1.5, "feature2": 2.3, ...}'
-              className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg p-3 text-neutral-200 font-mono text-sm resize-none focus:outline-none focus:border-indigo-500"
+              className="flex-1 bg-neutral-800 border border-neutral-700 rounded-lg p-3 text-neutral-200 font-mono text-sm resize-none focus:outline-none focus:border-zinc-600"
             />
             {jsonError && (
               <p className="text-red-400 text-xs mt-2">{jsonError}</p>
@@ -446,7 +446,7 @@ export default function StreamingInference({ models, token }: StreamingInference
                     )}
                     <div>
                       <span className="text-neutral-500">Total Features:</span>{' '}
-                      <span className="text-indigo-400 font-mono">
+                      <span className="text-zinc-300 font-mono">
                         {selectedShapResult.shapValues.length}
                       </span>
                     </div>

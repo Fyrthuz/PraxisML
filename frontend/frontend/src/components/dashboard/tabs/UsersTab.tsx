@@ -24,9 +24,9 @@ interface UsersTabProps {
 }
 
 const ROLE_COLORS = {
-  admin: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  editor: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-  viewer: "bg-neutral-700 text-neutral-400 border-neutral-600",
+  admin: "bg-orange-500/10 text-orange-400 border-orange-500/30",
+  editor: "bg-zinc-800 text-zinc-200 border-zinc-700",
+  viewer: "bg-zinc-900 text-zinc-400 border-zinc-800",
 };
 
 const ROLE_LABELS = {
@@ -158,7 +158,7 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
       </div>
     );
   }
@@ -180,64 +180,64 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Users className="w-6 h-6 text-indigo-400" />
+          <Users className="w-5 h-5 text-zinc-400" />
           <div>
-            <h3 className="text-lg font-semibold">Team Members</h3>
-            <p className="text-sm text-neutral-400">Manage user roles and permissions</p>
+            <h3 className="text-sm font-semibold text-zinc-100">Team Members</h3>
+            <p className="text-xs text-zinc-500">Manage user roles and permissions</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={fetchUsers}
-            className="px-4 py-2 text-sm bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors"
+            className="h-8 px-3 text-xs border border-zinc-800 bg-[#101217] hover:bg-zinc-800 text-zinc-300 rounded-md transition-colors"
           >
             Refresh
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors flex items-center gap-2"
+            className="h-8 px-3 text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 rounded-md transition-colors flex items-center gap-1.5"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             Add User
           </button>
         </div>
       </div>
 
       {/* Users List */}
-      <div className="bg-neutral-900/50 rounded-xl border border-neutral-800 overflow-hidden">
+      <div className="bg-[#101217] rounded-lg border border-zinc-800 overflow-hidden">
         <table className="w-full">
-          <thead className="bg-neutral-900 border-b border-neutral-800">
+          <thead className="bg-[#0b0c0f] border-b border-zinc-800">
             <tr>
-              <th className="text-left px-6 py-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">User</th>
-              <th className="text-left px-6 py-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">Role</th>
-              <th className="text-left px-6 py-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">Status</th>
-              <th className="text-left px-6 py-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">Joined</th>
-              <th className="text-right px-6 py-4 text-xs font-medium text-neutral-400 uppercase tracking-wider">Actions</th>
+              <th className="text-left px-5 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">User</th>
+              <th className="text-left px-5 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Role</th>
+              <th className="text-left px-5 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+              <th className="text-left px-5 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Joined</th>
+              <th className="text-right px-5 py-3 text-[11px] font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-neutral-800">
+          <tbody className="divide-y divide-zinc-800/80">
             {users.map((user) => {
               const isSelf = currentUser?.id === user.id;
               return (
                 <tr
                   key={user.id}
-                  className={`hover:bg-neutral-800/50 transition-colors ${!user.is_active ? "opacity-50" : ""}`}
+                  className={`hover:bg-zinc-800/30 transition-colors ${!user.is_active ? "opacity-50" : ""}`}
                 >
-                  <td className="px-6 py-4">
+                  <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm font-medium shrink-0">
+                      <div className="w-8 h-8 rounded-md bg-zinc-800 border border-zinc-700 flex items-center justify-center text-xs font-mono font-semibold text-zinc-200 shrink-0">
                         {user.full_name?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
                       </div>
                       <div>
-                        <p className="font-medium text-white flex items-center gap-2">
+                        <p className="text-xs font-medium text-zinc-100 flex items-center gap-2">
                           {user.full_name || "No name"}
                           {isSelf && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
-                              You
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                              you
                             </span>
                           )}
                         </p>
-                        <p className="text-sm text-neutral-400">{user.email}</p>
+                        <p className="text-xs text-zinc-500">{user.email}</p>
                       </div>
                     </div>
                   </td>
@@ -371,7 +371,7 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
                     type="email"
                     value={newUser.email}
                     onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg py-2.5 pl-10 pr-4 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-neutral-800 border border-neutral-700 rounded-lg py-2.5 pl-10 pr-4 text-white placeholder-neutral-500 focus:outline-none focus:border-zinc-600"
                     placeholder="user@example.com"
                   />
                 </div>
@@ -383,7 +383,7 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
                   type="text"
                   value={newUser.full_name}
                   onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg py-2.5 px-4 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg py-2.5 px-4 text-white placeholder-neutral-500 focus:outline-none focus:border-zinc-600"
                   placeholder="John Doe"
                 />
               </div>
@@ -394,7 +394,7 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
                   type="password"
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg py-2.5 px-4 text-white placeholder-neutral-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg py-2.5 px-4 text-white placeholder-neutral-500 focus:outline-none focus:border-zinc-600"
                   placeholder="••••••••"
                 />
               </div>
@@ -404,7 +404,7 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-neutral-800 border border-neutral-700 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:border-zinc-600"
                 >
                   <option value="viewer">Viewer</option>
                   <option value="editor">Editor</option>
@@ -421,9 +421,9 @@ export default function UsersTab({ token, currentUserRole, tenantId, onRefreshUs
               <button
                 onClick={handleCreateUser}
                 disabled={isCreating || !newUser.email || !newUser.password}
-                className="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors"
+                className="h-9 px-4 text-xs font-medium bg-zinc-100 hover:bg-white text-zinc-950 disabled:opacity-40 disabled:cursor-not-allowed rounded-md transition-colors flex items-center gap-1.5"
               >
-                {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : "Create User"}
+                {isCreating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Create User"}
               </button>
             </div>
           </div>

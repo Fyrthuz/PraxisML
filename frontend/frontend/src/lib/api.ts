@@ -235,17 +235,21 @@ export interface DatasetPreview {
 }
 
 export interface PreprocessingStep {
-    type: "impute" | "scale" | "encode" | "feature_eng" | "drop";
+    type: "impute" | "scale" | "encode" | "feature_eng" | "drop" | "rename";
     columns: string[];
     strategy?: string;
     method?: string;
     fill_value?: string;
+    bins?: number;
+    output_names?: Record<string, string>;
 }
 
 export interface PreprocessingConfig {
     dataset_id: string;
     target_column?: string;
     steps: PreprocessingStep[];
+    column_renames?: Record<string, string>;
+    output_dataset_name?: string;
 }
 
 export interface PreprocessingPreviewResponse {
@@ -530,7 +534,7 @@ export const api = {
         return res.json();
     },
 
-    async getDatasetPipeline(datasetId: string, tenantId: string): Promise<{ steps: PreprocessingStep[]; target_column?: string; message?: string }> {
+    async getDatasetPipeline(datasetId: string, tenantId: string): Promise<{ steps: PreprocessingStep[]; target_column?: string; column_renames?: Record<string, string>; message?: string }> {
         const res = await fetchAuth(`${API_BASE_URL}/tabular/preprocessing/pipeline/${datasetId}?tenant_id=${tenantId}`);
         if (!res.ok) throw new Error("Failed to fetch dataset pipeline");
         return res.json();

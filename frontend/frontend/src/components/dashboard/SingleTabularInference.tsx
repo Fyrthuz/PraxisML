@@ -66,7 +66,7 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
     return (
         <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-6 lg:p-10 shadow-2xl">
             <div className="flex items-center gap-4 mb-6">
-                <div className="p-3 bg-indigo-500/20 rounded-2xl text-indigo-400">
+                <div className="p-3 bg-zinc-800 rounded-2xl text-zinc-300">
                     <Settings2 className="w-6 h-6" />
                 </div>
                 <div>
@@ -125,7 +125,7 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
                     </div>
 
                     <Button
-                        className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 rounded-2xl font-bold mt-4 shadow-lg shadow-indigo-600/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                        className="w-full h-14 bg-zinc-100 hover:bg-white text-zinc-950 font-medium rounded-2xl font-bold mt-4 shadow-lg  transition-all hover:scale-[1.02] active:scale-[0.98]"
                         disabled={!selectedModel || isUploading}
                         onClick={handleSubmit}
                     >
@@ -142,7 +142,7 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
                     <div className="bg-black/30 border border-neutral-800/50 rounded-2xl p-6 h-full max-h-[500px] overflow-y-auto custom-scrollbar shadow-inner">
                         <div className="flex items-center justify-between mb-6 border-b border-neutral-800 pb-4">
                             <h4 className="text-sm font-bold text-neutral-400 uppercase tracking-widest">Input Features</h4>
-                            <span className="px-3 py-1 bg-indigo-500/10 text-indigo-400 rounded-full text-[10px] font-bold uppercase tracking-tighter">
+                            <span className="px-3 py-1 bg-zinc-900 text-zinc-300 rounded-full text-[10px] font-bold uppercase tracking-tighter">
                                 {featureNames.length} Total
                             </span>
                         </div>
@@ -151,12 +151,12 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
                                 {featureNames.map((featureName: string) => (
                                     <div key={featureName} className="group flex flex-col space-y-1.5">
-                                        <label className="text-xs font-semibold text-neutral-500 transition-colors group-focus-within:text-indigo-400 ml-1">
+                                        <label className="text-xs font-semibold text-neutral-500 transition-colors group-focus-within:text-zinc-300 ml-1">
                                             {featureName}
                                         </label>
                                         <input
                                             type="text"
-                                            className="w-full bg-neutral-950/50 border border-neutral-800 hover:border-neutral-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 text-white placeholder-neutral-700 transition-all"
+                                            className="w-full bg-neutral-950/50 border border-neutral-800 hover:border-neutral-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-600/30 text-white placeholder-neutral-700 transition-all"
                                             placeholder="Enter value..."
                                             value={featureValues[featureName] || ''}
                                             onChange={(e) => handleFeatureChange(featureName, e.target.value)}

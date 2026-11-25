@@ -31,7 +31,7 @@ export default function AssistantTab({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 flex flex-col space-y-4 min-h-[420px]">
                 <div className="flex items-center gap-3">
-                    <div className="p-3 bg-indigo-500/20 rounded-xl text-indigo-400">
+                    <div className="p-3 bg-zinc-800 rounded-xl text-zinc-300">
                         <Sparkles className="w-5 h-5" />
                     </div>
                     <h4 className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Asistente PraxisML</h4>
@@ -39,7 +39,7 @@ export default function AssistantTab({
 
                 <div className="flex-1 space-y-3">
                     {chatAnswer ? (
-                        <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4 text-sm text-neutral-200 whitespace-pre-wrap">
+                        <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-4 text-sm text-neutral-200 whitespace-pre-wrap">
                             {chatAnswer}
                         </div>
                     ) : (
@@ -75,7 +75,7 @@ export default function AssistantTab({
                     <button
                         onClick={submit}
                         disabled={isChatLoading || !message.trim()}
-                        className="px-5 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl"
+                        className="px-5 py-3 bg-zinc-100 hover:bg-white text-zinc-950 font-medium disabled:opacity-40 text-white rounded-xl"
                     >
                         <Send className="w-4 h-4" />
                     </button>

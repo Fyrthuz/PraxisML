@@ -58,7 +58,7 @@ export default function PredictionResultsModal({
     useEffect(() => {
         if (!token || !showExplain || !prediction.id) return;
         setLoadingShap(true);
-        fetch(config.getFullApiUrl(`/predictions/${prediction.id}/explain`), {
+        fetch(config.getFullApiUrl(`/tabular/predictions/${prediction.id}/explain`), {
             headers: { Authorization: `Bearer ${token}` },
         })
             .then((res) => {

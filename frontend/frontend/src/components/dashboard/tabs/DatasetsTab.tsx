@@ -57,57 +57,61 @@ export default function DatasetsTab({
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h3 className="text-xl font-medium">Available Datasets</h3>
-                <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setIsDatasetModalOpen(true)}>
-                    <Plus className="w-4 h-4 mr-2" /> Upload Dataset
+                <h3 className="text-sm font-semibold text-zinc-200">Registered Datasets</h3>
+                <Button
+                    size="sm"
+                    className="h-8 bg-zinc-100 hover:bg-white text-zinc-950 font-medium text-xs rounded-md"
+                    onClick={() => setIsDatasetModalOpen(true)}
+                >
+                    <Plus className="w-3.5 h-3.5 mr-1.5" /> Upload dataset
                 </Button>
             </div>
             {datasets.length === 0 ? (
-                <div className="border-2 border-dashed border-neutral-700 rounded-xl p-12 text-center text-neutral-500">
-                    No datasets found. Upload your first dataset to get started.
+                <div className="border border-dashed border-zinc-800 rounded-lg p-10 text-center text-xs text-zinc-500 bg-[#14171e]">
+                    No datasets found. Upload a CSV, Parquet, Excel or ZIP file to begin.
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {datasets.map(ds => (
-                        <div key={ds.id} className="bg-neutral-800/40 border border-neutral-700 p-5 rounded-xl flex items-start gap-4 hover:border-indigo-500/50 transition-colors group">
-                            <div className="p-3 bg-indigo-500/10 rounded-lg text-indigo-400">
+                        <div key={ds.id} className="bg-[#14171e] border border-zinc-800/90 p-4 rounded-lg flex items-start gap-3.5 hover:border-zinc-700 transition-colors group">
+                            <div className="p-2 bg-zinc-900 border border-zinc-800 rounded-md text-zinc-400">
                                 {ds.file_type && ['csv', 'xlsx', 'parquet'].includes(ds.file_type)
-                                    ? <Table2 className="w-6 h-6" />
-                                    : <Database className="w-6 h-6" />}
+                                    ? <Table2 className="w-4 h-4" />
+                                    : <Database className="w-4 h-4" />}
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <h4 className="font-medium text-white truncate">{ds.name}</h4>
+                                    <h4 className="text-sm font-medium text-zinc-100 truncate">{ds.name}</h4>
                                     {ds.file_type && (
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold uppercase ${fileTypeBadgeColor(ds.file_type)}`}>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono uppercase ${fileTypeBadgeColor(ds.file_type)}`}>
                                             {ds.file_type}
                                         </span>
                                     )}
                                     {ds.version && ds.version > 1 && (
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-amber-300 border border-amber-800/60">
                                             v{ds.version}
                                         </span>
                                     )}
                                     {ds.is_dvc_tracked && (
-                                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30" title={`DVC Hash: ${ds.dvc_hash?.substring(0, 12)}...`}>
+                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-orange-400 border border-orange-800/60" title={`DVC Hash: ${ds.dvc_hash?.substring(0, 12)}...`}>
                                             DVC
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-sm text-neutral-400 mt-1 line-clamp-2">{ds.description || "No description provided."}</p>
-                                <div className="mt-3 flex items-center gap-3 text-xs text-neutral-500">
+                                <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{ds.description || "No description."}</p>
+                                <div className="mt-2.5 flex items-center gap-2.5 text-[11px] font-mono tabular-nums text-zinc-500">
                                     <span>{(ds.file_size_bytes / 1024).toFixed(1)} KB</span>
-                                    <span>•</span>
+                                    <span>·</span>
                                     <span>{new Date(ds.created_at).toLocaleDateString()}</span>
                                     {ds.num_rows != null && (
                                         <>
-                                            <span>•</span>
-                                            <span className="text-indigo-400">{ds.num_rows.toLocaleString()} rows × {ds.num_columns} cols</span>
+                                            <span>·</span>
+                                            <span className="text-zinc-300">{ds.num_rows.toLocaleString()} × {ds.num_columns}</span>
                                         </>
                                     )}
                                 </div>
-                                {/* Action buttons */}
-                                <div className="mt-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {/* Actions */}
+                                <div className="mt-3 pt-2.5 border-t border-zinc-800/80 flex flex-wrap items-center gap-1.5">
                                     {ds.file_type && ['csv', 'xlsx', 'parquet'].includes(ds.file_type) && (
                                         <Button
                                             variant="ghost"

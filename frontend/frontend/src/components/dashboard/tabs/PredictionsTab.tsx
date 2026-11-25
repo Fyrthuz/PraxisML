@@ -43,75 +43,78 @@ export default function PredictionsTab({
 
     const renderStatusIcon = (status: string) => {
         switch (status) {
-            case 'COMPLETED': return <CheckCircle2 className="w-4 h-4 text-green-400" />;
+            case 'COMPLETED': return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
             case 'FAILED': return <XCircle className="w-4 h-4 text-red-400" />;
-            case 'PENDING': return <Clock className="w-4 h-4 text-yellow-500" />;
+            case 'PENDING': return <Clock className="w-4 h-4 text-amber-400" />;
             case 'IN_PROGRESS':
             case 'RUNNING':
-            case 'STARTED': return <Activity className="w-4 h-4 text-blue-400 animate-pulse" />;
-            default: return <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />;
+            case 'STARTED': return <Activity className="w-4 h-4 text-orange-400 animate-pulse" />;
+            default: return <Loader2 className="w-4 h-4 text-zinc-400 animate-spin" />;
         }
     };
 
     const renderStatusClass = (status: string) => {
         switch (status) {
-            case 'COMPLETED': return 'text-green-400';
+            case 'COMPLETED': return 'text-emerald-400';
             case 'FAILED': return 'text-red-400';
-            case 'PENDING': return 'text-yellow-500';
+            case 'PENDING': return 'text-amber-400';
             case 'IN_PROGRESS':
             case 'RUNNING':
-            case 'STARTED': return 'text-blue-400';
-            default: return 'text-indigo-400';
+            case 'STARTED': return 'text-orange-400';
+            default: return 'text-zinc-400';
         }
     };
 
     return (
         <div className="space-y-6">
-            <h3 className="text-xl font-medium">Inference History</h3>
-            <div className="bg-neutral-900/50 border border-neutral-800 rounded-xl overflow-hidden">
+            <div className="bg-[#101217] border border-zinc-800 rounded-lg overflow-hidden">
+                <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-200">Inference History</span>
+                    <span className="text-[11px] font-mono tabular-nums text-zinc-500">{predictions.length} runs</span>
+                </div>
                 <table className="w-full text-left border-collapse">
                     <thead>
-                        <tr className="bg-black/40 text-neutral-400 text-xs uppercase tracking-wider">
-                            <th className="px-6 py-4 font-semibold">Status</th>
-                            <th className="px-6 py-4 font-semibold">Model / Method</th>
-                            <th className="px-6 py-4 font-semibold">Dataset</th>
-                            <th className="px-6 py-4 font-semibold">Created</th>
-                            <th className="px-6 py-4 font-semibold">Actions</th>
+                        <tr className="bg-[#0b0c0f] text-zinc-500 text-[11px] uppercase tracking-wider border-b border-zinc-800">
+                            <th className="px-5 py-3 font-medium">Status</th>
+                            <th className="px-5 py-3 font-medium">Model / Method</th>
+                            <th className="px-5 py-3 font-medium">Dataset</th>
+                            <th className="px-5 py-3 font-medium">Created</th>
+                            <th className="px-5 py-3 font-medium text-right">Actions</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-800">
+                    <tbody className="divide-y divide-zinc-800/80">
                         {predictions.map(pred => {
                             return (
-                                <tr key={pred.id} className="hover:bg-white/5 transition-colors">
-                                    <td className="px-6 py-4">
+                                <tr key={pred.id} className="hover:bg-zinc-800/30 transition-colors">
+                                    <td className="px-5 py-3">
                                         <div className="flex items-center gap-2">
                                             {renderStatusIcon(pred.status)}
-                                            <span className={`text-sm ${renderStatusClass(pred.status)}`}>
+                                            <span className={`text-xs font-mono ${renderStatusClass(pred.status)}`}>
                                                 {pred.status}
                                             </span>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <div className="text-sm font-medium text-white">
+                                    <td className="px-5 py-3">
+                                        <div className="text-xs font-medium text-zinc-100">
                                             {models.find(m => m.id === pred.model_id)?.name || pred.model_id.substring(0, 8)}
                                         </div>
-                                        <div className="text-xs text-neutral-500 mt-0.5">{pred.method}</div>
+                                        <div className="text-[11px] font-mono text-zinc-500 mt-0.5">{pred.method}</div>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-neutral-400">
+                                    <td className="px-5 py-3 text-xs text-zinc-400">
                                         {pred.dataset_id ? (datasets.find(d => d.id === pred.dataset_id)?.name || pred.dataset_id.substring(0, 8)) : "Tabular Data"}
                                     </td>
-                                    <td className="px-6 py-4 text-xs text-neutral-500">
+                                    <td className="px-5 py-3 text-xs font-mono text-zinc-500">
                                         {new Date(pred.created_at).toLocaleString()}
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-5 py-3 text-right">
                                         <Button
                                             variant="ghost"
                                             size="sm"
-                                            className="text-neutral-400 hover:text-white"
+                                            className="h-7 text-xs text-zinc-400 hover:text-zinc-100"
                                             disabled={pred.status !== 'COMPLETED'}
                                             onClick={() => setSelectedPredictionView(pred)}
                                         >
-                                            <ExternalLink className="w-4 h-4 mr-2" /> View
+                                            <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> View
                                         </Button>
                                     </td>
                                 </tr>
@@ -119,8 +122,8 @@ export default function PredictionsTab({
                         })}
                         {predictions.length === 0 && (
                             <tr>
-                                <td colSpan={5} className="px-6 py-12 text-center text-neutral-500 italic">
-                                    No predictions yet. Head to Workspace to run your first inference.
+                                <td colSpan={5} className="px-5 py-10 text-center text-xs text-zinc-500">
+                                    No predictions yet. Run a batch or single-row prediction below.
                                 </td>
                             </tr>
                         )}
@@ -128,24 +131,23 @@ export default function PredictionsTab({
                 </table>
             </div>
 
-            {/* Quick Inference Panel (Moved from DashboardMVP) */}
-            <div className="mt-16 p-8 bg-neutral-900/40 border border-indigo-500/20 rounded-3xl backdrop-blur-md">
-                <div className="flex items-center gap-4 mb-8">
-                    <div className="p-3 bg-indigo-500/20 rounded-2xl text-indigo-400">
-                        <Activity className="w-6 h-6" />
+            {/* Batch Tabular Inference */}
+            <div className="p-5 bg-[#101217] border border-zinc-800 rounded-lg space-y-5">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-zinc-900 border border-zinc-800 rounded-md text-zinc-300">
+                        <Activity className="w-4 h-4" />
                     </div>
                     <div>
-                        <h3 className="text-xl font-bold">Batch Tabular Inference</h3>
-                        <p className="text-sm text-neutral-400">Upload a CSV/Excel file to run predictions on multiple rows.</p>
+                        <h3 className="text-sm font-semibold text-zinc-100">Batch Tabular Inference</h3>
+                        <p className="text-xs text-zinc-500">Upload a CSV, Excel or Parquet file to score multiple rows asynchronously.</p>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                    {/* File Upload Dropzone */}
-                    <div className="md:col-span-1">
-                        <label className="text-xs font-bold text-neutral-500 uppercase ml-1 mb-2 block">Batch Data File (.csv, .xlsx)</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label className="text-[11px] font-medium text-zinc-400 mb-1.5 block">Batch Data File (.csv, .xlsx, .parquet)</label>
                         <div
-                            className="bg-neutral-950/50 border-2 border-dashed border-neutral-800 rounded-2xl p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-neutral-900/50 transition-all group"
+                            className="bg-[#0b0c0f] border border-dashed border-zinc-700 rounded-lg p-6 flex flex-col items-center justify-center text-center cursor-pointer hover:border-zinc-500 transition-colors"
                             onClick={() => document.getElementById('batch-file-input')?.click()}
                         >
                             <input
@@ -155,32 +157,30 @@ export default function PredictionsTab({
                                 accept=".csv,.xlsx,.parquet"
                                 onChange={(e) => {
                                     if (e.target.files?.[0]) {
-                                        // Store file in a local state if needed, or just trigger the parent handler
-                                        // For simplicity, we'll use a local state here to show the filename
                                         setBatchFile(e.target.files[0]);
                                     }
                                 }}
                             />
                             {batchFile ? (
                                 <div className="flex flex-col items-center">
-                                    <CheckCircle2 className="w-8 h-8 text-green-500 mb-2" />
-                                    <p className="text-sm font-medium text-white">{batchFile.name}</p>
-                                    <p className="text-[10px] text-neutral-500 mt-1">Ready to process</p>
+                                    <CheckCircle2 className="w-6 h-6 text-emerald-400 mb-1.5" />
+                                    <p className="text-xs font-mono text-zinc-100">{batchFile.name}</p>
+                                    <p className="text-[10px] text-zinc-500 mt-0.5">Ready to process</p>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center">
-                                    <UploadCloud className="w-8 h-8 text-neutral-600 group-hover:text-indigo-400 mb-2 transition-colors" />
-                                    <p className="text-sm text-neutral-500">Click to upload CSV</p>
+                                    <UploadCloud className="w-6 h-6 text-zinc-500 mb-1.5" />
+                                    <p className="text-xs text-zinc-400">Click to select file</p>
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    <div className="space-y-6">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-neutral-500 uppercase ml-1">ML Model</label>
+                    <div className="space-y-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-medium text-zinc-400">ML Model</label>
                             <select
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none text-white"
+                                className="w-full h-9 bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600"
                                 value={selectedModel}
                                 onChange={(e) => {
                                     setSelectedModel(e.target.value);
@@ -191,10 +191,10 @@ export default function PredictionsTab({
                                 {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                             </select>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-neutral-500 uppercase ml-1">Method</label>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-medium text-zinc-400">Uncertainty Method</label>
                             <select
-                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none text-white"
+                                className="w-full h-9 bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600"
                                 value={uncertaintyMethod}
                                 onChange={(e) => setUncertaintyMethod(e.target.value)}
                             >
@@ -207,23 +207,18 @@ export default function PredictionsTab({
                     </div>
                 </div>
 
-                <Button
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 rounded-2xl text-lg font-bold shadow-2xl shadow-indigo-600/20"
+                <button
+                    type="button"
+                    className="w-full h-10 rounded-md bg-zinc-100 hover:bg-white text-zinc-950 text-xs font-semibold disabled:opacity-40 flex items-center justify-center gap-2 transition-colors"
                     disabled={(!selectedDataset && !batchFile) || !selectedModel || isActionLoading}
                     onClick={() => handleRunInference(batchFile || undefined)}
                 >
                     {isActionLoading ? (
-                        <>
-                            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                            Processing Batch...
-                        </>
+                        <><Loader2 className="w-4 h-4 animate-spin" /> Processing Batch...</>
                     ) : (
-                        <>
-                            <Activity className="w-5 h-5 mr-2" />
-                            Start Batch Inference
-                        </>
+                        <><Activity className="w-4 h-4" /> Start Batch Inference</>
                     )}
-                </Button>
+                </button>
             </div>
 
             <div className="mt-12">

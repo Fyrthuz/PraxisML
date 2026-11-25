@@ -58,17 +58,30 @@ export default function ObservabilityTab({ token }: ObservabilityTabProps) {
     };
 
     return (
-        <div className="flex-1 flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                        <Activity className="w-7 h-7 text-indigo-400" />
-                        Observability
-                    </h2>
-                    <p className="text-neutral-400 text-sm mt-1">
-                        Monitor usage, costs, alerts and resource pricing
-                    </p>
+        <div className="flex-1 flex flex-col space-y-5">
+            {/* Sub-tabs & refresh */}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 pb-3">
+                <div className="flex flex-wrap items-center gap-1">
+                    {([
+                        { id: "overview", label: "Overview", icon: <BarChart3 className="w-3.5 h-3.5" /> },
+                        { id: "usage", label: "Usage", icon: <Activity className="w-3.5 h-3.5" /> },
+                        { id: "costs", label: "Costs", icon: <DollarSign className="w-3.5 h-3.5" /> },
+                        { id: "alerts", label: "Alerts", icon: <Bell className="w-3.5 h-3.5" /> },
+                        { id: "pricing", label: "Pricing", icon: <Cpu className="w-3.5 h-3.5" /> },
+                    ] as { id: SubTab; label: string; icon: React.ReactNode }[]).map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => handleTabChange(tab.id)}
+                            className={`h-8 flex items-center gap-1.5 px-3 rounded-md text-xs font-medium transition-colors ${
+                                obs.activeTab === tab.id
+                                    ? "bg-zinc-800 text-zinc-100"
+                                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40"
+                            }`}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
                 <button
                     onClick={() => {
@@ -78,35 +91,11 @@ export default function ObservabilityTab({ token }: ObservabilityTabProps) {
                         obs.fetchAlerts();
                         obs.fetchPricing();
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-neutral-800 text-neutral-300 rounded-xl hover:bg-neutral-700 transition-colors"
+                    className="h-8 flex items-center gap-1.5 px-3 bg-[#101217] border border-zinc-800 text-zinc-300 text-xs rounded-md hover:bg-zinc-800 transition-colors"
                 >
-                    <RefreshCw className={`w-4 h-4 ${obs.isLoading ? "animate-spin" : ""}`} />
+                    <RefreshCw className={`w-3.5 h-3.5 ${obs.isLoading ? "animate-spin" : ""}`} />
                     Refresh
                 </button>
-            </div>
-
-            {/* Sub-tabs */}
-            <div className="flex gap-1 bg-neutral-900/50 p-1 rounded-xl mb-6 w-fit">
-                {([
-                    { id: "overview", label: "Overview", icon: <BarChart3 className="w-4 h-4" /> },
-                    { id: "usage", label: "Usage", icon: <Activity className="w-4 h-4" /> },
-                    { id: "costs", label: "Costs", icon: <DollarSign className="w-4 h-4" /> },
-                    { id: "alerts", label: "Alerts", icon: <Bell className="w-4 h-4" /> },
-                    { id: "pricing", label: "Pricing", icon: <Cpu className="w-4 h-4" /> },
-                ] as { id: SubTab; label: string; icon: React.ReactNode }[]).map((tab) => (
-                    <button
-                        key={tab.id}
-                        onClick={() => handleTabChange(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                            obs.activeTab === tab.id
-                                ? "bg-indigo-600 text-white"
-                                : "text-neutral-400 hover:text-white hover:bg-neutral-800"
-                        }`}
-                    >
-                        {tab.icon}
-                        {tab.label}
-                    </button>
-                ))}
             </div>
 
             {/* Content */}
@@ -196,7 +185,7 @@ function OverviewPanel({ obs }: { obs: ReturnType<typeof useObservability> }) {
             {/* Forecast */}
             <div className="col-span-1 md:col-span-2 bg-neutral-900 border border-neutral-800 rounded-xl p-6">
                 <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-5 h-5 text-indigo-400" />
+                    <TrendingUp className="w-5 h-5 text-zinc-300" />
                     Monthly Forecast
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -362,7 +351,7 @@ function AlertsPanel({
                 </h3>
                 <button
                     onClick={() => setShowCreate(!showCreate)}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-500 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-100 text-zinc-950 font-medium rounded-xl hover:bg-indigo-500 transition-colors"
                 >
                     <Plus className="w-4 h-4" />
                     New Alert
@@ -458,7 +447,7 @@ function CreateAlertForm({
     };
 
     return (
-        <div className="bg-neutral-900 border border-indigo-500/30 rounded-xl p-6 space-y-4">
+        <div className="bg-neutral-900 border border-zinc-700 rounded-xl p-6 space-y-4">
             <h4 className="text-white font-semibold">Create Alert</h4>
             <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -519,7 +508,7 @@ function CreateAlertForm({
                 </button>
                 <button
                     onClick={handleSubmit}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-500"
+                    className="px-4 py-2 bg-zinc-100 text-zinc-950 font-medium rounded-lg text-sm hover:bg-indigo-500"
                 >
                     Create
                 </button>
@@ -605,7 +594,7 @@ function StatCard({
         blue: "text-blue-400 bg-blue-400/10 border-blue-400/20",
         red: "text-red-400 bg-red-400/10 border-red-400/20",
         amber: "text-amber-400 bg-amber-400/10 border-amber-400/20",
-        indigo: "text-indigo-400 bg-indigo-400/10 border-indigo-400/20",
+        indigo: "text-zinc-300 bg-indigo-400/10 border-indigo-400/20",
     };
 
     return (

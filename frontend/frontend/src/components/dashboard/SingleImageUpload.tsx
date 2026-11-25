@@ -129,7 +129,7 @@ export default function SingleImageUpload({ models, onPredictionStarted }: Singl
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-neutral-500 uppercase ml-1">Target Model</label>
                         <select
-                            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-600"
                             value={selectedModel}
                             onChange={(e) => {
                                 setSelectedModel(e.target.value);
@@ -146,7 +146,7 @@ export default function SingleImageUpload({ models, onPredictionStarted }: Singl
                     <div className="space-y-2">
                         <label className="text-xs font-bold text-neutral-500 uppercase ml-1">Uncertainty Method</label>
                         <select
-                            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                            className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-600"
                             value={uncertaintyMethod}
                             onChange={(e) => setUncertaintyMethod(e.target.value)}
                         >
@@ -177,7 +177,7 @@ export default function SingleImageUpload({ models, onPredictionStarted }: Singl
                     </div>
 
                     <Button
-                        className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 rounded-2xl font-bold mt-4"
+                        className="w-full h-14 bg-zinc-100 hover:bg-white text-zinc-950 font-medium rounded-2xl font-bold mt-4"
                         disabled={(!isTabular && !file) || !selectedModel || isUploading}
                         onClick={handleSubmit}
                     >
@@ -201,7 +201,7 @@ export default function SingleImageUpload({ models, onPredictionStarted }: Singl
                                             <label className="text-xs font-medium text-neutral-400 ml-1">{featureName}</label>
                                             <input
                                                 type="text"
-                                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 text-white placeholder-neutral-600"
+                                                className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-600 text-white placeholder-neutral-600"
                                                 placeholder="0.0"
                                                 value={featureValues[featureName] || ''}
                                                 onChange={(e) => handleFeatureChange(featureName, e.target.value)}
@@ -217,8 +217,8 @@ export default function SingleImageUpload({ models, onPredictionStarted }: Singl
                         <div
                             className={cn(
                                 "h-full min-h-[250px] relative rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-8 text-center transition-all duration-200 cursor-pointer overflow-hidden",
-                                isDragging ? "border-indigo-500 bg-indigo-500/10" : "border-neutral-700 bg-neutral-900/50 hover:bg-neutral-800",
-                                file ? "border-indigo-500/50 bg-indigo-500/5" : ""
+                                isDragging ? "border-indigo-500 bg-zinc-900" : "border-neutral-700 bg-neutral-900/50 hover:bg-neutral-800",
+                                file ? "border-zinc-700 bg-indigo-500/5" : ""
                             )}
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
@@ -238,7 +238,7 @@ export default function SingleImageUpload({ models, onPredictionStarted }: Singl
                                     {imagePreview ? (
                                         <img src={imagePreview} alt="Preview" className="mx-auto max-h-32 object-contain rounded-lg shadow-md" />
                                     ) : (
-                                        <div className="mx-auto w-16 h-16 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                                        <div className="mx-auto w-16 h-16 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center">
                                             <CheckCircle2 className="w-8 h-8" />
                                         </div>
                                     )}

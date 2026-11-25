@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Database, Trash2, Loader2, RefreshCw, GitBranch, Upload, Download } from 'lucide-react';
+import { Loader2, RefreshCw, GitBranch, Upload, Download, ExternalLink, FlaskConical } from 'lucide-react';
 import { api } from '../../../lib/api';
 import toast from 'react-hot-toast';
 
@@ -21,9 +21,17 @@ interface DataRegistryTabProps {
     tenantId?: string;
     token?: string | null;
     onRefresh?: () => void;
+    onOpenDataset?: (datasetId: string) => void;
+    onTrainDataset?: (datasetId: string) => void;
 }
 
-export default function DataRegistryTab({ tenantId, token, onRefresh }: DataRegistryTabProps) {
+export default function DataRegistryTab({
+    tenantId,
+    token,
+    onRefresh,
+    onOpenDataset,
+    onTrainDataset,
+}: DataRegistryTabProps) {
     const [registries, setRegistries] = useState<DatasetRegistry[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedRegistry, setSelectedRegistry] = useState<string | null>(null);
@@ -35,7 +43,12 @@ export default function DataRegistryTab({ tenantId, token, onRefresh }: DataRegi
         setIsLoading(true);
         try {
             const data = await api.getDatasetRegistries(tenantId);
-            setRegistries(data || []);
+            const list = data || [];
+            setRegistries(list);
+            if (!selectedRegistry && list.length > 0) {
+                setSelectedRegistry(list[0].name);
+                fetchVersions(list[0].name);
+            }
         } catch (err) {
             console.error('Failed to fetch dataset registries:', err);
             toast.error('Failed to load data registries');
@@ -109,123 +122,170 @@ export default function DataRegistryTab({ tenantId, token, onRefresh }: DataRegi
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
             <div className="flex justify-between items-center">
-                <h3 className="text-xl font-medium">Data Registry (DVC)</h3>
-                <Button variant="outline" size="sm" onClick={fetchRegistries} disabled={isLoading}>
-                    <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                <h3 className="text-sm font-semibold text-zinc-200">Data Registry (DVC)</h3>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={fetchRegistries}
+                    disabled={isLoading}
+                    className="h-8 border-zinc-800 bg-[#14171e] text-zinc-300 hover:bg-zinc-800 text-xs rounded-md"
+                >
+                    <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
                     Refresh
                 </Button>
             </div>
 
             {isLoading ? (
-                <div className="text-center py-8 text-neutral-500">
-                    <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
-                    Loading...
+                <div className="text-center py-8 text-zinc-500">
+                    <Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />
+                    <span className="text-xs">Loading registries...</span>
                 </div>
             ) : registries.length === 0 ? (
-                <div className="border-2 border-dashed border-neutral-700 rounded-xl p-12 text-center text-neutral-500">
+                <div className="border border-dashed border-zinc-800 rounded-lg p-10 text-center text-xs text-zinc-500 bg-[#14171e]">
                     No DVC-tracked datasets yet. Enable DVC tracking when uploading a dataset.
                 </div>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Registry List */}
-                    <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-neutral-400">Data Registries</h4>
-                        {registries.map((reg) => (
-                            <div
-                                key={reg.name}
-                                onClick={() => handleSelectRegistry(reg.name)}
-                                className={`p-4 rounded-xl border cursor-pointer transition-colors ${
-                                    selectedRegistry === reg.name
-                                        ? 'bg-indigo-500/10 border-indigo-500/30'
-                                        : 'bg-neutral-800/40 border-neutral-700 hover:border-neutral-600'
-                                }`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-orange-500/10 rounded-lg text-orange-400">
-                                        <GitBranch className="w-5 h-5" />
-                                    </div>
-                                    <div className="flex-1">
-                                        <h5 className="font-medium text-white">
-                                            {reg.display_name || reg.name.replace(/^tenant_[^_]+_/, '')}
-                                        </h5>
-                                        <p className="text-xs text-neutral-400">
-                                            {reg.datasets.length} dataset(s) • {reg.versions} version(s)
-                                        </p>
+                    <div className="space-y-2.5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                            Registries
+                        </h4>
+                        {registries.map((reg) => {
+                            const isSelected = selectedRegistry === reg.name;
+                            return (
+                                <div
+                                    key={reg.name}
+                                    onClick={() => handleSelectRegistry(reg.name)}
+                                    className={`p-3.5 rounded-lg border cursor-pointer transition-colors ${
+                                        isSelected
+                                            ? 'bg-zinc-800/70 border-zinc-600'
+                                            : 'bg-[#14171e] border-zinc-800/90 hover:border-zinc-700'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-zinc-900 border border-zinc-800 rounded-md text-orange-400">
+                                            <GitBranch className="w-4 h-4" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h5 className="text-sm font-medium text-zinc-100 truncate">
+                                                {reg.display_name || reg.name.replace(/^tenant_[^_]+_/, '')}
+                                            </h5>
+                                            <p className="text-[11px] font-mono text-zinc-500">
+                                                {reg.datasets.length} dataset(s) · {reg.versions} version(s)
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
 
                     {/* Version Details */}
-                    <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-neutral-400">
-                            {selectedRegistry ? `Versions: ${registries.find(r => r.name === selectedRegistry)?.display_name || selectedRegistry.replace(/^tenant_[^_]+_/, '')}` : 'Select a registry'}
+                    <div className="space-y-2.5">
+                        <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                            {selectedRegistry
+                                ? `Versions · ${registries.find(r => r.name === selectedRegistry)?.display_name || selectedRegistry.replace(/^tenant_[^_]+_/, '')}`
+                                : 'Select a registry'}
                         </h4>
-                        
+
                         {!selectedRegistry ? (
-                            <div className="text-center py-8 text-neutral-500 text-sm">
-                                Select a registry to view versions
+                            <div className="border border-zinc-800/90 rounded-lg bg-[#14171e] text-center py-8 text-zinc-500 text-xs">
+                                Select a registry to inspect versions.
                             </div>
                         ) : isLoadingVersions ? (
-                            <div className="text-center py-8 text-neutral-500">
-                                <Loader2 className="w-6 h-6 animate-spin mx-auto" />
+                            <div className="text-center py-8 text-zinc-500">
+                                <Loader2 className="w-5 h-5 animate-spin mx-auto" />
                             </div>
                         ) : versions.length === 0 ? (
-                            <div className="text-center py-8 text-neutral-500 text-sm">
-                                No versions found
+                            <div className="border border-zinc-800/90 rounded-lg bg-[#14171e] text-center py-8 text-zinc-500 text-xs">
+                                No versions found.
                             </div>
                         ) : (
-                            <div className="space-y-2">
+                            <div className="space-y-2.5">
                                 {versions.map((v) => (
                                     <div
                                         key={v.id}
-                                        className="p-4 bg-neutral-800/40 border border-neutral-700 rounded-xl"
+                                        className="p-4 bg-[#14171e] border border-zinc-800/90 rounded-lg space-y-3"
                                     >
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <h5 className="font-medium text-white">{v.name}</h5>
-                                                <p className="text-xs text-neutral-400 mt-1">
-                                                    Version {v.version} • {getFileSize(v.file_size_bytes || 0)}
+                                        <div className="flex justify-between items-start gap-3">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <h5 className="text-sm font-medium text-zinc-100 truncate">
+                                                        {v.name}
+                                                    </h5>
+                                                    {v.is_active && (
+                                                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-emerald-800/80 bg-emerald-950/60 text-emerald-300">
+                                                            production
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs font-mono text-zinc-400 mt-0.5">
+                                                    v{v.version} · {getFileSize(v.file_size_bytes || 0)}
                                                 </p>
-                                                <p className="text-[10px] text-neutral-500 font-mono mt-1 truncate" title={v.dvc_hash}>
-                                                    Hash: {v.dvc_hash?.substring(0, 12)}...
+                                                <p
+                                                    className="text-[11px] text-zinc-500 font-mono mt-0.5 truncate"
+                                                    title={v.dvc_hash}
+                                                >
+                                                    md5: {v.dvc_hash?.substring(0, 12)}...
                                                 </p>
                                             </div>
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handlePush(v.id)}
-                                                    className="text-xs"
-                                                >
-                                                    <Upload className="w-3 h-3 mr-1" />
-                                                    Push
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handleDownload(v)}
-                                                    className="text-xs text-emerald-400 hover:text-emerald-300"
-                                                >
-                                                    <Download className="w-3 h-3 mr-1" />
-                                                    Download
-                                                </Button>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handlePromote(v.id)}
-                                                    className="text-xs"
-                                                >
-                                                    Promote
-                                                </Button>
-                                            </div>
+                                            <span className="text-[11px] text-zinc-500 font-mono shrink-0">
+                                                {new Date(v.created_at).toLocaleDateString()}
+                                            </span>
                                         </div>
-                                        <p className="text-xs text-neutral-500 mt-2">
-                                            Created: {new Date(v.created_at).toLocaleString()}
-                                        </p>
+
+                                        <div className="pt-2.5 border-t border-zinc-800/80 flex flex-wrap gap-1.5">
+                                            {onOpenDataset && (
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => onOpenDataset(v.id)}
+                                                    className="h-7 px-2.5 text-xs bg-zinc-100 hover:bg-white text-zinc-950 font-medium rounded-md"
+                                                >
+                                                    <ExternalLink className="w-3 h-3 mr-1" />
+                                                    View Dataset
+                                                </Button>
+                                            )}
+                                            {onTrainDataset && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => onTrainDataset(v.id)}
+                                                    className="h-7 px-2.5 text-xs border-zinc-800 bg-zinc-900 text-zinc-200 hover:bg-zinc-800 rounded-md"
+                                                >
+                                                    <FlaskConical className="w-3 h-3 mr-1" />
+                                                    Train
+                                                </Button>
+                                            )}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handlePush(v.id)}
+                                                className="h-7 px-2.5 text-xs border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 rounded-md"
+                                            >
+                                                <Upload className="w-3 h-3 mr-1" />
+                                                Push
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleDownload(v)}
+                                                className="h-7 px-2.5 text-xs border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 rounded-md"
+                                            >
+                                                <Download className="w-3 h-3 mr-1" />
+                                                Download
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handlePromote(v.id)}
+                                                className="h-7 px-2.5 text-xs border-zinc-800 bg-zinc-900 text-emerald-300 hover:bg-zinc-800 rounded-md"
+                                            >
+                                                Promote
+                                            </Button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
