@@ -157,5 +157,5 @@ def upload_dataset(..., verify_quota = Depends(check_dataset_quota)):
 El proyecto cuenta con suites de `pytest` (unitarias e integración).
 - Uso intensivo de *mocking* (MagicMock) en Unit tests frente a bases de MLflow o MinIO.
 - Base de datos en memoria o aislada transaccionalmente para Integration tests (API REST completa cubierta en `test_api_endpoints.py`).
-- Flujo CI mediante GitHub Actions validando Lints (Ruff) con un límite de cobertura exigido en CI (Pytest `--cov-fail-under=30%` alcanzando ~45%).
+- Flujo CI mediante GitHub Actions validando Lints (Ruff) con un límite de cobertura exigido en CI (Pytest `--cov-fail-under=50%` alcanzando ~45%).
 - **Model Validation**: Script `validate_model.py` integrado en CI para verificar que los modelos cumplen con las métricas mínimas antes de ser promovidos a producción.
