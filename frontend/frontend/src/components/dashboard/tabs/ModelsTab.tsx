@@ -151,12 +151,18 @@ export default function ModelsTab({
                                         <span className="px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-400 rounded">
                                             run:{(model.mlflow_run_id || '').substring(0, 8)}
                                         </span>
+                                        {model.metrics_metadata?.domain && (
+                                            <span className="px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-300 rounded uppercase">
+                                                {model.metrics_metadata.domain}
+                                            </span>
+                                        )}
                                         {model.metrics_metadata?.algorithm && (
                                             <span className="px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 text-orange-300 rounded">
                                                 {model.metrics_metadata.algorithm}
                                             </span>
                                         )}
-                                        {model.metrics_metadata?.preprocessing_pipeline_path && (
+                                        {((model as any).preprocessing_pipeline_path ||
+                                            model.metrics_metadata?.preprocessing_pipeline_path) && (
                                             <span className="px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded">
                                                 auto-preprocess
                                             </span>

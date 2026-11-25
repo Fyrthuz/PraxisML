@@ -61,6 +61,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_PROMETHEUS_AUTH_TYPE: public
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -119,6 +120,11 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_PUBLIC_URL=http://localhost:5000
+      - PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_PUBLIC_URL=http://localhost:9090
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_PUBLIC_URL=http://localhost:3001
       - STORAGE_BACKEND=minio
       - MINIO_ENDPOINT=http://minio:9000
       - AWS_ACCESS_KEY_ID=minioadmin
@@ -154,6 +160,11 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_PUBLIC_URL=http://localhost:5000
+      - PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_PUBLIC_URL=http://localhost:9090
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_PUBLIC_URL=http://localhost:3001
       - STORAGE_BACKEND=minio
       - MINIO_ENDPOINT=http://minio:9000
       - AWS_ACCESS_KEY_ID=minioadmin
@@ -189,6 +200,11 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_PUBLIC_URL=http://localhost:5000
+      - PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_PUBLIC_URL=http://localhost:9090
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_PUBLIC_URL=http://localhost:3001
       - STORAGE_BACKEND=minio
       - MINIO_ENDPOINT=http://minio:9000
       - AWS_ACCESS_KEY_ID=minioadmin
@@ -225,6 +241,11 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MLFLOW_PUBLIC_URL=http://localhost:5000
+      - PROMETHEUS_URL=http://prometheus:9090
+      - PROMETHEUS_PUBLIC_URL=http://localhost:9090
+      - GRAFANA_URL=http://grafana:3000
+      - GRAFANA_PUBLIC_URL=http://localhost:3001
       - STORAGE_BACKEND=minio
       - MINIO_ENDPOINT=http://minio:9000
       - AWS_ACCESS_KEY_ID=minioadmin
@@ -246,7 +267,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     restart: always
 
   # 7b. vLLM — servidor LLM (OpenAI-compatible) para el asistente RAG (Fase 1)
@@ -277,8 +298,11 @@ services:
     container_name: praxisml_prometheus
     ports:
       - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"

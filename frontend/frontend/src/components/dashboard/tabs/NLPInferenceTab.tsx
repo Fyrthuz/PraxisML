@@ -1,6 +1,6 @@
 "use client";
-import React from "react";
-import { Loader2, Cpu } from "lucide-react";
+import React, { useEffect } from "react";
+import { Loader2, Cpu, Send, FileSpreadsheet } from "lucide-react";
 import { MLModel, NLPPrediction } from "@/lib/api";
 
 interface Props {
@@ -10,6 +10,12 @@ interface Props {
     onPredict: (modelId: string, text: string) => void;
     onBatch: (modelId: string, textColumn: string, file: File) => void;
 }
+
+const SAMPLE_TEXTS = [
+    "Excellent model serving latency and rock-solid MLflow tracking!",
+    "The deployment crashed with timeout errors and missing metrics.",
+    "Standard release with minor configuration updates for staging.",
+];
 
 export default function NLPInferenceTab({
     nlpModels,
@@ -23,91 +29,195 @@ export default function NLPInferenceTab({
     const [textColumn, setTextColumn] = React.useState("text");
     const [file, setFile] = React.useState<File | null>(null);
 
+    useEffect(() => {
+        if (!modelId && nlpModels.length > 0) {
+            setModelId(nlpModels[0].id);
+        }
+    }, [modelId, nlpModels]);
+
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-3 bg-sky-500/20 rounded-xl text-sky-400">
-                        <Cpu className="w-5 h-5" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="bg-[#101217] border border-zinc-800 rounded-lg p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                    <div className="flex items-center gap-2">
+                        <Cpu className="w-4 h-4 text-orange-400" />
+                        <h4 className="text-xs font-semibold text-zinc-100 uppercase tracking-wider">
+                            NLP Real-Time &amp; Batch Inference
+                        </h4>
                     </div>
-                    <h4 className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Inferencia</h4>
+                    <span className="text-[10px] font-mono text-zinc-500">
+                        {nlpModels.length} NLP model{nlpModels.length !== 1 ? "s" : ""}
+                    </span>
                 </div>
 
                 <div>
-                    <label className="text-xs font-semibold text-neutral-500 ml-1">Modelo NLP</label>
-                    <select className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm mt-1" value={modelId} onChange={(e) => setModelId(e.target.value)}>
-                        <option value="" disabled>Selecciona modelo</option>
+                    <label className="text-[11px] font-medium text-zinc-400">NLP Model</label>
+                    <select
+                        className="w-full h-9 bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 text-xs text-zinc-100 mt-1 focus:outline-none focus:border-zinc-600"
+                        value={modelId}
+                        onChange={(e) => setModelId(e.target.value)}
+                    >
+                        <option value="" disabled>
+                            {nlpModels.length === 0 ? "No NLP models registered yet" : "Select NLP model..."}
+                        </option>
                         {nlpModels.map((m) => (
-                            <option key={m.id} value={m.id}>{m.name}</option>
+                            <option key={m.id} value={m.id}>
+                                {m.name} ({m.stage || "Staging"})
+                            </option>
                         ))}
                     </select>
                 </div>
 
                 <div>
-                    <label className="text-xs font-semibold text-neutral-500 ml-1">Texto</label>
+                    <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-medium text-zinc-400">Input Text</label>
+                        <div className="flex items-center gap-1">
+                            {SAMPLE_TEXTS.map((sample, idx) => (
+                                <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => setText(sample)}
+                                    className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-400 hover:text-zinc-200"
+                                >
+                                    sample #{idx + 1}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                     <textarea
-                        className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm mt-1 min-h-24"
+                        className="w-full bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 py-2.5 text-xs text-zinc-100 mt-1 min-h-24 focus:outline-none focus:border-zinc-600"
                         value={text}
                         onChange={(e) => setText(e.target.value)}
-                        placeholder="Escribe un texto para clasificar..."
+                        placeholder="Enter text to classify or extract entities..."
                     />
                 </div>
 
                 <button
                     onClick={() => onPredict(modelId, text)}
-                    disabled={isPredicting || !modelId || !text}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-sky-600 hover:bg-sky-500 disabled:opacity-40 text-white rounded-xl font-semibold transition-colors"
+                    disabled={isPredicting || !modelId || !text.trim()}
+                    className="w-full h-9 flex items-center justify-center gap-2 px-4 bg-zinc-100 hover:bg-white disabled:opacity-40 text-zinc-950 rounded-md text-xs font-medium transition-colors"
                 >
-                    {isPredicting ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                    {isPredicting ? "Prediciendo..." : "Predecir"}
+                    {isPredicting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    {isPredicting ? "Running inference..." : "Run NLP Inference"}
                 </button>
 
-                <div className="border-t border-neutral-800 pt-4 mt-4">
-                    <label className="text-xs font-semibold text-neutral-500 ml-1">Batch CSV</label>
-                    <input className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm mt-1" type="file" accept=".csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
-                    <input className="w-full bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm mt-2" value={textColumn} onChange={(e) => setTextColumn(e.target.value)} placeholder="Columna de texto (default: text)" />
+                <div className="border-t border-zinc-800 pt-4 space-y-2.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-medium text-zinc-400">
+                        <FileSpreadsheet className="w-3.5 h-3.5" />
+                        Async Batch CSV Scoring (Celery)
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <input
+                            className="w-full bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 py-2 text-xs text-zinc-300"
+                            type="file"
+                            accept=".csv"
+                            onChange={(e) => setFile(e.target.files?.[0] || null)}
+                        />
+                        <input
+                            className="w-full bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 py-2 text-xs font-mono text-zinc-200"
+                            value={textColumn}
+                            onChange={(e) => setTextColumn(e.target.value)}
+                            placeholder="text column (default: text)"
+                        />
+                    </div>
                     <button
                         onClick={() => file && onBatch(modelId, textColumn, file)}
                         disabled={!modelId || !file}
-                        className="w-full mt-2 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-40 text-neutral-200 rounded-xl text-sm"
+                        className="w-full h-8 px-4 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 disabled:opacity-40 text-zinc-200 rounded-md text-xs font-medium"
                     >
-                        Encolar Batch
+                        Enqueue Batch CSV Job
                     </button>
                 </div>
             </div>
 
-            <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 space-y-4">
-                <h4 className="text-sm font-bold text-neutral-400 uppercase tracking-wider">Resultado</h4>
+            <div className="bg-[#101217] border border-zinc-800 rounded-lg p-5 space-y-4">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                    <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">
+                        Inference Output &amp; Telemetry
+                    </h4>
+                    <span className="text-[10px] font-mono text-zinc-500">domain: nlp</span>
+                </div>
                 {prediction ? (
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-neutral-500">Label</span>
-                            <span className="text-lg font-bold text-white">{prediction.label ?? "—"}</span>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-2.5">
+                            <div className="rounded-md bg-[#0b0c0f] border border-zinc-800 p-3">
+                                <span className="text-[10px] uppercase text-zinc-500 block">Predicted Label</span>
+                                <span className="text-base font-mono font-semibold text-zinc-100 mt-0.5 block">
+                                    {prediction.label ?? "—"}
+                                </span>
+                            </div>
+                            <div className="rounded-md bg-[#0b0c0f] border border-zinc-800 p-3">
+                                <span className="text-[10px] uppercase text-zinc-500 block">Confidence</span>
+                                <span className="text-base font-mono font-semibold text-emerald-400 tabular-nums mt-0.5 block">
+                                    {prediction.confidence != null
+                                        ? `${(prediction.confidence * 100).toFixed(1)}%`
+                                        : "—"}
+                                </span>
+                            </div>
+                            <div className="rounded-md bg-[#0b0c0f] border border-zinc-800 p-3">
+                                <span className="text-[10px] uppercase text-zinc-500 block">Latency</span>
+                                <span className="text-base font-mono font-semibold text-orange-400 tabular-nums mt-0.5 block">
+                                    {prediction.latency_ms.toFixed(1)} ms
+                                </span>
+                            </div>
                         </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-neutral-500">Confianza</span>
-                            <span className="text-sm text-emerald-400">
-                                {prediction.confidence != null ? (prediction.confidence * 100).toFixed(1) + "%" : "—"}
-                            </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-neutral-500">Latencia</span>
-                            <span className="text-sm text-neutral-300">{prediction.latency_ms.toFixed(1)} ms</span>
-                        </div>
-                        {prediction.entities.length > 0 && (
+
+                        {prediction.confidence != null && (
                             <div className="space-y-1">
-                                <span className="text-xs text-neutral-500">Entidades</span>
-                                {prediction.entities.map((e, i) => (
-                                    <div key={i} className="flex justify-between bg-neutral-950 rounded-lg px-3 py-2 text-sm">
-                                        <span className="text-neutral-300">{e.entity}</span>
-                                        <span className="text-sky-400">{e.label}</span>
-                                    </div>
-                                ))}
+                                <div className="flex justify-between text-[11px] font-mono text-zinc-500">
+                                    <span>Confidence score</span>
+                                    <span>{(prediction.confidence * 100).toFixed(2)}%</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-zinc-900 overflow-hidden">
+                                    <div
+                                        className="h-full bg-emerald-400"
+                                        style={{ width: `${Math.min(100, prediction.confidence * 100)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {prediction.tokens && prediction.tokens.length > 0 && (
+                            <div className="space-y-1.5">
+                                <span className="text-[11px] font-mono text-zinc-500">
+                                    Tokens ({prediction.tokens.length})
+                                </span>
+                                <div className="flex flex-wrap gap-1 bg-[#0b0c0f] border border-zinc-800 rounded-md p-2.5 max-h-28 overflow-y-auto">
+                                    {prediction.tokens.slice(0, 40).map((tok, i) => (
+                                        <span
+                                            key={i}
+                                            className="px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-300"
+                                        >
+                                            {tok}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {prediction.entities.length > 0 && (
+                            <div className="space-y-1.5">
+                                <span className="text-[11px] font-mono text-zinc-500">
+                                    Extracted Entities ({prediction.entities.length})
+                                </span>
+                                <div className="space-y-1">
+                                    {prediction.entities.map((e, i) => (
+                                        <div
+                                            key={i}
+                                            className="flex justify-between bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 py-2 text-xs font-mono"
+                                        >
+                                            <span className="text-zinc-200">{e.entity}</span>
+                                            <span className="text-orange-400">{e.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
                 ) : (
-                    <p className="text-sm text-neutral-500">La predicción aparecerá aquí.</p>
+                    <p className="text-xs text-zinc-500 py-6">
+                        Select an NLP model and run inference to inspect label, confidence, tokenization, and latency (automatically tracked in Observability → Usage).
+                    </p>
                 )}
             </div>
         </div>

@@ -96,7 +96,10 @@ def run_nlp_training(
         metrics = result["metrics"]
         mlflow_run_id = result["mlflow_run_id"]
         label_map = result["label_map"]
-        onnx_path = result["onnx_path"]
+        id2label = result.get("id2label") or {str(v): k for k, v in (label_map or {}).items()}
+        onnx_path = result.get("onnx_path")
+        model_path = result.get("model_path")
+        tokenizer_path = result.get("tokenizer_path")
 
         logger.info(
             "Entrenamiento NLP completado. run_id=%s metrics=%s",
@@ -147,6 +150,9 @@ def run_nlp_training(
                 "text_column": text_column,
                 "label_column": label_column,
                 "label_map": label_map,
+                "id2label": id2label,
+                "model_path": model_path,
+                "tokenizer_path": tokenizer_path,
                 "onnx_path": onnx_path,
                 "metrics": metrics,
                 "feature_names": [text_column],

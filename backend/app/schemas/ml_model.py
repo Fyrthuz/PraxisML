@@ -36,6 +36,7 @@ class MLModelResponse(MLModelBase):
     promoted_by: Optional[str] = None
     mlflow_registry_name: Optional[str] = None
     mlflow_version: Optional[str] = None
+    preprocessing_pipeline_path: Optional[str] = None
 
     from pydantic import field_validator
     @field_validator("mlflow_version", mode="before")

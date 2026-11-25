@@ -385,6 +385,45 @@ def run_pipeline(
         parent_dataset_id=dataset.id,
     )
     db.add(new_ds)
+    duration_s = round(time.perf_counter() - t0, 4)
+    mlflow_run_id: Optional[str] = None
+    try:
+        import mlflow
+        from app.services.mlflow_service import MLFlowService
+
+        mlflow_svc = MLFlowService()
+        mlflow_svc.ensure_tenant_experiment(tenant.id, "pipelines")
+        with mlflow.start_run(run_name=f"pipeline_{pipe.slug}_v{pipe.version}") as run:
+            mlflow.set_tags(
+                {
+                    "tenant_id": tenant.id,
+                    "pipeline_id": pipe.id,
+                    "pipeline_slug": pipe.slug,
+                    "engine": pipe.engine,
+                    "environment_id": pipe.environment_id or "",
+                    "source_dataset_id": dataset.id,
+                    "output_dataset_id": new_ds.id,
+                }
+            )
+            mlflow.log_params(
+                {
+                    "pipeline_version": pipe.version,
+                    "engine": pipe.engine,
+                    "input_rows": dataset.num_rows or 0,
+                    "input_cols": dataset.num_columns or 0,
+                }
+            )
+            mlflow.log_metrics(
+                {
+                    "duration_s": duration_s,
+                    "output_rows": float(len(df_out)),
+                    "output_cols": float(len(df_out.columns)),
+                }
+            )
+            mlflow_run_id = run.info.run_id
+    except Exception:
+        mlflow_run_id = None
+
     try:
         from app.observability.usage_collector import get_usage_collector
 
@@ -393,9 +432,9 @@ def run_pipeline(
             tenant_id=tenant.id,
             pipeline_id=pipe.id,
             engine=pipe.engine,
-            duration_s=round(time.perf_counter() - t0, 4),
+            duration_s=duration_s,
             success=True,
-            tags={"slug": pipe.slug, "output_rows": len(df_out)},
+            tags={"slug": pipe.slug, "output_rows": len(df_out), "mlflow_run_id": mlflow_run_id or ""},
         )
     except Exception:
         pass
@@ -414,6 +453,7 @@ def run_pipeline(
             "source_dataset_id": dataset.id,
             "output_dataset_id": new_ds.id,
             "shape": [len(df_out), len(df_out.columns)],
+            "mlflow_run_id": mlflow_run_id,
         },
         request=request,
     )
@@ -426,5 +466,7 @@ def run_pipeline(
         "transformed_shape": [len(df_out), len(df_out.columns)],
         "transformed_columns": df_out.columns.tolist(),
         "pipeline_path": pipeline_artifact_uri,
+        "mlflow_run_id": mlflow_run_id,
+        "duration_s": duration_s,
         "stdout": exec_stdout,
     }

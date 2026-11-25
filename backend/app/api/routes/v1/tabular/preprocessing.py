@@ -255,6 +255,27 @@ def apply_preprocessing(
         db.commit()
         db.refresh(new_dataset)
 
+        try:
+            from app.observability.models import UsageMetric
+
+            db.add(
+                UsageMetric(
+                    tenant_id=tenant.id,
+                    domain="tabular",
+                    metric_name="preprocessing_rows_transformed",
+                    metric_value=float(len(df_transformed)),
+                    tags={
+                        "source_dataset_id": dataset.id,
+                        "output_dataset_id": new_dataset.id,
+                        "steps": len(config.steps),
+                        "output_columns": len(df_transformed.columns),
+                    },
+                )
+            )
+            db.commit()
+        except Exception as exc:
+            logger.warning("Preprocessing usage recording failed (non-critical): %s", exc)
+
         return {
             "message": "Preprocesamiento aplicado correctamente.",
             "new_dataset_id": new_dataset.id,

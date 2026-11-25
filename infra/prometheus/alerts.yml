@@ -1,0 +1,71 @@
+groups:
+  - name: praxisml_serving_and_pipelines
+    interval: 30s
+    rules:
+      - alert: HighServingErrorRate
+        expr: |
+          (
+            sum by (tenant_id, endpoint_slug) (rate(praxisml_serving_requests_total{status="error"}[5m]))
+            /
+            clamp_min(sum by (tenant_id, endpoint_slug) (rate(praxisml_serving_requests_total[5m])), 1e-6)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          domain: serving
+        annotations:
+          summary: "High error rate on Model Endpoint {{ $labels.endpoint_slug }}"
+          description: "Serving endpoint {{ $labels.endpoint_slug }} has >5% error rate over the last 5 minutes."
+
+      - alert: ServingLatencyP95Degraded
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, endpoint_slug, runtime) (rate(praxisml_serving_latency_ms_bucket[5m]))
+          ) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          domain: serving
+        annotations:
+          summary: "Serving P95 latency > 1000ms on {{ $labels.endpoint_slug }}"
+          description: "Endpoint {{ $labels.endpoint_slug }} ({{ $labels.runtime }}) P95 latency exceeded 1s."
+
+      - alert: PipelineRunFailureSpike
+        expr: sum by (tenant_id, engine) (increase(praxisml_pipeline_runs_total{status="error"}[15m])) >= 3
+        for: 1m
+        labels:
+          severity: warning
+          domain: pipelines
+        annotations:
+          summary: "User pipeline failures detected ({{ $labels.engine }})"
+          description: "3+ pipeline runs failed in the last 15 minutes for tenant {{ $labels.tenant_id }}."
+
+      - alert: NLPInferenceLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, model_id, task_type) (rate(praxisml_nlp_inference_latency_ms_bucket[5m]))
+          ) > 2000
+        for: 5m
+        labels:
+          severity: warning
+          domain: nlp
+        annotations:
+          summary: "NLP P95 latency > 2000ms for model {{ $labels.model_id }}"
+          description: "NLP inference latency degraded above 2 seconds."
+
+      - alert: HighAPI5xxErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{job="praxisml_api",status_code=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total{job="praxisml_api"}[5m])), 1e-6)
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          domain: api
+        annotations:
+          summary: "PraxisML API 5xx error rate exceeded 5%"
+          description: "Control Plane HTTP 5xx ratio exceeded 5% over the last 5 minutes."

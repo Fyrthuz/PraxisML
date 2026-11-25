@@ -106,7 +106,7 @@ class NLPRuntime(ModelRuntime):
         inputs: Union[Dict[str, Any], List[Dict[str, Any]], List[str]],
         pipeline_path: Optional[str] = None,
     ) -> Dict[str, Any]:
-        from app.services.nlp_inference_service import NLPInferenceService
+        from app.services.nlp_inference import get_nlp_inference_service
 
         if isinstance(inputs, dict):
             texts = [str(inputs.get("text") or inputs.get("input") or "")]
@@ -120,8 +120,15 @@ class NLPRuntime(ModelRuntime):
         else:
             texts = [str(inputs)]
 
-        results = NLPInferenceService().predict_batch(ml_model=ml_model, texts=texts)
-        return {"predictions": results, "probabilities": None, "count": len(results)}
+        svc = get_nlp_inference_service()
+        handle = svc.load_model(ml_model)
+        results = [svc.predict(handle, text) for text in texts]
+        probabilities = [r.get("confidence") for r in results if r.get("confidence") is not None]
+        return {
+            "predictions": results,
+            "probabilities": probabilities or None,
+            "count": len(results),
+        }
 
 
 class TabularMLRuntime(ModelRuntime):

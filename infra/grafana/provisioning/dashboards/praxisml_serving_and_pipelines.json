@@ -1,0 +1,186 @@
+{
+  "__requires": [
+    { "type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0" },
+    { "type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0" },
+    { "type": "panel", "id": "timeseries", "name": "Time series", "version": "" },
+    { "type": "panel", "id": "stat", "name": "Stat", "version": "" }
+  ],
+  "annotations": { "list": [] },
+  "description": "Model Serving Endpoints (RPS, Canary split, P50/P95/P99 latency, Error Rate) & User Pipelines telemetry",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        { "expr": "sum(praxisml_serving_requests_total)", "legendFormat": "Serving Requests", "refId": "A" }
+      ],
+      "title": "Total Serving Requests",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        {
+          "expr": "sum(praxisml_serving_requests_total{status=\"error\"}) / clamp_min(sum(praxisml_serving_requests_total), 1)",
+          "legendFormat": "Error Rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Serving Error Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(praxisml_serving_latency_ms_bucket[5m])))",
+          "legendFormat": "P95 Latency",
+          "refId": "A"
+        }
+      ],
+      "title": "Serving P95 Latency (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        { "expr": "sum(praxisml_pipeline_runs_total)", "legendFormat": "Pipeline Runs", "refId": "A" }
+      ],
+      "title": "Total User Pipeline Runs",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 12 },
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum by (endpoint_slug, variant, status) (rate(praxisml_serving_requests_total[1m]))",
+          "legendFormat": "{{endpoint_slug}} ({{variant}}/{{status}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Model Serving RPS by Endpoint & Variant (Primary vs Canary)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, endpoint_slug, runtime) (rate(praxisml_serving_latency_ms_bucket[5m])))",
+          "legendFormat": "p50 {{endpoint_slug}} ({{runtime}})",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, endpoint_slug, runtime) (rate(praxisml_serving_latency_ms_bucket[5m])))",
+          "legendFormat": "p95 {{endpoint_slug}} ({{runtime}})",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, endpoint_slug, runtime) (rate(praxisml_serving_latency_ms_bucket[5m])))",
+          "legendFormat": "p99 {{endpoint_slug}} ({{runtime}})",
+          "refId": "C"
+        }
+      ],
+      "title": "Model Serving Latency (P50 / P95 / P99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 12 },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "sum by (engine, status) (increase(praxisml_pipeline_runs_total[5m]))",
+          "legendFormat": "{{engine}} ({{status}})",
+          "refId": "A"
+        }
+      ],
+      "title": "User Pipeline Executions by Engine & Status (5m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "Prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, engine) (rate(praxisml_pipeline_duration_seconds_bucket[15m])))",
+          "legendFormat": "p95 {{engine}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, engine) (rate(praxisml_pipeline_duration_seconds_bucket[15m])))",
+          "legendFormat": "p50 {{engine}}",
+          "refId": "B"
+        }
+      ],
+      "title": "User Pipeline Execution Duration (P50 / P95)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["praxisml", "serving", "pipelines", "observability"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "PraxisML — Model Serving & User Pipelines",
+  "uid": "praxisml-serving-pipelines",
+  "version": 1
+}

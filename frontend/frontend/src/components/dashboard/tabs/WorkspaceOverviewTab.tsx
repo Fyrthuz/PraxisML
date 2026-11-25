@@ -17,8 +17,15 @@ interface PlatformSummary {
     services_health: {
         postgres: { status: string };
         redis: { status: string; queues?: Record<string, number> };
+        celery_workers?: { status: string; workers?: number };
         storage: { status: string; backend: string };
         mlflow: { status: string; tracking_uri: string };
+        prometheus?: { status: string; url?: string };
+        grafana?: { status: string; url?: string };
+        serving_plane?: { status: string; active_endpoints?: number; runtimes?: string[] };
+        vector_search?: { status: string; indexed_vectors?: number; embedding_model?: string };
+        llm_gateway?: { status: string; provider?: string; model?: string };
+        event_bus?: { status: string; backend?: string };
     };
     serving: {
         total_endpoints: number;
@@ -65,12 +72,19 @@ interface WorkspaceOverviewTabProps {
     onOpenUploadDataset: () => void;
 }
 
-function StatusDot({ status }: { status: string }) {
+function StatusDot({ status }: { status?: string }) {
     const ok = status === "ok" || status === "healthy";
+    const info = status === "rag_local" || status === "idle";
     return (
         <span
             className={`inline-block w-2 h-2 rounded-full ${
-                ok ? "bg-emerald-400" : status === "degraded" ? "bg-amber-400" : "bg-red-400"
+                ok
+                    ? "bg-emerald-400"
+                    : info
+                    ? "bg-sky-400"
+                    : status === "degraded"
+                    ? "bg-amber-400"
+                    : "bg-red-400"
             }`}
         />
     );
@@ -222,27 +236,45 @@ export default function WorkspaceOverviewTab({
 
             {/* Live Platform Services Health Bar */}
             {summary && (
-                <section className="border border-zinc-800/90 rounded-lg bg-[#14171e] px-4 py-3 flex flex-wrap items-center justify-between gap-4">
-                    <div className="flex flex-wrap items-center gap-5 text-xs font-mono">
-                        <span className="text-[11px] font-sans font-semibold uppercase tracking-wider text-zinc-500">
+                <section className="border border-zinc-800/90 rounded-lg bg-[#14171e] px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] font-mono">
+                        <span className="font-sans font-semibold uppercase tracking-wider text-zinc-500">
                             Services
                         </span>
-                        <span className="flex items-center gap-2 text-zinc-300">
+                        <span className="flex items-center gap-1.5 text-zinc-300">
                             <StatusDot status={summary.services_health.postgres.status} /> PostgreSQL
                         </span>
-                        <span className="flex items-center gap-2 text-zinc-300">
-                            <StatusDot status={summary.services_health.redis.status} /> Redis ({queuedJobs} queued)
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                            <StatusDot status={summary.services_health.redis.status} /> Redis ({queuedJobs}q)
                         </span>
-                        <span className="flex items-center gap-2 text-zinc-300">
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                            <StatusDot status={summary.services_health.celery_workers?.status} /> Celery ({summary.services_health.celery_workers?.workers ?? 0}w)
+                        </span>
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                            <StatusDot status={summary.services_health.serving_plane?.status} /> Serving ({summary.services_health.serving_plane?.active_endpoints ?? 0})
+                        </span>
+                        <span className="flex items-center gap-1.5 text-zinc-300">
                             <StatusDot status={summary.services_health.storage.status} /> Storage ({summary.services_health.storage.backend})
                         </span>
-                        <span className="flex items-center gap-2 text-zinc-300">
-                            <StatusDot status={summary.services_health.mlflow.status} /> MLflow Tracking
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                            <StatusDot status={summary.services_health.mlflow.status} /> MLflow
+                        </span>
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                            <StatusDot status={summary.services_health.prometheus?.status} /> Prometheus
+                        </span>
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                            <StatusDot status={summary.services_health.grafana?.status} /> Grafana
+                        </span>
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                            <StatusDot status={summary.services_health.vector_search?.status} /> pgvector ({summary.services_health.vector_search?.indexed_vectors ?? 0})
+                        </span>
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                            <StatusDot status={summary.services_health.llm_gateway?.status} /> Copilot
                         </span>
                     </div>
                     <button
                         onClick={() => onNavigate("observability")}
-                        className="text-xs text-zinc-400 hover:text-zinc-100 inline-flex items-center gap-1"
+                        className="text-xs text-zinc-400 hover:text-zinc-100 inline-flex items-center gap-1 shrink-0"
                     >
                         Full Observability <ArrowUpRight className="w-3.5 h-3.5" />
                     </button>

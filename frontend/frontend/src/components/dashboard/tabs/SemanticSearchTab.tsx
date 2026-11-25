@@ -8,66 +8,116 @@ interface Props {
     results: SemanticSearchResult[];
 }
 
+const EXAMPLE_QUERIES = [
+    "sentiment classification NLP",
+    "titanic survival prediction",
+    "preprocessed customer dataset",
+];
+
 export default function SemanticSearchTab({ onSearch, results }: Props) {
     const [query, setQuery] = React.useState("");
     const [index, setIndex] = React.useState<"models" | "datasets">("models");
 
+    const run = (q?: string) => {
+        const target = (q ?? query).trim();
+        if (!target) return;
+        if (q !== undefined) setQuery(q);
+        onSearch(target, index);
+    };
+
     return (
-        <div className="space-y-6">
-            <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-3 bg-violet-500/20 rounded-xl text-violet-400">
-                        <Search className="w-5 h-5" />
+        <div className="space-y-5">
+            <div className="bg-[#101217] border border-zinc-800 rounded-lg p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+                    <div className="flex items-center gap-2">
+                        <Search className="w-4 h-4 text-orange-400" />
+                        <h4 className="text-xs font-semibold text-zinc-100 uppercase tracking-wider">
+                            Semantic Vector Search (pgvector + SentenceTransformers)
+                        </h4>
                     </div>
-                    <h4 className="text-sm font-bold text-neutral-300 uppercase tracking-wider">Búsqueda Semántica</h4>
+                    <div className="flex items-center gap-1">
+                        {(["models", "datasets"] as const).map((i) => (
+                            <button
+                                key={i}
+                                onClick={() => setIndex(i)}
+                                className={`h-7 px-2.5 rounded-md text-xs font-medium border transition-colors ${
+                                    index === i
+                                        ? "bg-zinc-100 text-zinc-950 border-zinc-100"
+                                        : "bg-[#0b0c0f] text-zinc-400 border-zinc-800 hover:text-zinc-200"
+                                }`}
+                            >
+                                {i === "models" ? "Models Index" : "Datasets Index"}
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <div className="flex gap-3">
+
+                <div className="flex gap-2">
                     <input
-                        className="flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-4 py-3 text-sm"
+                        className="flex-1 h-9 bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="¿Qué estás buscando? p.ej. modelo de sentimiento"
+                        onKeyDown={(e) => e.key === "Enter" && run()}
+                        placeholder="Natural language query, e.g. sentiment classifier or titanic survival model..."
                     />
                     <button
-                        onClick={() => onSearch(query, index)}
-                        disabled={!query}
-                        className="px-5 py-3 bg-violet-600 hover:bg-violet-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold"
+                        onClick={() => run()}
+                        disabled={!query.trim()}
+                        className="h-9 px-4 bg-zinc-100 hover:bg-white disabled:opacity-40 text-zinc-950 rounded-md text-xs font-medium"
                     >
-                        Buscar
+                        Search
                     </button>
                 </div>
-                <div className="flex gap-2">
-                    {(["models", "datasets"] as const).map((i) => (
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-zinc-500">Quick queries:</span>
+                    {EXAMPLE_QUERIES.map((q) => (
                         <button
-                            key={i}
-                            onClick={() => setIndex(i)}
-                            className={`px-4 py-2 rounded-lg text-xs font-semibold ${index === i ? "bg-violet-600 text-white" : "bg-neutral-800 text-neutral-400"}`}
+                            key={q}
+                            type="button"
+                            onClick={() => run(q)}
+                            className="px-2 py-0.5 rounded bg-[#0b0c0f] border border-zinc-800 text-[11px] font-mono text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
                         >
-                            {i === "models" ? "Modelos" : "Datasets"}
+                            {q}
                         </button>
                     ))}
                 </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
                 {results.map((r, i) => (
-                    <div key={i} className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-5 flex items-center justify-between">
-                        <div>
-                            <p className="font-semibold text-white">{r.name || r.model_id || r.dataset_id}</p>
-                            <p className="text-xs text-neutral-500 mt-1">
+                    <div
+                        key={i}
+                        className="bg-[#101217] border border-zinc-800 rounded-lg p-4 flex items-center justify-between gap-4"
+                    >
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium text-zinc-100 truncate">
+                                {r.name || r.model_id || r.dataset_id}
+                            </p>
+                            <p className="text-[11px] font-mono text-zinc-400 mt-1">
+                                {r.metadata?.domain ? `${r.metadata.domain} · ` : ""}
                                 {r.metadata?.algorithm ? `${r.metadata.algorithm} · ` : ""}
                                 {r.metadata?.task_type ? `${r.metadata.task_type} · ` : ""}
-                                {r.metadata?.stage ? `stage ${r.metadata.stage}` : ""}
+                                {r.metadata?.stage ? `stage: ${r.metadata.stage}` : ""}
                             </p>
-                            <p className="text-xs text-neutral-600 mt-1">{r.metadata?.text_preview || ""}</p>
+                            {r.metadata?.text_preview && (
+                                <p className="text-xs text-zinc-500 mt-1 truncate">
+                                    {r.metadata.text_preview}
+                                </p>
+                            )}
                         </div>
-                        <span className="text-sm font-bold text-violet-400">
-                            {(r.score * 100).toFixed(1)}%
-                        </span>
+                        <div className="shrink-0 text-right">
+                            <span className="text-sm font-mono font-semibold text-orange-400 tabular-nums">
+                                {(r.score * 100).toFixed(1)}%
+                            </span>
+                            <p className="text-[10px] font-mono text-zinc-500">cosine sim</p>
+                        </div>
                     </div>
                 ))}
                 {results.length === 0 && (
-                    <p className="text-sm text-neutral-500">Sin resultados. Ejecuta una búsqueda.</p>
+                    <div className="bg-[#101217] border border-dashed border-zinc-800 rounded-lg p-8 text-center text-xs text-zinc-500">
+                        Run a semantic search to retrieve models or datasets by vector similarity.
+                    </div>
                 )}
             </div>
         </div>

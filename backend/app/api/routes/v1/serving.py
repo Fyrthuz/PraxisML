@@ -7,7 +7,7 @@ autenticado mediante API Key (`X-API-Key` / `Bearer px_...`) o JWT.
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -97,6 +97,12 @@ def _serialize_endpoint(ep: ModelEndpoint, db: Session) -> Dict[str, Any]:
         "api_invoke_path": f"{settings.API_V1_STR}/serving/endpoints/{ep.slug}/invocations",
         "request_count": ep.request_count,
         "error_count": ep.error_count,
+        "error_rate_pct": round((ep.error_count / ep.request_count) * 100.0, 2)
+        if ep.request_count
+        else 0.0,
+        "success_rate_pct": round(((ep.request_count - ep.error_count) / ep.request_count) * 100.0, 2)
+        if ep.request_count
+        else 100.0,
         "avg_latency_ms": ep.avg_latency_ms,
         "last_invoked_at": ep.last_invoked_at.isoformat() if ep.last_invoked_at else None,
         "created_at": ep.created_at.isoformat() if ep.created_at else None,
@@ -338,10 +344,151 @@ def delete_endpoint(
     return {"message": "Endpoint eliminado.", "id": ep_id, "slug": slug}
 
 
+def _percentile(sorted_vals: List[float], pct: float) -> float:
+    if not sorted_vals:
+        return 0.0
+    if len(sorted_vals) == 1:
+        return round(sorted_vals[0], 2)
+    idx = min(len(sorted_vals) - 1, max(0, int(round((pct / 100.0) * (len(sorted_vals) - 1)))))
+    return round(sorted_vals[idx], 2)
+
+
+@router.get("/endpoints/{endpoint_id}/metrics")
+def get_endpoint_metrics(
+    endpoint_id: str,
+    window_logs: int = Query(default=200, ge=10, le=1000),
+    _user: User = Depends(require_viewer),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+):
+    """Devuelve métricas detalladas de observabilidad para un Model Endpoint."""
+    from sqlalchemy import func
+    from app.observability.models import CostRecord, UsageMetric
+
+    ep = (
+        db.query(ModelEndpoint)
+        .filter(
+            (ModelEndpoint.id == endpoint_id) | (ModelEndpoint.slug == endpoint_id),
+            ModelEndpoint.tenant_id == tenant.id,
+        )
+        .first()
+    )
+    if not ep:
+        raise HTTPException(status_code=404, detail="Endpoint no encontrado.")
+
+    logs = (
+        db.query(EndpointInvocationLog)
+        .filter(
+            EndpointInvocationLog.endpoint_id == ep.id,
+            EndpointInvocationLog.tenant_id == tenant.id,
+        )
+        .order_by(EndpointInvocationLog.created_at.desc())
+        .limit(window_logs)
+        .all()
+    )
+
+    latencies = sorted(float(r.latency_ms or 0.0) for r in logs)
+    now_utc = datetime.now(timezone.utc)
+    cutoff_1h = now_utc - timedelta(hours=1)
+    cutoff_24h = now_utc - timedelta(hours=24)
+
+    def _to_aware(dt: Optional[datetime]) -> Optional[datetime]:
+        if dt is None:
+            return None
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+    reqs_1h = sum(1 for r in logs if (_to_aware(r.created_at) or now_utc) >= cutoff_1h)
+    reqs_24h = sum(1 for r in logs if (_to_aware(r.created_at) or now_utc) >= cutoff_24h)
+    total_rows_scored = sum(int(r.input_count or 1) for r in logs)
+    last_err_row = next((r for r in logs if r.status != "ok"), None)
+
+    by_variant: Dict[str, Dict[str, Any]] = {}
+    for variant_name in ("primary", "canary"):
+        v_rows = [r for r in logs if (r.variant or "primary") == variant_name]
+        v_count = len(v_rows)
+        v_errs = sum(1 for r in v_rows if r.status != "ok")
+        v_avg_lat = (
+            round(sum(float(r.latency_ms or 0.0) for r in v_rows) / v_count, 2)
+            if v_count
+            else 0.0
+        )
+        by_variant[variant_name] = {
+            "count": v_count,
+            "pct": round((v_count / len(logs)) * 100.0, 1) if logs else 0.0,
+            "avg_latency_ms": v_avg_lat,
+            "error_count": v_errs,
+        }
+
+    # Cost & usage recorded for this endpoint
+    est_cost = (
+        db.query(func.coalesce(func.sum(CostRecord.amount), 0.0))
+        .filter(
+            CostRecord.tenant_id == tenant.id,
+            CostRecord.source == f"serving:{ep.slug}",
+        )
+        .scalar()
+        or 0.0
+    )
+    usage_events = (
+        db.query(func.count(UsageMetric.id))
+        .filter(
+            UsageMetric.tenant_id == tenant.id,
+            UsageMetric.domain == "serving",
+            UsageMetric.model_id.in_([m for m in (ep.model_id, ep.secondary_model_id) if m]),
+        )
+        .scalar()
+        or 0
+    )
+
+    total_reqs = ep.request_count or 0
+    total_errs = ep.error_count or 0
+    success_cnt = max(0, total_reqs - total_errs)
+
+    recent_series = [
+        {
+            "ts": r.created_at.isoformat() if r.created_at else None,
+            "latency_ms": round(float(r.latency_ms or 0.0), 2),
+            "variant": r.variant or "primary",
+            "status": r.status,
+            "input_count": int(r.input_count or 1),
+        }
+        for r in reversed(logs[:25])
+    ]
+
+    return {
+        "endpoint_id": ep.id,
+        "slug": ep.slug,
+        "status": ep.status,
+        "configured_canary_pct": ep.traffic_split_pct,
+        "total_requests": total_reqs,
+        "total_errors": total_errs,
+        "success_count": success_cnt,
+        "success_rate_pct": round((success_cnt / total_reqs) * 100.0, 2) if total_reqs else 100.0,
+        "error_rate_pct": round((total_errs / total_reqs) * 100.0, 2) if total_reqs else 0.0,
+        "avg_latency_ms": round(float(ep.avg_latency_ms or 0.0), 2),
+        "min_latency_ms": round(latencies[0], 2) if latencies else 0.0,
+        "p50_latency_ms": _percentile(latencies, 50),
+        "p95_latency_ms": _percentile(latencies, 95),
+        "p99_latency_ms": _percentile(latencies, 99),
+        "max_latency_ms": round(latencies[-1], 2) if latencies else 0.0,
+        "requests_last_1h": reqs_1h,
+        "requests_last_24h": reqs_24h,
+        "total_rows_scored": total_rows_scored,
+        "last_invoked_at": ep.last_invoked_at.isoformat() if ep.last_invoked_at else None,
+        "last_error_message": last_err_row.error_message if last_err_row else None,
+        "by_variant": by_variant,
+        "estimated_cost_usd": round(float(est_cost), 6),
+        "usage_events_count": int(usage_events),
+        "latency_series": recent_series,
+    }
+
+
 @router.get("/endpoints/{endpoint_id}/logs")
 def get_endpoint_logs(
     endpoint_id: str,
     limit: int = Query(default=30, ge=1, le=200),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    variant: Optional[str] = Query(default=None),
     _user: User = Depends(require_viewer),
     tenant: Tenant = Depends(get_current_tenant),
     db: Session = Depends(get_db),
@@ -358,16 +505,16 @@ def get_endpoint_logs(
     if not ep:
         raise HTTPException(status_code=404, detail="Endpoint no encontrado.")
 
-    rows = (
-        db.query(EndpointInvocationLog)
-        .filter(
-            EndpointInvocationLog.endpoint_id == ep.id,
-            EndpointInvocationLog.tenant_id == tenant.id,
-        )
-        .order_by(EndpointInvocationLog.created_at.desc())
-        .limit(limit)
-        .all()
+    q = db.query(EndpointInvocationLog).filter(
+        EndpointInvocationLog.endpoint_id == ep.id,
+        EndpointInvocationLog.tenant_id == tenant.id,
     )
+    if status_filter:
+        q = q.filter(EndpointInvocationLog.status == status_filter)
+    if variant:
+        q = q.filter(EndpointInvocationLog.variant == variant)
+
+    rows = q.order_by(EndpointInvocationLog.created_at.desc()).limit(limit).all()
     return {
         "endpoint_id": ep.id,
         "slug": ep.slug,

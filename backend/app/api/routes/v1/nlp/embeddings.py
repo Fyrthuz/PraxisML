@@ -7,6 +7,7 @@ Endpoints:
 """
 
 import logging
+import time
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -31,7 +32,8 @@ class EmbedRequest(BaseModel):
 def embed_texts(
     req: EmbedRequest,
     _user: User = Depends(require_viewer),
-    _tenant: Tenant = Depends(get_current_tenant),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
 ):
     """
     Genera embeddings de una lista de textos con el modelo configurado.
@@ -41,15 +43,35 @@ def embed_texts(
     from app.services.embedding_service import get_embedding_service
 
     service = get_embedding_service()
+    t0 = time.perf_counter()
     try:
         embeddings = service.embed_texts(req.texts)
     except Exception as exc:
         logger.error("Error generando embeddings: %s", exc)
         raise HTTPException(status_code=500, detail=f"Error generando embeddings: {exc}")
 
+    latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    try:
+        from app.observability.usage_collector import get_usage_collector
+
+        get_usage_collector().record_inference(
+            db=db,
+            tenant_id=tenant.id,
+            model_id=None,
+            domain="nlp",
+            latency_ms=latency_ms,
+            tokens_input=sum(len(t.split()) for t in req.texts),
+            tokens_output=0,
+            tags={"operation": "embed", "batch_size": len(req.texts), "model": settings.EMBEDDING_MODEL_NAME},
+        )
+        db.commit()
+    except Exception as exc:
+        logger.warning("Embed usage recording failed (non-critical): %s", exc)
+
     return {
         "dim": settings.EMBEDDING_DIM,
         "model": settings.EMBEDDING_MODEL_NAME,
+        "latency_ms": latency_ms,
         "embeddings": embeddings.tolist(),
     }
 
@@ -76,5 +98,24 @@ def semantic_search(
     from app.services.embedding_service import get_embedding_service
 
     service = get_embedding_service()
+    t0 = time.perf_counter()
     results = service.search(db, tenant.id, q, top_k=limit, index=index)
-    return {"query": q, "index": index, "results": results}
+    latency_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    try:
+        from app.observability.usage_collector import get_usage_collector
+
+        get_usage_collector().record_inference(
+            db=db,
+            tenant_id=tenant.id,
+            model_id=None,
+            domain="nlp",
+            latency_ms=latency_ms,
+            tokens_input=len(q.split()),
+            tokens_output=0,
+            tags={"operation": "semantic_search", "index": index, "hits": len(results)},
+        )
+        db.commit()
+    except Exception as exc:
+        logger.warning("Semantic search usage recording failed (non-critical): %s", exc)
+
+    return {"query": q, "index": index, "latency_ms": latency_ms, "results": results}

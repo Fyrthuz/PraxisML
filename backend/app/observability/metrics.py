@@ -174,3 +174,17 @@ pipeline_duration_seconds = Histogram(
     buckets=[0.1, 0.5, 1, 2, 5, 15, 30, 60, 180],
 )
 
+# ── Platform Services & Queues Health ─────────────────────────────────────────
+
+service_health_status = Gauge(
+    "praxisml_service_health",
+    "Estado de salud de los servicios de la plataforma (1=ok, 0.5=idle/rag_local, 0=offline/error)",
+    ["service"],
+)
+
+celery_queue_depth = Gauge(
+    "praxisml_celery_queue_depth",
+    "Profundidad actual de cada cola de tareas Celery en Redis",
+    ["queue"],
+)
+

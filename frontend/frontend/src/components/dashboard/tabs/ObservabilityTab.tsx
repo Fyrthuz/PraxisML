@@ -33,8 +33,15 @@ interface PlatformSummary {
     services_health: {
         postgres: { status: string };
         redis: { status: string; queues?: Record<string, number> };
+        celery_workers?: { status: string; workers?: number };
         storage: { status: string; backend?: string };
         mlflow: { status: string; tracking_uri?: string };
+        prometheus?: { status: string; url?: string };
+        grafana?: { status: string; url?: string };
+        serving_plane?: { status: string; active_endpoints?: number; runtimes?: string[] };
+        vector_search?: { status: string; indexed_vectors?: number; embedding_model?: string };
+        llm_gateway?: { status: string; provider?: string; model?: string };
+        event_bus?: { status: string; backend?: string };
     };
     serving: {
         total_endpoints: number;
@@ -234,6 +241,14 @@ function OverviewPanel({
                 </span>
             );
         }
+        if (status === "rag_local" || status === "idle") {
+            return (
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-sky-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                    {status === "rag_local" ? "rag-local" : "idle"}
+                </span>
+            );
+        }
         if (status === "degraded") {
             return (
                 <span className="inline-flex items-center gap-1.5 text-[11px] font-mono text-amber-400">
@@ -300,7 +315,7 @@ function OverviewPanel({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {/* Platform Services & Queues Health */}
                 <div className="bg-[#101217] border border-zinc-800 rounded-lg p-5">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center justify-between mb-3.5">
                         <h3 className="text-zinc-100 text-sm font-medium flex items-center gap-2">
                             <Server className="w-4 h-4 text-zinc-400" />
                             Platform Services &amp; Queues
@@ -309,16 +324,16 @@ function OverviewPanel({
                             {totalQueued} queued jobs
                         </span>
                     </div>
-                    <div className="space-y-2.5 text-xs">
-                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/70">
-                            <span className="text-zinc-300">PostgreSQL Database</span>
+                    <div className="space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
+                            <span className="text-zinc-300">PostgreSQL Database &amp; RLS</span>
                             {statusBadge(health?.postgres.status)}
                         </div>
-                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/70">
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
                             <div className="flex flex-col gap-1">
                                 <span className="text-zinc-300">Redis Broker &amp; Celery Queues</span>
                                 {health?.redis.queues && (
-                                    <div className="flex flex-wrap gap-1.5">
+                                    <div className="flex flex-wrap gap-1">
                                         {Object.entries(health.redis.queues).map(([q, depth]) => (
                                             <span
                                                 key={q}
@@ -332,7 +347,30 @@ function OverviewPanel({
                             </div>
                             {statusBadge(health?.redis.status)}
                         </div>
-                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/70">
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
+                            <div>
+                                <span className="text-zinc-300">Celery Workers</span>
+                                {health?.celery_workers?.workers !== undefined && (
+                                    <span className="ml-2 text-[11px] font-mono text-zinc-500">
+                                        ({health.celery_workers.workers} online)
+                                    </span>
+                                )}
+                            </div>
+                            {statusBadge(health?.celery_workers?.status)}
+                        </div>
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
+                            <div>
+                                <span className="text-zinc-300">Model Serving Plane</span>
+                                {health?.serving_plane?.runtimes && (
+                                    <span className="ml-2 text-[11px] font-mono text-zinc-500">
+                                        ({health.serving_plane.active_endpoints ?? 0} active ·{" "}
+                                        {health.serving_plane.runtimes.join(", ")})
+                                    </span>
+                                )}
+                            </div>
+                            {statusBadge(health?.serving_plane?.status)}
+                        </div>
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
                             <div>
                                 <span className="text-zinc-300">Object Storage</span>
                                 {health?.storage.backend && (
@@ -343,16 +381,88 @@ function OverviewPanel({
                             </div>
                             {statusBadge(health?.storage.status)}
                         </div>
-                        <div className="flex items-center justify-between py-1.5">
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
                             <div className="truncate pr-3">
                                 <span className="text-zinc-300">MLflow Tracking</span>
                                 {health?.mlflow.tracking_uri && (
-                                    <span className="ml-2 text-[11px] font-mono text-zinc-500">
+                                    <a
+                                        href={
+                                            health.mlflow.tracking_uri.startsWith("http")
+                                                ? health.mlflow.tracking_uri
+                                                : undefined
+                                        }
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="ml-2 text-[11px] font-mono text-orange-400 hover:underline"
+                                    >
                                         {health.mlflow.tracking_uri}
-                                    </span>
+                                    </a>
                                 )}
                             </div>
                             {statusBadge(health?.mlflow.status)}
+                        </div>
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
+                            <div className="truncate pr-3">
+                                <span className="text-zinc-300">Prometheus &amp; Grafana</span>
+                                {health?.grafana?.url && (
+                                    <a
+                                        href={health.grafana.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="ml-2 text-[11px] font-mono text-orange-400 hover:underline"
+                                    >
+                                        Grafana (:3001)
+                                    </a>
+                                )}
+                                {health?.prometheus?.url && (
+                                    <a
+                                        href={health.prometheus.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="ml-2 text-[11px] font-mono text-zinc-500 hover:text-zinc-300 hover:underline"
+                                    >
+                                        Prom (:9090)
+                                    </a>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                                {statusBadge(health?.prometheus?.status)}
+                                <span className="text-zinc-700">/</span>
+                                {statusBadge(health?.grafana?.status)}
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
+                            <div>
+                                <span className="text-zinc-300">Vector Search (pgvector)</span>
+                                {health?.vector_search && (
+                                    <span className="ml-2 text-[11px] font-mono text-zinc-500">
+                                        ({health.vector_search.indexed_vectors ?? 0} vectors)
+                                    </span>
+                                )}
+                            </div>
+                            {statusBadge(health?.vector_search?.status)}
+                        </div>
+                        <div className="flex items-center justify-between py-1.5 border-b border-zinc-800/60">
+                            <div>
+                                <span className="text-zinc-300">LLM Gateway / Copilot</span>
+                                {health?.llm_gateway?.provider && (
+                                    <span className="ml-2 text-[11px] font-mono text-zinc-500">
+                                        ({health.llm_gateway.provider})
+                                    </span>
+                                )}
+                            </div>
+                            {statusBadge(health?.llm_gateway?.status)}
+                        </div>
+                        <div className="flex items-center justify-between py-1.5">
+                            <div>
+                                <span className="text-zinc-300">Domain Event Bus</span>
+                                {health?.event_bus?.backend && (
+                                    <span className="ml-2 text-[11px] font-mono text-zinc-500">
+                                        ({health.event_bus.backend})
+                                    </span>
+                                )}
+                            </div>
+                            {statusBadge(health?.event_bus?.status)}
                         </div>
                     </div>
                 </div>
@@ -720,43 +830,48 @@ function CostsPanel({ obs }: { obs: ReturnType<typeof useObservability> }) {
     const records = obs.costBreakdown?.records ?? [];
 
     return (
-        <div className="space-y-6">
-            <div className="bg-neutral-900 border border-neutral-800 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-white font-semibold">Total Cost (Period)</h3>
-                    <span className="text-2xl font-bold text-emerald-400">
-                        ${obs.costBreakdown?.total_cost_usd.toFixed(2) ?? "0.00"}
+        <div className="space-y-5">
+            <div className="bg-[#101217] border border-zinc-800 rounded-lg p-5">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h3 className="text-zinc-100 text-sm font-medium">Total Cost (Period)</h3>
+                        <p className="text-zinc-500 text-xs mt-0.5">
+                            Includes training, serving, NLP inference, and LLM gateway usage
+                        </p>
+                    </div>
+                    <span className="text-2xl font-mono font-semibold text-emerald-400 tabular-nums">
+                        ${obs.costBreakdown?.total_cost_usd.toFixed(4) ?? "0.0000"}
                     </span>
                 </div>
             </div>
 
-            <div className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
-                    <thead className="bg-neutral-800/50">
+            <div className="bg-[#101217] border border-zinc-800 rounded-lg overflow-hidden">
+                <table className="w-full text-xs">
+                    <thead className="bg-[#0b0c0f] border-b border-zinc-800">
                         <tr>
-                            <th className="px-4 py-3 text-left text-neutral-400 font-medium">Type</th>
-                            <th className="px-4 py-3 text-left text-neutral-400 font-medium">Model</th>
-                            <th className="px-4 py-3 text-right text-neutral-400 font-medium">Amount</th>
-                            <th className="px-4 py-3 text-left text-neutral-400 font-medium">Source</th>
-                            <th className="px-4 py-3 text-left text-neutral-400 font-medium">Period</th>
+                            <th className="px-4 py-2.5 text-left text-zinc-400 font-medium">Type</th>
+                            <th className="px-4 py-2.5 text-left text-zinc-400 font-medium">Model</th>
+                            <th className="px-4 py-2.5 text-right text-zinc-400 font-medium">Amount</th>
+                            <th className="px-4 py-2.5 text-left text-zinc-400 font-medium">Source</th>
+                            <th className="px-4 py-2.5 text-left text-zinc-400 font-medium">Period</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-neutral-800">
+                    <tbody className="divide-y divide-zinc-800/70">
                         {records.map((r) => (
-                            <tr key={r.id} className="hover:bg-neutral-800/30">
+                            <tr key={r.id} className="hover:bg-zinc-800/30">
                                 <td className="px-4 py-2.5">
-                                    <span className="px-2 py-0.5 rounded bg-neutral-800 text-neutral-300 text-xs capitalize">
+                                    <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono text-[11px] capitalize">
                                         {r.cost_type}
                                     </span>
                                 </td>
-                                <td className="px-4 py-2.5 text-neutral-300 font-mono text-xs">
+                                <td className="px-4 py-2.5 text-zinc-300 font-mono">
                                     {r.model_id ?? "—"}
                                 </td>
-                                <td className="px-4 py-2.5 text-right text-emerald-400 font-mono">
+                                <td className="px-4 py-2.5 text-right text-emerald-400 font-mono tabular-nums">
                                     ${r.amount.toFixed(4)}
                                 </td>
-                                <td className="px-4 py-2.5 text-neutral-500 text-xs">{r.source ?? "—"}</td>
-                                <td className="px-4 py-2.5 text-neutral-500 text-xs">
+                                <td className="px-4 py-2.5 text-zinc-400 font-mono">{r.source ?? "—"}</td>
+                                <td className="px-4 py-2.5 text-zinc-500 font-mono">
                                     {new Date(r.period_start).toLocaleDateString()}
                                 </td>
                             </tr>
@@ -764,7 +879,7 @@ function CostsPanel({ obs }: { obs: ReturnType<typeof useObservability> }) {
                     </tbody>
                 </table>
                 {records.length === 0 && (
-                    <p className="text-neutral-500 text-sm p-6 text-center">No cost records</p>
+                    <p className="text-zinc-500 text-xs p-6 text-center">No cost records</p>
                 )}
             </div>
         </div>
@@ -783,28 +898,28 @@ function AlertsPanel({
     setShowCreate: (v: boolean) => void;
 }) {
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
             <div className="flex items-center justify-between">
-                <h3 className="text-white font-semibold">
+                <h3 className="text-zinc-100 text-sm font-medium">
                     {obs.alerts.length} Alert{obs.alerts.length !== 1 ? "s" : ""} Configured
                 </h3>
                 <button
                     onClick={() => setShowCreate(!showCreate)}
-                    className="flex items-center gap-2 px-4 py-2 bg-zinc-100 text-zinc-950 font-medium rounded-xl hover:bg-indigo-500 transition-colors"
+                    className="h-8 flex items-center gap-1.5 px-3 bg-zinc-100 text-zinc-950 text-xs font-medium rounded-md hover:bg-white transition-colors"
                 >
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-3.5 h-3.5" />
                     New Alert
                 </button>
             </div>
 
             {showCreate && <CreateAlertForm obs={obs} onClose={() => setShowCreate(false)} />}
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
                 {obs.alerts.map((alert) => (
                     <AlertRow key={alert.id} alert={alert} obs={obs} />
                 ))}
                 {obs.alerts.length === 0 && (
-                    <p className="text-neutral-500 text-sm text-center py-8">
+                    <p className="text-zinc-500 text-xs text-center py-8">
                         No alerts configured
                     </p>
                 )}
@@ -822,30 +937,32 @@ function AlertRow({
 }) {
     return (
         <div
-            className={`bg-neutral-900 border rounded-xl p-4 flex items-center justify-between ${
-                alert.enabled ? "border-neutral-800" : "border-neutral-800/50 opacity-60"
+            className={`bg-[#101217] border rounded-lg p-4 flex items-center justify-between ${
+                alert.enabled ? "border-zinc-800" : "border-zinc-800/50 opacity-60"
             }`}
         >
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
                 <div
                     className={`w-2 h-2 rounded-full ${
-                        alert.enabled ? "bg-emerald-400" : "bg-neutral-600"
+                        alert.enabled ? "bg-emerald-400" : "bg-zinc-600"
                     }`}
                 />
                 <div>
-                    <p className="text-white font-medium capitalize">{alert.alert_type.replace(/_/g, " ")}</p>
-                    <p className="text-neutral-400 text-xs mt-0.5">
+                    <p className="text-zinc-100 text-sm font-medium capitalize">
+                        {alert.alert_type.replace(/_/g, " ")}
+                    </p>
+                    <p className="text-zinc-400 font-mono text-xs mt-0.5">
                         {alert.metric_name} {alert.comparison} {alert.threshold}
                     </p>
                 </div>
             </div>
             <div className="flex items-center gap-3">
-                <span className="text-neutral-500 text-xs">
+                <span className="text-zinc-500 font-mono text-xs">
                     Cooldown: {alert.cooldown_min}m
                 </span>
                 <button
                     onClick={() => obs.toggleAlert(alert.id, !alert.enabled)}
-                    className="text-neutral-400 hover:text-white"
+                    className="text-zinc-400 hover:text-zinc-100"
                 >
                     {alert.enabled ? (
                         <ToggleRight className="w-5 h-5 text-emerald-400" />
@@ -855,7 +972,7 @@ function AlertRow({
                 </button>
                 <button
                     onClick={() => obs.deleteAlert(alert.id)}
-                    className="text-neutral-400 hover:text-red-400"
+                    className="text-zinc-400 hover:text-red-400"
                 >
                     <Trash2 className="w-4 h-4" />
                 </button>
@@ -886,15 +1003,15 @@ function CreateAlertForm({
     };
 
     return (
-        <div className="bg-neutral-900 border border-zinc-700 rounded-xl p-6 space-y-4">
-            <h4 className="text-white font-semibold">Create Alert</h4>
+        <div className="bg-[#101217] border border-zinc-700 rounded-lg p-5 space-y-4">
+            <h4 className="text-zinc-100 text-sm font-semibold">Create Alert</h4>
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="text-neutral-400 text-xs block mb-1">Alert Type</label>
+                    <label className="text-zinc-400 text-[11px] block mb-1">Alert Type</label>
                     <select
                         value={form.alert_type}
                         onChange={(e) => setForm({ ...form, alert_type: e.target.value })}
-                        className="w-full bg-neutral-800 text-white rounded-lg px-3 py-2 text-sm"
+                        className="w-full h-9 bg-[#0b0c0f] border border-zinc-800 text-zinc-100 rounded-md px-3 text-xs"
                     >
                         <option value="cost_spike">Cost Spike</option>
                         <option value="latency_degradation">Latency Degradation</option>
@@ -905,30 +1022,30 @@ function CreateAlertForm({
                     </select>
                 </div>
                 <div>
-                    <label className="text-neutral-400 text-xs block mb-1">Metric</label>
+                    <label className="text-zinc-400 text-[11px] block mb-1">Metric</label>
                     <input
                         type="text"
                         value={form.metric_name}
                         onChange={(e) => setForm({ ...form, metric_name: e.target.value })}
-                        className="w-full bg-neutral-800 text-white rounded-lg px-3 py-2 text-sm"
+                        className="w-full h-9 bg-[#0b0c0f] border border-zinc-800 text-zinc-100 font-mono rounded-md px-3 text-xs"
                     />
                 </div>
                 <div>
-                    <label className="text-neutral-400 text-xs block mb-1">Threshold</label>
+                    <label className="text-zinc-400 text-[11px] block mb-1">Threshold</label>
                     <input
                         type="number"
                         step="0.01"
                         value={form.threshold}
                         onChange={(e) => setForm({ ...form, threshold: parseFloat(e.target.value) })}
-                        className="w-full bg-neutral-800 text-white rounded-lg px-3 py-2 text-sm"
+                        className="w-full h-9 bg-[#0b0c0f] border border-zinc-800 text-zinc-100 font-mono rounded-md px-3 text-xs"
                     />
                 </div>
                 <div>
-                    <label className="text-neutral-400 text-xs block mb-1">Comparison</label>
+                    <label className="text-zinc-400 text-[11px] block mb-1">Comparison</label>
                     <select
                         value={form.comparison}
                         onChange={(e) => setForm({ ...form, comparison: e.target.value })}
-                        className="w-full bg-neutral-800 text-white rounded-lg px-3 py-2 text-sm"
+                        className="w-full h-9 bg-[#0b0c0f] border border-zinc-800 text-zinc-100 rounded-md px-3 text-xs"
                     >
                         <option value="gt">Greater than</option>
                         <option value="lt">Less than</option>
@@ -941,13 +1058,13 @@ function CreateAlertForm({
             <div className="flex gap-2 justify-end">
                 <button
                     onClick={onClose}
-                    className="px-4 py-2 text-neutral-400 hover:text-white text-sm"
+                    className="h-8 px-3 text-zinc-400 hover:text-zinc-100 text-xs"
                 >
                     Cancel
                 </button>
                 <button
                     onClick={handleSubmit}
-                    className="px-4 py-2 bg-zinc-100 text-zinc-950 font-medium rounded-lg text-sm hover:bg-indigo-500"
+                    className="h-8 px-4 bg-zinc-100 text-zinc-950 font-medium rounded-md text-xs hover:bg-white"
                 >
                     Create
                 </button>
@@ -974,32 +1091,32 @@ function PricingPanel({ obs }: { obs: ReturnType<typeof useObservability> }) {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-5">
             {Object.entries(grouped).map(([category, items]) => (
-                <div key={category} className="bg-neutral-900 border border-neutral-800 rounded-xl overflow-hidden">
-                    <div className="px-6 py-3 bg-neutral-800/50 border-b border-neutral-800">
-                        <h3 className="text-white font-semibold capitalize">
+                <div key={category} className="bg-[#101217] border border-zinc-800 rounded-lg overflow-hidden">
+                    <div className="px-4 py-2.5 bg-[#0b0c0f] border-b border-zinc-800">
+                        <h3 className="text-zinc-200 text-xs font-semibold uppercase tracking-wider">
                             {categoryLabels[category] ?? category}
                         </h3>
                     </div>
-                    <table className="w-full text-sm">
+                    <table className="w-full text-xs">
                         <thead>
-                            <tr className="border-b border-neutral-800">
-                                <th className="px-4 py-2 text-left text-neutral-400 font-medium">Resource</th>
-                                <th className="px-4 py-2 text-left text-neutral-400 font-medium">Unit</th>
-                                <th className="px-4 py-2 text-right text-neutral-400 font-medium">Price</th>
-                                <th className="px-4 py-2 text-left text-neutral-400 font-medium">Currency</th>
+                            <tr className="border-b border-zinc-800/80">
+                                <th className="px-4 py-2 text-left text-zinc-400 font-medium">Resource</th>
+                                <th className="px-4 py-2 text-left text-zinc-400 font-medium">Unit</th>
+                                <th className="px-4 py-2 text-right text-zinc-400 font-medium">Price</th>
+                                <th className="px-4 py-2 text-left text-zinc-400 font-medium">Currency</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-neutral-800">
+                        <tbody className="divide-y divide-zinc-800/70">
                             {items.map((p) => (
-                                <tr key={p.id} className="hover:bg-neutral-800/30">
-                                    <td className="px-4 py-2.5 text-white font-medium">{p.resource_id}</td>
-                                    <td className="px-4 py-2.5 text-neutral-400 text-xs">{p.pricing_unit}</td>
-                                    <td className="px-4 py-2.5 text-right text-emerald-400 font-mono">
+                                <tr key={p.id} className="hover:bg-zinc-800/30">
+                                    <td className="px-4 py-2.5 text-zinc-100 font-mono font-medium">{p.resource_id}</td>
+                                    <td className="px-4 py-2.5 text-zinc-400 font-mono">{p.pricing_unit}</td>
+                                    <td className="px-4 py-2.5 text-right text-emerald-400 font-mono tabular-nums">
                                         ${p.price_per_unit.toFixed(4)}
                                     </td>
-                                    <td className="px-4 py-2.5 text-neutral-500">{p.currency}</td>
+                                    <td className="px-4 py-2.5 text-zinc-500 font-mono">{p.currency}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -1007,7 +1124,7 @@ function PricingPanel({ obs }: { obs: ReturnType<typeof useObservability> }) {
                 </div>
             ))}
             {obs.pricing.length === 0 && (
-                <p className="text-neutral-500 text-sm text-center py-8">No pricing configured</p>
+                <p className="text-zinc-500 text-xs text-center py-8">No pricing configured</p>
             )}
         </div>
     );

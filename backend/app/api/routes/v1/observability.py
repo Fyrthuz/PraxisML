@@ -626,22 +626,33 @@ def get_platform_summary(
     Model Serving Endpoints, Tracking/DVC/Storage, Runtime Environments,
     Pipelines, Governance y distribución de UsageMetric por dominio.
     """
+    import os
     import urllib.request
     from sqlalchemy import text
 
     from app.core.config import settings
+    from app.core.event_bus import get_event_bus
     from app.core.redis import create_sync_redis_client
     from app.models.api_key import APIKey
     from app.models.audit_log import AuditLog
     from app.models.dataset import Dataset
+    from app.models.embedding import ModelEmbedding
     from app.models.ml_model import MLModel
     from app.models.model_endpoint import ModelEndpoint
     from app.models.runtime_environment import RuntimeEnvironment
     from app.models.user_pipeline import UserPipeline
     from app.models.workspace import Workspace
+    from app.platform.serving.runtimes import get_model_runtime_registry
     from app.services.storage_service import get_storage
 
-    # 1. Live infrastructure health probes
+    def _probe_http(url: str, timeout: float = 0.8) -> str:
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as resp:
+                return "ok" if resp.status < 400 else "degraded"
+        except Exception:
+            return "offline"
+
+    # 1. Live infrastructure & platform services probes
     pg_status = "ok"
     try:
         db.execute(text("SELECT 1"))
@@ -650,14 +661,24 @@ def get_platform_summary(
 
     redis_status = "unavailable"
     queue_depths: dict[str, int] = {}
+    celery_workers_status = "offline"
+    celery_worker_count = 0
     try:
         rclient = create_sync_redis_client()
         if rclient is not None and rclient.ping():
             redis_status = "ok"
             for q in ("cpu-light", "cpu-heavy", "gpu-train", "system-beat", "celery"):
                 queue_depths[q] = int(rclient.llen(q) or 0)
+            # Detect active Celery workers via kombu binding keys in Redis (fast, non-blocking)
+            binding_keys = list(rclient.scan_iter(match="_kombu.binding.*", count=50))
+            if binding_keys:
+                celery_workers_status = "ok"
+                celery_worker_count = max(1, len([k for k in binding_keys if "pidbox" in str(k)]))
+            else:
+                celery_workers_status = "idle"
     except Exception:
         redis_status = "degraded"
+        celery_workers_status = "unavailable"
 
     storage_status = "ok"
     try:
@@ -668,11 +689,48 @@ def get_platform_summary(
     mlflow_uri = settings.MLFLOW_TRACKING_URI or "local-file"
     mlflow_status = "ok"
     if mlflow_uri.startswith("http"):
-        try:
-            with urllib.request.urlopen(f"{mlflow_uri.rstrip('/')}/health", timeout=1.5) as resp:
-                mlflow_status = "ok" if resp.status < 400 else "degraded"
-        except Exception:
-            mlflow_status = "degraded"
+        mlflow_status = _probe_http(f"{mlflow_uri.rstrip('/')}/health", timeout=1.0)
+
+    prom_url = os.getenv("PROMETHEUS_URL", "http://localhost:9090").rstrip("/")
+    prom_public_url = os.getenv("PROMETHEUS_PUBLIC_URL", "http://localhost:9090").rstrip("/")
+    prom_status = _probe_http(f"{prom_url}/-/healthy", timeout=0.6)
+
+    grafana_url = os.getenv("GRAFANA_URL", "http://localhost:3001").rstrip("/")
+    grafana_public_url = os.getenv("GRAFANA_PUBLIC_URL", "http://localhost:3001").rstrip("/")
+    grafana_status = _probe_http(f"{grafana_url}/api/health", timeout=0.6)
+
+    # Event bus, embeddings, serving plane & LLM gateway
+    try:
+        event_bus = get_event_bus()
+        event_bus_backend = getattr(event_bus, "backend_name", None) or (
+            "redis_streams" if redis_status == "ok" else "in_memory"
+        )
+        event_bus_status = "ok"
+    except Exception:
+        event_bus_backend = "unknown"
+        event_bus_status = "degraded"
+
+    indexed_vectors = (
+        db.query(func.count(ModelEmbedding.id))
+        .filter(ModelEmbedding.tenant_id == tenant.id)
+        .scalar()
+        or 0
+    )
+    vector_status = "ok" if pg_status == "ok" else "error"
+
+    llm_provider = settings.LLM_PROVIDER
+    llm_model = settings.VLLM_MODEL_NAME if llm_provider == "vllm" else settings.LLM_MODEL_NAME
+    llm_status = "rag_local"
+    if llm_provider == "vllm":
+        probe = _probe_http(f"{settings.VLLM_BASE_URL.rstrip('/')}/models", timeout=0.5)
+        llm_status = "ok" if probe == "ok" else "rag_local"
+    elif llm_provider == "ollama":
+        probe = _probe_http(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/models", timeout=0.5)
+        llm_status = "ok" if probe == "ok" else "rag_local"
+    elif llm_provider in ("openai", "anthropic") and settings.LLM_API_KEY and settings.LLM_API_KEY != "EMPTY":
+        llm_status = "ok"
+
+    runtimes_available = get_model_runtime_registry().list_runtimes()
 
     # 2. Deployed Model Serving Endpoints
     endpoints = (
@@ -752,14 +810,50 @@ def get_platform_summary(
     )
     usage_by_domain = {str(dom or "unknown"): int(cnt) for dom, cnt in domain_rows}
 
+    services_health = {
+        "postgres": {"status": pg_status},
+        "redis": {"status": redis_status, "queues": queue_depths},
+        "celery_workers": {"status": celery_workers_status, "workers": celery_worker_count},
+        "storage": {"status": storage_status, "backend": settings.STORAGE_BACKEND},
+        "mlflow": {"status": mlflow_status, "tracking_uri": os.getenv("MLFLOW_PUBLIC_URL", mlflow_uri)},
+        "prometheus": {"status": prom_status, "url": prom_public_url},
+        "grafana": {"status": grafana_status, "url": grafana_public_url},
+        "serving_plane": {
+            "status": "ok" if active_eps > 0 else "idle",
+            "active_endpoints": active_eps,
+            "runtimes": runtimes_available,
+        },
+        "vector_search": {
+            "status": vector_status,
+            "indexed_vectors": int(indexed_vectors),
+            "embedding_model": settings.EMBEDDING_MODEL_NAME,
+        },
+        "llm_gateway": {
+            "status": llm_status,
+            "provider": llm_provider,
+            "model": llm_model,
+        },
+        "event_bus": {
+            "status": event_bus_status,
+            "backend": event_bus_backend,
+        },
+    }
+
+    try:
+        from app.observability.metrics import celery_queue_depth, service_health_status
+
+        for svc_name, svc_info in services_health.items():
+            st = svc_info.get("status")
+            val = 1.0 if st == "ok" else (0.5 if st in ("idle", "rag_local") else 0.0)
+            service_health_status.labels(service=svc_name).set(val)
+        for q_name, depth in queue_depths.items():
+            celery_queue_depth.labels(queue=q_name).set(float(depth))
+    except Exception:
+        pass
+
     return {
         "tenant_id": tenant.id,
-        "services_health": {
-            "postgres": {"status": pg_status},
-            "redis": {"status": redis_status, "queues": queue_depths},
-            "storage": {"status": storage_status, "backend": settings.STORAGE_BACKEND},
-            "mlflow": {"status": mlflow_status, "tracking_uri": mlflow_uri},
-        },
+        "services_health": services_health,
         "serving": {
             "total_endpoints": len(endpoints),
             "active_endpoints": active_eps,

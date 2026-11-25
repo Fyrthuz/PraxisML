@@ -56,15 +56,23 @@ def export_model_to_onnx(
         name: {0: "batch", 1: "sequence"} for name in dummy.keys()
     }
 
+    import inspect
+
+    export_kwargs: Dict[str, Any] = {
+        "input_names": list(dummy.keys()),
+        "output_names": ["logits"],
+        "dynamic_axes": dynamic_axes,
+        "opset_version": opset_version,
+    }
+    if "dynamo" in inspect.signature(torch.onnx.export).parameters:
+        export_kwargs["dynamo"] = False
+
     with torch.no_grad():
         torch.onnx.export(
             model,
             tuple(dummy.values()),
             str(onnx_path),
-            input_names=list(dummy.keys()),
-            output_names=["logits"],
-            dynamic_axes=dynamic_axes,
-            opset_version=opset_version,
+            **export_kwargs,
         )
 
     logger.info("Modelo ONNX exportado a %s", onnx_path)

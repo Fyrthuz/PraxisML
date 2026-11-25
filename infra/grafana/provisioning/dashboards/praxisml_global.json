@@ -274,6 +274,74 @@
             ],
             "title": "Errores Detallados (api_errors_total)",
             "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 12
+                    },
+                    "unit": "reqps"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 0,
+                "y": 24
+            },
+            "id": 101,
+            "targets": [
+                {
+                    "expr": "sum by (endpoint_slug, variant) (rate(praxisml_serving_requests_total[1m]))",
+                    "legendFormat": "{{endpoint_slug}} ({{variant}})",
+                    "refId": "A"
+                }
+            ],
+            "title": "Model Serving Endpoints RPS (Primary / Canary)",
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "Prometheus"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "lineWidth": 2,
+                        "fillOpacity": 12
+                    },
+                    "unit": "short"
+                }
+            },
+            "gridPos": {
+                "h": 8,
+                "w": 12,
+                "x": 12,
+                "y": 24
+            },
+            "id": 102,
+            "targets": [
+                {
+                    "expr": "sum by (engine, status) (increase(praxisml_pipeline_runs_total[5m]))",
+                    "legendFormat": "pipeline {{engine}} ({{status}})",
+                    "refId": "A"
+                }
+            ],
+            "title": "User Pipeline Executions (5m)",
+            "type": "timeseries"
         }
     ],
     "refresh": "10s",

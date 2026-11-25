@@ -150,9 +150,9 @@ export default function DatasetsTab({
             {/* Delete confirmation */}
             {deletingDatasetId && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                    <div className="bg-neutral-900 border border-neutral-800 rounded-2xl p-8 max-w-md w-full">
-                        <h3 className="text-lg font-bold mb-2">Delete Dataset?</h3>
-                        <p className="text-neutral-400 text-sm mb-6">This will permanently delete the file from disk. Predictions linked to this dataset will NOT be deleted (lineage preserved).</p>
+                    <div className="bg-[#101217] border border-zinc-800 rounded-xl p-6 max-w-md w-full">
+                        <h3 className="text-base font-semibold text-zinc-100 mb-2">Delete Dataset?</h3>
+                        <p className="text-zinc-400 text-xs mb-6">This will permanently delete the file from disk. Predictions linked to this dataset will NOT be deleted (lineage preserved).</p>
                         <div className="flex gap-3 justify-end">
                             <Button variant="ghost" onClick={() => setDeletingDatasetId(null)}>Cancel</Button>
                             <Button className="bg-red-600 hover:bg-red-700" onClick={() => handleDeleteDataset(deletingDatasetId)}>
@@ -166,35 +166,35 @@ export default function DatasetsTab({
             {/* Preview Modal */}
             {previewData && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="w-full max-w-5xl max-h-[85vh] overflow-auto bg-neutral-900 border border-neutral-800 rounded-3xl p-8 relative">
-                        <button onClick={() => setPreviewData(null)} className="absolute top-6 right-6 text-neutral-400 hover:text-white">
+                    <div className="w-full max-w-5xl max-h-[85vh] overflow-auto bg-[#101217] border border-zinc-800 rounded-xl p-6 relative">
+                        <button onClick={() => setPreviewData(null)} className="absolute top-5 right-5 text-zinc-400 hover:text-white">
                             <X className="w-5 h-5" />
                         </button>
-                        <div className="mb-6">
-                            <h2 className="text-2xl font-bold">Data Preview</h2>
-                            <p className="text-neutral-400 text-sm mt-1">
+                        <div className="mb-5">
+                            <h2 className="text-lg font-semibold text-zinc-100">Data Preview</h2>
+                            <p className="text-zinc-400 text-xs font-mono mt-1">
                                 {previewData.num_rows.toLocaleString()} rows × {previewData.num_columns} columns •
-                                <span className="uppercase ml-1 text-xs font-semibold text-indigo-400">{previewData.file_type}</span>
+                                <span className="uppercase ml-1 font-semibold text-orange-400">{previewData.file_type}</span>
                             </p>
                         </div>
-                        <div className="overflow-x-auto rounded-xl border border-neutral-800">
-                            <table className="w-full text-sm border-collapse">
+                        <div className="overflow-x-auto rounded-lg border border-zinc-800">
+                            <table className="w-full text-xs border-collapse">
                                 <thead>
-                                    <tr className="bg-black/60">
+                                    <tr className="bg-[#0b0c0f]">
                                         {previewData.column_names.map(col => (
-                                            <th key={col} className="px-4 py-3 text-left text-xs font-semibold text-neutral-400 uppercase tracking-wider whitespace-nowrap">
+                                            <th key={col} className="px-3 py-2.5 text-left text-[11px] font-semibold text-zinc-400 uppercase tracking-wider whitespace-nowrap">
                                                 {col}
-                                                <span className="block text-[10px] text-neutral-600 font-normal normal-case">{previewData.column_dtypes[col]}</span>
+                                                <span className="block text-[10px] text-zinc-600 font-mono font-normal normal-case">{previewData.column_dtypes[col]}</span>
                                             </th>
                                         ))}
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-neutral-800">
+                                <tbody className="divide-y divide-zinc-800/80">
                                     {previewData.preview_rows.map((row, i) => (
-                                        <tr key={i} className="hover:bg-white/5 transition-colors">
+                                        <tr key={i} className="hover:bg-zinc-800/30 transition-colors">
                                             {previewData.column_names.map(col => (
-                                                <td key={col} className="px-4 py-2 text-neutral-300 whitespace-nowrap max-w-[200px] truncate">
-                                                    {row[col] != null ? String(row[col]) : <span className="text-neutral-600 italic">null</span>}
+                                                <td key={col} className="px-3 py-2 text-zinc-300 font-mono whitespace-nowrap max-w-[200px] truncate">
+                                                    {row[col] != null ? String(row[col]) : <span className="text-zinc-600 italic">null</span>}
                                                 </td>
                                             ))}
                                         </tr>
@@ -205,30 +205,30 @@ export default function DatasetsTab({
 
                         {/* Pipeline info inside preview modal */}
                         {pipelineSteps && pipelineSteps.length > 0 && (
-                            <div className="mt-8 pt-6 border-t border-neutral-800">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h4 className="text-sm font-bold text-neutral-300 uppercase tracking-wider flex items-center gap-2">
-                                        <ArrowRightCircle className="w-4 h-4 text-indigo-400" />
+                            <div className="mt-6 pt-5 border-t border-zinc-800">
+                                <div className="flex items-center justify-between mb-3">
+                                    <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
+                                        <ArrowRightCircle className="w-4 h-4 text-orange-400" />
                                         Applied Preprocessing Pipeline
                                     </h4>
-                                    <span className="text-[10px] text-indigo-400 font-mono">v{datasets.find(d => d.id === previewData.dataset_id)?.version || 1} Transformation</span>
+                                    <span className="text-[11px] text-orange-400 font-mono">v{datasets.find(d => d.id === previewData.dataset_id)?.version || 1} Transformation</span>
                                 </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                                     {pipelineSteps.map((step, i) => (
-                                        <div key={i} className="bg-black/40 border border-neutral-800 rounded-xl p-4">
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className="text-[9px] font-bold text-neutral-600 uppercase">Step {i + 1}</span>
-                                                <span className="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 rounded text-[8px] font-bold uppercase">{step.type}</span>
+                                        <div key={i} className="bg-[#0b0c0f] border border-zinc-800 rounded-lg p-3.5">
+                                            <div className="flex justify-between items-center mb-1.5">
+                                                <span className="text-[10px] font-mono text-zinc-500 uppercase">Step {i + 1}</span>
+                                                <span className="px-1.5 py-0.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 rounded text-[9px] font-mono uppercase">{step.type}</span>
                                             </div>
-                                            <p className="text-xs text-white font-medium capitalize mb-1">{step.method || step.strategy || 'Default'}</p>
-                                            <p className="text-[10px] text-neutral-500 truncate">{step.columns?.length || 0} cols</p>
+                                            <p className="text-xs text-zinc-100 font-medium capitalize mb-1">{step.method || step.strategy || 'Default'}</p>
+                                            <p className="text-[10px] font-mono text-zinc-500 truncate">{step.columns?.length || 0} cols</p>
                                         </div>
                                     ))}
                                 </div>
                                 {targetCol && (
-                                    <div className="mt-4 text-[10px] text-neutral-500 bg-indigo-500/5 px-3 py-2 rounded-lg inline-flex items-center gap-2">
+                                    <div className="mt-3 text-[11px] font-mono text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-md inline-flex items-center gap-2">
                                         <span>Target variable:</span>
-                                        <span className="text-indigo-400 font-bold uppercase">{targetCol}</span>
+                                        <span className="text-orange-400 font-semibold">{targetCol}</span>
                                     </div>
                                 )}
                             </div>
@@ -240,19 +240,19 @@ export default function DatasetsTab({
             {/* Drift Panel Modal */}
             {selectedDatasetForDrift && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-                    <div className="w-full max-w-2xl max-h-[85vh] overflow-auto bg-neutral-900 border border-neutral-800 rounded-3xl p-8 relative">
+                    <div className="w-full max-w-2xl max-h-[85vh] overflow-auto bg-[#101217] border border-zinc-800 rounded-xl p-6 relative">
                         <button 
                             onClick={() => setSelectedDatasetForDrift(null)} 
-                            className="absolute top-6 right-6 text-neutral-400 hover:text-white"
+                            className="absolute top-5 right-5 text-zinc-400 hover:text-white"
                         >
                             <X className="w-5 h-5" />
                         </button>
-                        <div className="mb-6">
-                            <h2 className="text-2xl font-bold flex items-center gap-2">
-                                <Activity className="w-6 h-6 text-amber-400" />
+                        <div className="mb-5">
+                            <h2 className="text-lg font-semibold text-zinc-100 flex items-center gap-2">
+                                <Activity className="w-5 h-5 text-amber-400" />
                                 Data Drift Monitor
                             </h2>
-                            <p className="text-neutral-400 text-sm mt-1">
+                            <p className="text-zinc-400 text-xs mt-1">
                                 Análisis de estabilidad de distribuciones para: {selectedDatasetForDrift.name}
                             </p>
                         </div>

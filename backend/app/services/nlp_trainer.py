@@ -357,12 +357,16 @@ class NLPTrainer:
             trainer.save_model(str(model_dir))
             tokenizer.save_pretrained(str(tokenizer_dir))
 
-            # Export ONNX
+            # Export ONNX (best-effort; fallback to saved transformers checkpoint)
             onnx_dir = out_dir / f"onnx_{run.info.run_id[:8]}"
-            onnx_path = export_model_to_onnx(
-                model, tokenizer, onnx_dir, max_seq_length=int(hp["max_seq_length"])
-            )
-            mlflow.log_artifact(str(onnx_path), artifact_path="onnx")
+            onnx_path = None
+            try:
+                onnx_path = export_model_to_onnx(
+                    model, tokenizer, onnx_dir, max_seq_length=int(hp["max_seq_length"])
+                )
+                mlflow.log_artifact(str(onnx_path), artifact_path="onnx")
+            except Exception as exc:
+                logger.warning("Exportación ONNX omitida (usando checkpoint transformers): %s", exc)
             mlflow.log_artifacts(str(model_dir), artifact_path="model")
             mlflow.log_artifacts(str(tokenizer_dir), artifact_path="tokenizer")
 
@@ -380,7 +384,7 @@ class NLPTrainer:
             "mlflow_run_id": run_id,
             "model_path": str(model_dir),
             "tokenizer_path": str(tokenizer_dir),
-            "onnx_path": str(onnx_path),
+            "onnx_path": str(onnx_path) if onnx_path else None,
             "label_map": self.label2id,
             "id2label": self.id2label,
             "metrics": result_metrics,
@@ -508,7 +512,7 @@ class NLPTrainer:
             "mlflow_run_id": run_id,
             "model_path": str(model_dir),
             "tokenizer_path": str(tokenizer_dir),
-            "onnx_path": str(onnx_path),
+            "onnx_path": str(onnx_path) if onnx_path else None,
             "label_map": self.label2id,
             "id2label": self.id2label,
             "metrics": metrics,

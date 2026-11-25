@@ -28,6 +28,28 @@ class MLFlowService:
         mlflow.set_tracking_uri(tracking_uri)
         self.tracking_uri = tracking_uri
 
+    @staticmethod
+    def get_experiment_name(tenant_id: str, domain: str) -> str:
+        """Convención uniforme de experimentos MLflow por tenant y dominio."""
+        clean_domain = domain.strip().lower().replace(" ", "_")
+        return f"tenant_{tenant_id}_{clean_domain}"
+
+    def ensure_tenant_experiment(self, tenant_id: str, domain: str) -> str:
+        """Crea o selecciona el experimento MLflow del tenant y adjunta tags estándar."""
+        from mlflow.tracking import MlflowClient
+
+        exp_name = self.get_experiment_name(tenant_id, domain)
+        mlflow.set_tracking_uri(self.tracking_uri)
+        exp = mlflow.set_experiment(exp_name)
+        try:
+            client = MlflowClient(tracking_uri=self.tracking_uri)
+            client.set_experiment_tag(exp.experiment_id, "praxisml.tenant_id", str(tenant_id))
+            client.set_experiment_tag(exp.experiment_id, "praxisml.domain", domain)
+            client.set_experiment_tag(exp.experiment_id, "praxisml.managed_by", "praxisml")
+        except Exception:
+            pass
+        return exp_name
+
     def load_model(self, run_id: str, device: torch.device) -> nn.Module:
         """
         Carga un modelo PyTorch desde MLFlow usando su run_id.

@@ -257,6 +257,16 @@ def test_model_endpoint_deploy_canary_and_invoke_with_api_key(auth_context):
     assert logs[0]["variant"] == "canary"
     assert logs[0]["sample_output"]["predictions"] == [1]
 
+    # Per-endpoint observability metrics (percentiles, variant split, latency series)
+    metrics_res = client.get(f"/api/v1/serving/endpoints/{ep['id']}/metrics", headers=headers)
+    assert metrics_res.status_code == 200
+    ep_metrics = metrics_res.json()
+    assert ep_metrics["total_requests"] == 1
+    assert ep_metrics["success_rate_pct"] == 100.0
+    assert ep_metrics["by_variant"]["canary"]["count"] == 1
+    assert ep_metrics["total_rows_scored"] == 1
+    assert len(ep_metrics["latency_series"]) == 1
+
     # Unified platform observability summary reflects deployed endpoints & serving usage
     summary_res = client.get("/api/v1/observability/platform-summary", headers=headers)
     assert summary_res.status_code == 200

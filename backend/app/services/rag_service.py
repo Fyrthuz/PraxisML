@@ -30,12 +30,16 @@ class RAGService:
     ) -> Dict[str, Any]:
         """Recupera el contexto relevante para la pregunta del usuario."""
         models = self._get_models(db, tenant_id)
+        endpoints = self._get_serving_endpoints(db, tenant_id)
+        datasets = self._get_datasets(db, tenant_id)
         drift = self._get_recent_drift(db, tenant_id)
         costs = self._get_recent_costs(db, tenant_id)
         semantic = self._semantic_search(db, tenant_id, question, top_k)
 
         context = {
             "modelos": models,
+            "model_endpoints": endpoints,
+            "datasets": datasets,
             "drift_reciente": drift,
             "costes_recientes": costs,
             "busqueda_semantica": semantic,
@@ -43,8 +47,61 @@ class RAGService:
 
         return {
             "context": json.dumps(context, ensure_ascii=False, default=str),
-            "sources": self._extract_sources(models, semantic),
+            "structured": context,
+            "sources": self._extract_sources(models, semantic, endpoints),
         }
+
+    def _get_serving_endpoints(self, db: Session, tenant_id: str) -> List[Dict[str, Any]]:
+        from app.models.model_endpoint import ModelEndpoint
+
+        try:
+            rows = (
+                db.query(ModelEndpoint)
+                .filter(ModelEndpoint.tenant_id == tenant_id)
+                .limit(20)
+                .all()
+            )
+            return [
+                {
+                    "id": e.id,
+                    "name": e.name,
+                    "slug": e.slug,
+                    "status": e.status,
+                    "traffic_split_pct": e.traffic_split_pct,
+                    "request_count": e.request_count or 0,
+                    "error_count": e.error_count or 0,
+                    "avg_latency_ms": e.avg_latency_ms or 0.0,
+                }
+                for e in rows
+            ]
+        except Exception as exc:
+            logger.warning("Endpoints retrieval failed (non-critical): %s", exc)
+            return []
+
+    def _get_datasets(self, db: Session, tenant_id: str) -> List[Dict[str, Any]]:
+        from app.models.dataset import Dataset
+
+        try:
+            rows = (
+                db.query(Dataset)
+                .filter(Dataset.tenant_id == tenant_id)
+                .limit(20)
+                .all()
+            )
+            return [
+                {
+                    "id": d.id,
+                    "name": d.name,
+                    "file_type": d.file_type,
+                    "num_rows": d.num_rows,
+                    "num_columns": d.num_columns,
+                    "is_dvc_tracked": d.is_dvc_tracked,
+                }
+                for d in rows
+            ]
+        except Exception as exc:
+            logger.warning("Datasets retrieval failed (non-critical): %s", exc)
+            return []
 
     def _get_models(self, db: Session, tenant_id: str) -> List[Dict[str, Any]]:
         from app.models.ml_model import MLModel
@@ -142,12 +199,18 @@ class RAGService:
             logger.warning("Semantic search failed (non-critical): %s", exc)
             return {"models": [], "datasets": []}
 
-    def _extract_sources(self, models: List[Dict], semantic: Dict) -> List[Dict]:
+    def _extract_sources(
+        self, models: List[Dict], semantic: Dict, endpoints: Optional[List[Dict]] = None
+    ) -> List[Dict]:
         sources = [
             {"model_id": m.get("model_id"), "name": m.get("name"), "type": "model"}
             for m in models
             if m.get("model_id")
         ]
+        for ep in (endpoints or [])[:5]:
+            sources.append(
+                {"model_id": ep.get("id"), "name": f"endpoint:{ep.get('slug')}", "type": "endpoint"}
+            )
         for m in semantic.get("models", [])[:3]:
             if m.get("model_id") not in {s["model_id"] for s in sources}:
                 sources.append(
