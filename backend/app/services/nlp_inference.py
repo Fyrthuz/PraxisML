@@ -7,16 +7,37 @@ Integra ModelCache para evitar recargas.
 """
 
 import logging
+import os
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from app.core.config import settings
 from app.services.model_cache import get_model_cache
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_MAX_SEQ_LENGTH = 128
+
+
+def _resolve_artifact_path(path_str: Optional[str]) -> Optional[str]:
+    """Resuelve rutas locales de artefactos NLP entre host y contenedor Docker."""
+    if not path_str:
+        return None
+    if os.path.exists(path_str):
+        return path_str
+    marker = "/tenants/"
+    if marker in path_str:
+        tail = path_str.split(marker, 1)[1]
+        candidate = Path(settings.DATA_DIR) / "tenants" / tail
+        if candidate.exists():
+            return str(candidate)
+    rel_candidate = Path(settings.DATA_DIR) / path_str.lstrip("/")
+    if rel_candidate.exists():
+        return str(rel_candidate)
+    return path_str
 
 
 class NLPInferenceService:
@@ -39,9 +60,9 @@ class NLPInferenceService:
           session / model, tokenizer, task_type, label_map, id2label, max_seq_length
         """
         metadata = ml_model.metrics_metadata or {}
-        onnx_path = metadata.get("onnx_path")
-        model_path = metadata.get("model_path")
-        tokenizer_path = metadata.get("tokenizer_path")
+        onnx_path = _resolve_artifact_path(metadata.get("onnx_path"))
+        model_path = _resolve_artifact_path(metadata.get("model_path"))
+        tokenizer_path = _resolve_artifact_path(metadata.get("tokenizer_path")) or model_path
         task_type = metadata.get("task_type", "text_classification")
         label_map = metadata.get("label_map") or {}
         id2label = metadata.get("id2label") or {str(v): k for k, v in label_map.items()}

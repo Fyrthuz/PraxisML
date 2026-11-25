@@ -32,6 +32,7 @@ from sklearn.model_selection import (
 )
 
 from app.core.config import settings
+from app.services.mlflow_service import MLFlowService
 from app.core_ml.hyperparams import get_algorithm_info, get_default_hyperparams
 from app.services.training_utils import prepare_features
 
@@ -144,8 +145,7 @@ class SklearnTrainer:
         X = prepare_features(X)
 
         algo_info = get_algorithm_info(algorithm)
-        experiment_name = f"tenant_{self.tenant_id}_training"
-        mlflow.set_experiment(experiment_name)
+        MLFlowService().ensure_tenant_experiment(self.tenant_id, "tabular-training")
         mlflow.sklearn.autolog(log_models=True, log_datasets=False)
 
         if strategy == "cross_validation":
@@ -695,8 +695,7 @@ class PyTorchTrainer:
             )
 
         # MLFlow
-        experiment_name = f"tenant_{self.tenant_id}_training"
-        mlflow.set_experiment(experiment_name)
+        MLFlowService().ensure_tenant_experiment(self.tenant_id, "tabular-training")
         mlflow.pytorch.autolog(log_models=True)
 
         algo_display = algorithm.upper() if algorithm != "mlp" else "MLP"
@@ -885,8 +884,7 @@ class PyTorchTrainer:
 
         all_fold_metrics: List[Dict[str, float]] = []
 
-        experiment_name = f"tenant_{self.tenant_id}_training"
-        mlflow.set_experiment(experiment_name)
+        MLFlowService().ensure_tenant_experiment(self.tenant_id, "tabular-training")
         mlflow.pytorch.autolog(log_models=True)
         algo_display = algorithm.upper() if algorithm != "mlp" else "MLP"
         run_name = (

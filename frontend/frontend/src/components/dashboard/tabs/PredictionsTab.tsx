@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, XCircle, Clock, Activity, Loader2, ExternalLink, UploadCloud } from 'lucide-react';
 import { MLModel, Prediction, Dataset } from '../../../lib/api';
+import { getModelCompatibilityProfile } from '../../../lib/modelCompatibility';
 import SingleTabularInference from '../SingleTabularInference';
 import { config } from '@/lib/config';
 
@@ -40,6 +41,11 @@ export default function PredictionsTab({
     handleRunInference
 }: PredictionsTabProps) {
     const [batchFile, setBatchFile] = React.useState<File | null>(null);
+    const tabularModels = React.useMemo(
+        () => models.filter((m) => getModelCompatibilityProfile(m).domain === 'tabular'),
+        [models]
+    );
+    const hiddenNonTabularCount = models.length - tabularModels.length;
 
     const renderStatusIcon = (status: string) => {
         switch (status) {
@@ -178,18 +184,23 @@ export default function PredictionsTab({
 
                     <div className="space-y-4">
                         <div className="space-y-1.5">
-                            <label className="text-[11px] font-medium text-zinc-400">ML Model</label>
+                            <label className="text-[11px] font-medium text-zinc-400">Tabular ML Model</label>
                             <select
                                 className="w-full h-9 bg-[#0b0c0f] border border-zinc-800 rounded-md px-3 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600"
-                                value={selectedModel}
+                                value={tabularModels.some((m) => m.id === selectedModel) ? selectedModel : ''}
                                 onChange={(e) => {
                                     setSelectedModel(e.target.value);
                                     setUncertaintyMethod('none');
                                 }}
                             >
-                                <option value="" disabled>Select a model</option>
-                                {models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                <option value="" disabled>Select a tabular model</option>
+                                {tabularModels.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                             </select>
+                            {hiddenNonTabularCount > 0 && (
+                                <p className="text-[10px] text-zinc-500">
+                                    {hiddenNonTabularCount} non-tabular model{hiddenNonTabularCount > 1 ? 's' : ''} hidden (use NLP Engine or Model Serving).
+                                </p>
+                            )}
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-[11px] font-medium text-zinc-400">Uncertainty Method</label>
@@ -223,7 +234,7 @@ export default function PredictionsTab({
 
             <div className="mt-12">
                 <SingleTabularInference
-                    models={models}
+                    models={tabularModels}
                     onPredictionStarted={() => {
                         // Refresh the predictions list when a single file starts
                         if (token) {

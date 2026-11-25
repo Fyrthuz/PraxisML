@@ -92,7 +92,7 @@ export default function SingleImageUpload({ models, onPredictionStarted }: Singl
                 formData.append('file', file);
             }
 
-            const res = await fetch(config.getFullApiUrl('/predictions/predict/single'), {
+            const res = await fetch(config.getFullApiUrl('/tabular/predictions/predict/single'), {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,

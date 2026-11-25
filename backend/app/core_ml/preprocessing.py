@@ -291,10 +291,7 @@ def save_pipeline(
     preprocesamiento del tenant actual, incluyendo los pasos y renombrados.
     """
     mlflow_svc = MLFlowService()
-    mlflow.set_tracking_uri(mlflow_svc.tracking_uri)
-
-    experiment_name = f"tenant_{tenant_id}_preprocessing"
-    mlflow.set_experiment(experiment_name)
+    mlflow_svc.ensure_tenant_experiment(tenant_id, "preprocessing")
 
     with mlflow.start_run(run_name=pipeline_name) as run:
         mlflow.sklearn.log_model(pipeline, "pipeline")

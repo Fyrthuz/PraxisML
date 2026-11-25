@@ -1,477 +1,477 @@
 {
-    "__requires": [
-        {
-            "type": "grafana",
-            "id": "grafana",
-            "name": "Grafana",
-            "version": "10.0.0"
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "description": "NLP Engine — training, inference, embeddings y LLM gateway",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "s"
         },
-        {
-            "type": "datasource",
-            "id": "prometheus",
-            "name": "Prometheus",
-            "version": "1.0.0"
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
         },
-        {
-            "type": "panel",
-            "id": "timeseries",
-            "name": "Time series",
-            "version": ""
-        },
-        {
-            "type": "panel",
-            "id": "stat",
-            "name": "Stat",
-            "version": ""
+        "tooltip": {
+          "mode": "multi"
         }
-    ],
-    "annotations": {
-        "list": []
-    },
-    "description": "NLP Engine — training, inference, embeddings y LLM gateway",
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 1,
-    "id": null,
-    "links": [],
-    "panels": [
+      },
+      "targets": [
         {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "s"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 0
-            },
-            "id": 1,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "histogram_quantile(0.95, sum by(le, algorithm) (rate(praxisml_training_duration_seconds_bucket{domain=\"nlp\", tenant_id=~\"$tenant_id\"}[5m])))",
-                    "legendFormat": "p95 {{algorithm}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Duración Entrenamiento NLP (p95)",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "ms"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 0
-            },
-            "id": 2,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "histogram_quantile(0.95, sum by(le, task_type) (rate(praxisml_nlp_inference_latency_ms_bucket{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m])))",
-                    "legendFormat": "p95 {{task_type}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Latencia Inferencia NLP (p95)",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "orange",
-                                "value": 100
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 8
-            },
-            "id": 3,
-            "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                }
-            },
-            "targets": [
-                {
-                    "expr": "sum(rate(praxisml_nlp_predictions_total{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m]))",
-                    "legendFormat": "Predicciones/s",
-                    "refId": "A"
-                }
-            ],
-            "title": "Predicciones NLP (rate)",
-            "type": "stat"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 8
-            },
-            "id": 4,
-            "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                }
-            },
-            "targets": [
-                {
-                    "expr": "sum by(operation) (rate(praxisml_embeddings_total{tenant_id=~\"$tenant_id\"}[5m]))",
-                    "legendFormat": "{{operation}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Operaciones Embeddings",
-            "type": "stat"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "ms"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 16
-            },
-            "id": 5,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "histogram_quantile(0.95, sum by(le, index_type) (rate(praxisml_semantic_search_latency_ms_bucket{tenant_id=~\"$tenant_id\"}[5m])))",
-                    "legendFormat": "p95 {{index_type}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Latencia Búsqueda Semántica (p95)",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 16
-            },
-            "id": 6,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "sum by(direction, provider) (rate(praxisml_llm_tokens_total{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m]))",
-                    "legendFormat": "{{direction}} - {{provider}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Tokens LLM (rate)",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "ms"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 24
-            },
-            "id": 7,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "histogram_quantile(0.95, sum by(le, provider) (rate(praxisml_llm_latency_ms_bucket{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m])))",
-                    "legendFormat": "p95 {{provider}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Latencia LLM (p95)",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 24
-            },
-            "id": 8,
-            "options": {
-                "colorMode": "value",
-                "graphMode": "area",
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                }
-            },
-            "targets": [
-                {
-                    "expr": "sum by(provider, status) (rate(praxisml_llm_requests_total{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m]))",
-                    "legendFormat": "{{provider}} {{status}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Requests LLM (rate)",
-            "type": "stat"
+          "expr": "histogram_quantile(0.95, sum by(le, algorithm) (rate(praxisml_training_duration_seconds_bucket{domain=\"nlp\", tenant_id=~\"$tenant_id\"}[5m])))",
+          "legendFormat": "p95 {{algorithm}}",
+          "refId": "A"
         }
-    ],
-    "refresh": "10s",
-    "schemaVersion": 38,
-    "style": "dark",
-    "tags": [
-        "praxisml",
-        "nlp",
-        "llm"
-    ],
-    "templating": {
-        "list": [
-            {
-                "current": {
-                    "selected": true,
-                    "text": "All",
-                    "value": "$__all"
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "Prometheus"
-                },
-                "definition": "label_values(praxisml_nlp_inference_latency_ms_bucket, model_id)",
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "name": "model_id",
-                "options": [],
-                "query": "label_values(praxisml_nlp_inference_latency_ms_bucket, model_id)",
-                "refresh": 1,
-                "regex": "",
-                "skipUrlSync": false,
-                "sort": 1,
-                "type": "query"
-            },
-            {
-                "current": {
-                    "selected": true,
-                    "text": "All",
-                    "value": "$__all"
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "Prometheus"
-                },
-                "definition": "label_values(praxisml_nlp_inference_latency_ms_bucket, tenant_id)",
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "name": "tenant_id",
-                "options": [],
-                "query": "label_values(praxisml_nlp_inference_latency_ms_bucket, tenant_id)",
-                "refresh": 1,
-                "regex": "",
-                "skipUrlSync": false,
-                "sort": 1,
-                "type": "query"
-            }
-        ]
+      ],
+      "title": "Duración Entrenamiento NLP (p95)",
+      "type": "timeseries"
     },
-    "time": {
-        "from": "now-7d",
-        "to": "now"
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by(le, task_type) (rate(praxisml_nlp_inference_latency_ms_bucket{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m])))",
+          "legendFormat": "p95 {{task_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Latencia Inferencia NLP (p95)",
+      "type": "timeseries"
     },
-    "timepicker": {},
-    "timezone": "browser",
-    "title": "NLP Engine",
-    "uid": "praxisml-nlp",
-    "version": 1
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 100
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(praxisml_nlp_predictions_total{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m]))",
+          "legendFormat": "Predicciones/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Predicciones NLP (rate)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by(operation) (rate(praxisml_embeddings_total{tenant_id=~\"$tenant_id\"}[5m]))",
+          "legendFormat": "{{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Operaciones Embeddings",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by(le, index_type) (rate(praxisml_semantic_search_latency_ms_bucket{tenant_id=~\"$tenant_id\"}[5m])))",
+          "legendFormat": "p95 {{index_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Latencia Búsqueda Semántica (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by(direction, provider) (rate(praxisml_llm_tokens_total{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m]))",
+          "legendFormat": "{{direction}} - {{provider}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tokens LLM (rate)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by(le, provider) (rate(praxisml_llm_latency_ms_bucket{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m])))",
+          "legendFormat": "p95 {{provider}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Latencia LLM (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by(provider, status) (rate(praxisml_llm_requests_total{model_id=~\"$model_id\", tenant_id=~\"$tenant_id\"}[5m]))",
+          "legendFormat": "{{provider}} {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Requests LLM (rate)",
+      "type": "stat"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "praxisml",
+    "nlp",
+    "llm"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "definition": "label_values(praxisml_nlp_inference_latency_ms_bucket, model_id)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "model_id",
+        "options": [],
+        "query": "label_values(praxisml_nlp_inference_latency_ms_bucket, model_id)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "definition": "label_values(praxisml_nlp_inference_latency_ms_bucket, tenant_id)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "tenant_id",
+        "options": [],
+        "query": "label_values(praxisml_nlp_inference_latency_ms_bucket, tenant_id)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "NLP Engine",
+  "uid": "praxisml-nlp",
+  "version": 1
 }

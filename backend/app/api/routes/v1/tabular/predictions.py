@@ -43,6 +43,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+_NLP_TASK_TYPES = {"text_classification", "token_classification", "sentiment_analysis", "ner"}
+
+
+def _get_tabular_model(db: Session, model_id: str, tenant_id: str) -> MLModel:
+    ml_model = (
+        db.query(MLModel)
+        .filter(MLModel.id == model_id, MLModel.tenant_id == tenant_id)
+        .first()
+    )
+    if not ml_model:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado."
+        )
+    meta = ml_model.metrics_metadata or {}
+    domain = str(meta.get("domain") or "").lower()
+    framework = str(meta.get("framework") or "").lower()
+    task_type = str(meta.get("task_type") or "").lower()
+    if (
+        domain == "nlp"
+        or framework == "huggingface"
+        or task_type in _NLP_TASK_TYPES
+        or bool(meta.get("onnx_path") or meta.get("tokenizer_path"))
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El modelo seleccionado pertenece al dominio NLP. Usa /api/v1/nlp/predict o un Serving Endpoint.",
+        )
+    return ml_model
+
+
 class PredictionRequest(BaseModel):
     dataset_id: str
     model_id: str
@@ -68,17 +98,17 @@ def request_prediction(
     from app.worker.tasks.predict import run_heavy_inference
 
     # Validar existencia de dataset y modelo para fallo rápido
-    dataset = db.query(Dataset).filter(Dataset.id == req.dataset_id).first()
+    dataset = (
+        db.query(Dataset)
+        .filter(Dataset.id == req.dataset_id, Dataset.tenant_id == tenant.id)
+        .first()
+    )
     if not dataset:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Dataset no encontrado."
         )
 
-    ml_model = db.query(MLModel).filter(MLModel.id == req.model_id).first()
-    if not ml_model:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado."
-        )
+    _get_tabular_model(db, req.model_id, tenant.id)
 
     # Crear registro PENDING en BD antes de encolar
     prediction = Prediction(
@@ -109,8 +139,8 @@ def request_prediction(
         "message": "Predicción encolada exitosamente.",
         "prediction_id": prediction.id,
         "task_id": task.id,
-        "status_url": f"/api/v1/predictions/status/{task.id}",
-        "result_url": f"/api/v1/predictions/{prediction.id}",
+        "status_url": f"/api/v1/tabular/predictions/status/{task.id}",
+        "result_url": f"/api/v1/tabular/predictions/{prediction.id}",
     }
 
 
@@ -143,11 +173,7 @@ def request_single_prediction(
             detail="Las características proporcionadas no son un JSON válido.",
         )
 
-    ml_model = db.query(MLModel).filter(MLModel.id == model_id).first()
-    if not ml_model:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado."
-        )
+    _get_tabular_model(db, model_id, tenant.id)
 
     # Crear registro Prediction
     prediction = Prediction(
@@ -200,11 +226,7 @@ def request_batch_prediction(
     """
     from app.worker.tasks.predict import run_heavy_inference
 
-    ml_model = db.query(MLModel).filter(MLModel.id == model_id).first()
-    if not ml_model:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Modelo no encontrado."
-        )
+    _get_tabular_model(db, model_id, tenant.id)
 
     # Guardar archivo temporalmente
     tenant_tmp_dir = os.path.join(settings.DATA_DIR, "tenants", tenant.id, "tmp")

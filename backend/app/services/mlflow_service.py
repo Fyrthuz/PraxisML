@@ -28,26 +28,67 @@ class MLFlowService:
         mlflow.set_tracking_uri(tracking_uri)
         self.tracking_uri = tracking_uri
 
-    @staticmethod
-    def get_experiment_name(tenant_id: str, domain: str) -> str:
-        """Convención uniforme de experimentos MLflow por tenant y dominio."""
-        clean_domain = domain.strip().lower().replace(" ", "_")
-        return f"tenant_{tenant_id}_{clean_domain}"
+    _DOMAIN_ALIASES: Dict[str, str] = {
+        "training": "tabular-training",
+        "tabular": "tabular-training",
+        "tabular_training": "tabular-training",
+        "tabular-training": "tabular-training",
+        "nlp": "nlp-training",
+        "nlp_training": "nlp-training",
+        "nlp-training": "nlp-training",
+        "preprocessing": "preprocessing",
+        "pipelines": "pipelines",
+        "models": "models",
+        "inference": "inference",
+    }
 
-    def ensure_tenant_experiment(self, tenant_id: str, domain: str) -> str:
+    @classmethod
+    def get_experiment_name(
+        cls,
+        tenant_id: str,
+        domain: str,
+        tenant_slug: Optional[str] = None,
+    ) -> str:
+        """
+        Convención jerárquica uniforme de experimentos MLflow:
+        `{tenant_slug}/{domain}` (o `tenant-{short_id}/{domain}` si no se indica slug).
+        """
+        raw_domain = domain.strip().lower().replace(" ", "_")
+        canonical_domain = cls._DOMAIN_ALIASES.get(raw_domain, raw_domain.replace("_", "-"))
+        if tenant_slug and tenant_slug.strip():
+            prefix = tenant_slug.strip().lower().replace(" ", "-")
+        else:
+            short_id = str(tenant_id).split("-")[0][:12] or "default"
+            prefix = f"tenant-{short_id}"
+        return f"{prefix}/{canonical_domain}"
+
+    def ensure_tenant_experiment(
+        self,
+        tenant_id: str,
+        domain: str,
+        tenant_slug: Optional[str] = None,
+        extra_tags: Optional[Dict[str, str]] = None,
+    ) -> str:
         """Crea o selecciona el experimento MLflow del tenant y adjunta tags estándar."""
         from mlflow.tracking import MlflowClient
 
-        exp_name = self.get_experiment_name(tenant_id, domain)
+        raw_domain = domain.strip().lower().replace(" ", "_")
+        canonical_domain = self._DOMAIN_ALIASES.get(raw_domain, raw_domain.replace("_", "-"))
+        exp_name = self.get_experiment_name(tenant_id, canonical_domain, tenant_slug=tenant_slug)
         mlflow.set_tracking_uri(self.tracking_uri)
         exp = mlflow.set_experiment(exp_name)
-        try:
-            client = MlflowClient(tracking_uri=self.tracking_uri)
-            client.set_experiment_tag(exp.experiment_id, "praxisml.tenant_id", str(tenant_id))
-            client.set_experiment_tag(exp.experiment_id, "praxisml.domain", domain)
-            client.set_experiment_tag(exp.experiment_id, "praxisml.managed_by", "praxisml")
-        except Exception:
-            pass
+        if exp is not None:
+            try:
+                client = MlflowClient(tracking_uri=self.tracking_uri)
+                client.set_experiment_tag(exp.experiment_id, "praxisml.tenant_id", str(tenant_id))
+                if tenant_slug:
+                    client.set_experiment_tag(exp.experiment_id, "praxisml.tenant_slug", str(tenant_slug))
+                client.set_experiment_tag(exp.experiment_id, "praxisml.domain", canonical_domain)
+                client.set_experiment_tag(exp.experiment_id, "praxisml.managed_by", "praxisml")
+                for k, v in (extra_tags or {}).items():
+                    client.set_experiment_tag(exp.experiment_id, str(k), str(v))
+            except Exception:
+                pass
         return exp_name
 
     def load_model(self, run_id: str, device: torch.device) -> nn.Module:
@@ -226,8 +267,7 @@ class MLFlowService:
         Returns:
             str: run_id del experimento MLFlow recién creado.
         """
-        experiment_name = f"tenant_{tenant_id}_models"
-        mlflow.set_experiment(experiment_name)
+        self.ensure_tenant_experiment(tenant_id, "models")
         import logging
 
         logger = logging.getLogger(__name__)
@@ -299,8 +339,7 @@ class MLFlowService:
         """
         Guarda un nn.Module en MLFlow (útil para fine-tuning desde código).
         """
-        experiment_name = f"tenant_{tenant_id}_models"
-        mlflow.set_experiment(experiment_name)
+        self.ensure_tenant_experiment(tenant_id, "models")
 
         with mlflow.start_run(run_name=model_name) as run:
             mlflow.pytorch.log_model(model, "model")
@@ -326,8 +365,7 @@ class MLFlowService:
         Returns:
             mlflow.ActiveRun: contexto del run (úsalo con `with`).
         """
-        experiment_name = f"tenant_{tenant_id}_inference"
-        mlflow.set_experiment(experiment_name)
+        self.ensure_tenant_experiment(tenant_id, "inference")
         return mlflow.start_run(
             run_name=f"inference_{prediction_id[:8]}",
             tags={

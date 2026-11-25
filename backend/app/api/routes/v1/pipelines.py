@@ -355,8 +355,12 @@ def run_pipeline(
         .count()
     )
     new_version = existing_count + 1
+    from app.services.storage_service import StorageKeyBuilder
+
     out_name = (body.output_dataset_name or "").strip() or f"{dataset.name} [{pipe.slug} v{pipe.version}]"
-    storage_key = f"tenants/{tenant.id}/datasets/{pipe.slug}_v{pipe.version}_{new_version}.csv"
+    storage_key = StorageKeyBuilder.dataset_pipeline(
+        tenant.id, f"{pipe.slug}_v{pipe.version}_{new_version}.csv"
+    )
 
     tmp_path = None
     try:
@@ -392,7 +396,9 @@ def run_pipeline(
         from app.services.mlflow_service import MLFlowService
 
         mlflow_svc = MLFlowService()
-        mlflow_svc.ensure_tenant_experiment(tenant.id, "pipelines")
+        mlflow_svc.ensure_tenant_experiment(
+            tenant.id, "pipelines", tenant_slug=getattr(tenant, "slug", None)
+        )
         with mlflow.start_run(run_name=f"pipeline_{pipe.slug}_v{pipe.version}") as run:
             mlflow.set_tags(
                 {

@@ -21,7 +21,7 @@ import {
 import toast from "react-hot-toast";
 import { Dataset, MLModel } from "@/lib/api";
 import { config } from "@/lib/config";
-import { areModelsCompatible } from "@/lib/modelCompatibility";
+import { areModelsCompatible, getModelCompatibilityProfile } from "@/lib/modelCompatibility";
 
 interface ModelEndpoint {
     id: string;
@@ -516,7 +516,20 @@ export default function ServingEndpointsTab({
                             </label>
                             <select
                                 value={modelId}
-                                onChange={(e) => setModelId(e.target.value)}
+                                onChange={(e) => {
+                                    const nextId = e.target.value;
+                                    setModelId(nextId);
+                                    const nextPrimary = models.find((pm) => pm.id === nextId);
+                                    if (nextPrimary && secondaryModelId) {
+                                        const sec = models.find((sm) => sm.id === secondaryModelId);
+                                        if (sec && !areModelsCompatible(nextPrimary, sec)) {
+                                            setSecondaryModelId("");
+                                        }
+                                    }
+                                    if (nextPrimary && getModelCompatibilityProfile(nextPrimary).domain !== "tabular") {
+                                        setPipelinePath("");
+                                    }
+                                }}
                                 required
                                 className="w-full h-9 px-3 rounded-md bg-[#0b0c0f] border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600"
                             >
@@ -573,18 +586,29 @@ export default function ServingEndpointsTab({
                             <label className="block text-[11px] font-medium text-zinc-400 mb-1">
                                 Auto-Preprocessing Pipeline (optional)
                             </label>
-                            <select
-                                value={pipelinePath}
-                                onChange={(e) => setPipelinePath(e.target.value)}
-                                className="w-full h-9 px-3 rounded-md bg-[#0b0c0f] border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600"
-                            >
-                                <option value="">Inherit from model / none</option>
-                                {pipelineDatasets.map((d) => (
-                                    <option key={d.id} value={d.pipeline_path || ""}>
-                                        {d.name}
-                                    </option>
-                                ))}
-                            </select>
+                            {(() => {
+                                const primaryModel = models.find((pm) => pm.id === modelId);
+                                const isNonTabular = primaryModel
+                                    ? getModelCompatibilityProfile(primaryModel).domain !== "tabular"
+                                    : false;
+                                return (
+                                    <select
+                                        value={isNonTabular ? "" : pipelinePath}
+                                        disabled={isNonTabular}
+                                        onChange={(e) => setPipelinePath(e.target.value)}
+                                        className="w-full h-9 px-3 rounded-md bg-[#0b0c0f] border border-zinc-800 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600 disabled:opacity-45"
+                                    >
+                                        <option value="">
+                                            {isNonTabular ? "Not applicable for NLP models (tokenizer embedded)" : "Inherit from model / none"}
+                                        </option>
+                                        {!isNonTabular && pipelineDatasets.map((d) => (
+                                            <option key={d.id} value={d.pipeline_path || ""}>
+                                                {d.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                );
+                            })()}
                         </div>
                     </div>
 

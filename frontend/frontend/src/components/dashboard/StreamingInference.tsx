@@ -36,6 +36,7 @@ ChartJS.register(
 );
 import { Button } from '@/components/ui/button';
 import { MLModel } from '@/lib/api';
+import { getModelCompatibilityProfile } from '@/lib/modelCompatibility';
 import { useStreamingInference, StreamingResult } from '@/hooks/useStreamingInference';
 
 interface StreamingInferenceProps {
@@ -44,6 +45,10 @@ interface StreamingInferenceProps {
 }
 
 export default function StreamingInference({ models, token }: StreamingInferenceProps) {
+  const tabularModels = React.useMemo(
+    () => models.filter((m) => getModelCompatibilityProfile(m).domain === 'tabular'),
+    [models]
+  );
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [explain, setExplain] = useState(true);
   const [rowInput, setRowInput] = useState('');
@@ -218,8 +223,8 @@ export default function StreamingInference({ models, token }: StreamingInference
               className="w-full bg-neutral-800 border border-neutral-700 text-neutral-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-zinc-600"
               disabled={isConnected}
             >
-              <option value="">Seleccionar modelo...</option>
-              {models.map((model) => (
+              <option value="">Seleccionar modelo tabular...</option>
+              {tabularModels.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.name} ({model.stage})
                 </option>

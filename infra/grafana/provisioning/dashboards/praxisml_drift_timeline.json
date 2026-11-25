@@ -1,257 +1,257 @@
 {
-    "__requires": [
-        {
-            "type": "grafana",
-            "id": "grafana",
-            "name": "Grafana",
-            "version": "10.0.0"
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "state-timeline",
+      "name": "State timeline",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "description": "Drift monitoring timeline — PSI/KS scores, current drift status, and alert annotations",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
         },
-        {
-            "type": "datasource",
-            "id": "prometheus",
-            "name": "Prometheus",
-            "version": "1.0.0"
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
         },
-        {
-            "type": "panel",
-            "id": "timeseries",
-            "name": "Time series",
-            "version": ""
-        },
-        {
-            "type": "panel",
-            "id": "stat",
-            "name": "Stat",
-            "version": ""
-        },
-        {
-            "type": "panel",
-            "id": "state-timeline",
-            "name": "State timeline",
-            "version": ""
+        "tooltip": {
+          "mode": "multi"
         }
-    ],
-    "annotations": {
-        "list": []
-    },
-    "description": "Drift monitoring timeline — PSI/KS scores, current drift status, and alert annotations",
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 1,
-    "id": null,
-    "links": [],
-    "panels": [
+      },
+      "targets": [
         {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 0
-            },
-            "id": 1,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "praxisml_drift_score{model_id=~\"$model_id\", metric=~\"$metric\"}",
-                    "legendFormat": "{{model_id}} - {{metric}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "PSI / KS Timeline",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "orange",
-                                "value": 0.1
-                            },
-                            {
-                                "color": "red",
-                                "value": 0.25
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 12,
-                "y": 0
-            },
-            "id": 2,
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "orientation": "auto",
-                "colorMode": "background"
-            },
-            "targets": [
-                {
-                    "expr": "praxisml_drift_score{model_id=~\"$model_id\", metric=~\"$metric\"}",
-                    "legendFormat": "Current drift",
-                    "refId": "A"
-                }
-            ],
-            "title": "Current Drift Score",
-            "type": "stat"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 24,
-                "x": 0,
-                "y": 4
-            },
-            "id": 3,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "praxisml_drift_score{model_id=~\"$model_id\", metric=~\"$metric\"} > bool 0.25",
-                    "legendFormat": "Drift alert - {{model_id}} ({{metric}})",
-                    "refId": "A"
-                }
-            ],
-            "title": "Alert Annotations (Drift > 0.25)",
-            "type": "state-timeline"
+          "expr": "praxisml_drift_score{model_id=~\"$model_id\", metric=~\"$metric\"}",
+          "legendFormat": "{{model_id}} - {{metric}}",
+          "refId": "A"
         }
-    ],
-    "refresh": "10s",
-    "schemaVersion": 38,
-    "style": "dark",
-    "tags": [
-        "praxisml",
-        "drift",
-        "observability"
-    ],
-    "templating": {
-        "list": [
-            {
-                "current": {
-                    "selected": true,
-                    "text": "All",
-                    "value": "$__all"
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "Prometheus"
-                },
-                "definition": "label_values(praxisml_drift_score, model_id)",
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "name": "model_id",
-                "options": [],
-                "query": "label_values(praxisml_drift_score, model_id)",
-                "refresh": 1,
-                "regex": "",
-                "skipUrlSync": false,
-                "sort": 1,
-                "type": "query"
-            },
-            {
-                "current": {
-                    "selected": true,
-                    "text": "All",
-                    "value": "$__all"
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "Prometheus"
-                },
-                "definition": "label_values(praxisml_drift_score, metric)",
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "name": "metric",
-                "options": [],
-                "query": "label_values(praxisml_drift_score, metric)",
-                "refresh": 1,
-                "regex": "",
-                "skipUrlSync": false,
-                "sort": 1,
-                "type": "query"
-            }
-        ]
+      ],
+      "title": "PSI / KS Timeline",
+      "type": "timeseries"
     },
-    "time": {
-        "from": "now-7d",
-        "to": "now"
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.25
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "orientation": "auto",
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "expr": "praxisml_drift_score{model_id=~\"$model_id\", metric=~\"$metric\"}",
+          "legendFormat": "Current drift",
+          "refId": "A"
+        }
+      ],
+      "title": "Current Drift Score",
+      "type": "stat"
     },
-    "timepicker": {},
-    "timezone": "browser",
-    "title": "Drift Timeline",
-    "uid": "praxisml-drift-timeline",
-    "version": 1
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "praxisml_drift_score{model_id=~\"$model_id\", metric=~\"$metric\"} > bool 0.25",
+          "legendFormat": "Drift alert - {{model_id}} ({{metric}})",
+          "refId": "A"
+        }
+      ],
+      "title": "Alert Annotations (Drift > 0.25)",
+      "type": "state-timeline"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "praxisml",
+    "drift",
+    "observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "definition": "label_values(praxisml_drift_score, model_id)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "model_id",
+        "options": [],
+        "query": "label_values(praxisml_drift_score, model_id)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "definition": "label_values(praxisml_drift_score, metric)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "metric",
+        "options": [],
+        "query": "label_values(praxisml_drift_score, metric)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Drift Timeline",
+  "uid": "praxisml-drift-timeline",
+  "version": 1
 }

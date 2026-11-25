@@ -13,9 +13,44 @@ Backends registrados por defecto (con carga lazy para evitar acoplar SDKs cloud)
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import PurePosixPath
 from typing import BinaryIO, Callable, Dict, List, Optional
 
 from app.core.config import settings
+
+
+class StorageKeyBuilder:
+    """Generador centralizado de claves jerárquicas para almacenamiento de objetos (MinIO/S3/local)."""
+
+    @staticmethod
+    def _clean_filename(filename: str) -> str:
+        name = PurePosixPath(str(filename).replace("\\", "/")).name
+        return name.strip() or "artifact.bin"
+
+    @classmethod
+    def dataset_raw(cls, tenant_id: str, filename: str) -> str:
+        return f"tenants/{tenant_id}/datasets/raw/{cls._clean_filename(filename)}"
+
+    @classmethod
+    def dataset_processed(cls, tenant_id: str, filename: str) -> str:
+        return f"tenants/{tenant_id}/datasets/processed/{cls._clean_filename(filename)}"
+
+    @classmethod
+    def dataset_pipeline(cls, tenant_id: str, filename: str) -> str:
+        return f"tenants/{tenant_id}/datasets/pipelines/{cls._clean_filename(filename)}"
+
+    @classmethod
+    def dataset_config(cls, tenant_id: str, dataset_name: str, filename: str) -> str:
+        safe_ds = cls._clean_filename(dataset_name).replace(" ", "_")
+        return f"tenants/{tenant_id}/datasets/configs/{safe_ds}_config_{cls._clean_filename(filename)}"
+
+    @classmethod
+    def model_artifact(cls, tenant_id: str, model_id: str, filename: str) -> str:
+        return f"tenants/{tenant_id}/artifacts/models/{model_id}/{cls._clean_filename(filename)}"
+
+    @classmethod
+    def prediction_output(cls, tenant_id: str, prediction_id: str, filename: str) -> str:
+        return f"tenants/{tenant_id}/predictions/{prediction_id}/{cls._clean_filename(filename)}"
 
 
 class StorageService(ABC):

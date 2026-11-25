@@ -1,331 +1,331 @@
 {
-    "__requires": [
-        {
-            "type": "grafana",
-            "id": "grafana",
-            "name": "Grafana",
-            "version": "10.0.0"
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "bargauge",
+      "name": "Bar gauge",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "description": "Per-tenant usage metrics — predictions, connections, quotas, and training activity",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10000
+              },
+              {
+                "color": "red",
+                "value": 50000
+              }
+            ]
+          },
+          "unit": "short"
         },
-        {
-            "type": "datasource",
-            "id": "prometheus",
-            "name": "Prometheus",
-            "version": "1.0.0"
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
         },
+        "orientation": "auto",
+        "colorMode": "background"
+      },
+      "targets": [
         {
-            "type": "panel",
-            "id": "timeseries",
-            "name": "Time series",
-            "version": ""
-        },
-        {
-            "type": "panel",
-            "id": "stat",
-            "name": "Stat",
-            "version": ""
-        },
-        {
-            "type": "panel",
-            "id": "bargauge",
-            "name": "Bar gauge",
-            "version": ""
+          "expr": "sum(increase(praxisml_predictions_total{tenant_id=~\"$tenant_id\"}[24h]))",
+          "legendFormat": "Predictions (24h)",
+          "refId": "A"
         }
-    ],
-    "annotations": {
-        "list": []
+      ],
+      "title": "Total Predictions (24h)",
+      "type": "stat"
     },
-    "description": "Per-tenant usage metrics — predictions, connections, quotas, and training activity",
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 1,
-    "id": null,
-    "links": [],
-    "panels": [
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "orange",
-                                "value": 10000
-                            },
-                            {
-                                "color": "red",
-                                "value": 50000
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 0,
-                "y": 0
-            },
-            "id": 1,
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "orientation": "auto",
-                "colorMode": "background"
-            },
-            "targets": [
-                {
-                    "expr": "sum(increase(praxisml_predictions_total{tenant_id=~\"$tenant_id\"}[24h]))",
-                    "legendFormat": "Predictions (24h)",
-                    "refId": "A"
-                }
-            ],
-            "title": "Total Predictions (24h)",
-            "type": "stat"
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          },
+          "unit": "short"
         },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "orange",
-                                "value": 100
-                            },
-                            {
-                                "color": "red",
-                                "value": 500
-                            }
-                        ]
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 4,
-                "w": 6,
-                "x": 6,
-                "y": 0
-            },
-            "id": 2,
-            "options": {
-                "reduceOptions": {
-                    "calcs": [
-                        "lastNotNull"
-                    ]
-                },
-                "orientation": "auto",
-                "colorMode": "background"
-            },
-            "targets": [
-                {
-                    "expr": "sum(praxisml_ws_connections_active{tenant_id=~\"$tenant_id\"})",
-                    "legendFormat": "Active WS",
-                    "refId": "A"
-                }
-            ],
-            "title": "Active WS Connections",
-            "type": "stat"
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
         },
+        "orientation": "auto",
+        "colorMode": "background"
+      },
+      "targets": [
         {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "continuous-GrYlRd"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "percent"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 12,
-                "y": 0
-            },
-            "id": 3,
-            "options": {
-                "displayMode": "basic",
-                "orientation": "horizontal",
-                "showUnfilled": true
-            },
-            "targets": [
-                {
-                    "expr": "praxisml_quota_usage_pct{tenant_id=~\"$tenant_id\"}",
-                    "legendFormat": "{{tenant_id}} - {{resource}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Quota Usage by Resource",
-            "type": "bargauge"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "short"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 12,
-                "x": 0,
-                "y": 4
-            },
-            "id": 4,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "sum by(model_id) (rate(praxisml_predictions_total{tenant_id=~\"$tenant_id\"}[1d]))",
-                    "legendFormat": "{{model_id}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Requests per Day per Model",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "prometheus",
-                "uid": "Prometheus"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "lineWidth": 2,
-                        "fillOpacity": 10
-                    },
-                    "unit": "s"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 8,
-                "w": 24,
-                "x": 0,
-                "y": 12
-            },
-            "id": 5,
-            "options": {
-                "legend": {
-                    "displayMode": "list",
-                    "placement": "bottom"
-                },
-                "tooltip": {
-                    "mode": "multi"
-                }
-            },
-            "targets": [
-                {
-                    "expr": "praxisml_training_duration_seconds{tenant_id=~\"$tenant_id\"}",
-                    "legendFormat": "{{tenant_id}} - {{algorithm}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Training Duration",
-            "type": "timeseries"
+          "expr": "sum(praxisml_ws_connections_active{tenant_id=~\"$tenant_id\"})",
+          "legendFormat": "Active WS",
+          "refId": "A"
         }
-    ],
-    "refresh": "10s",
-    "schemaVersion": 38,
-    "style": "dark",
-    "tags": [
-        "praxisml",
-        "tenants",
-        "observability"
-    ],
-    "templating": {
-        "list": [
-            {
-                "current": {
-                    "selected": true,
-                    "text": "All",
-                    "value": "$__all"
-                },
-                "datasource": {
-                    "type": "prometheus",
-                    "uid": "Prometheus"
-                },
-                "definition": "label_values(praxisml_predictions_total, tenant_id)",
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "name": "tenant_id",
-                "options": [],
-                "query": "label_values(praxisml_predictions_total, tenant_id)",
-                "refresh": 1,
-                "regex": "",
-                "skipUrlSync": false,
-                "sort": 1,
-                "type": "query"
-            }
-        ]
+      ],
+      "title": "Active WS Connections",
+      "type": "stat"
     },
-    "time": {
-        "from": "now-7d",
-        "to": "now"
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "expr": "praxisml_quota_usage_pct{tenant_id=~\"$tenant_id\"}",
+          "legendFormat": "{{tenant_id}} - {{resource}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Quota Usage by Resource",
+      "type": "bargauge"
     },
-    "timepicker": {},
-    "timezone": "browser",
-    "title": "Tenant Usage",
-    "uid": "praxisml-tenant-usage",
-    "version": 1
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 4
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by(model_id) (rate(praxisml_predictions_total{tenant_id=~\"$tenant_id\"}[1d]))",
+          "legendFormat": "{{model_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Requests per Day per Model",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 12
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, domain, algorithm) (rate(praxisml_training_duration_seconds_bucket{tenant_id=~\"$tenant_id\"}[15m])))",
+          "legendFormat": "{{tenant_id}} - {{algorithm}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Training Duration",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "praxisml",
+    "tenants",
+    "observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "definition": "label_values(praxisml_predictions_total, tenant_id)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "tenant_id",
+        "options": [],
+        "query": "label_values(praxisml_predictions_total, tenant_id)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Tenant Usage",
+  "uid": "praxisml-tenant-usage",
+  "version": 1
 }

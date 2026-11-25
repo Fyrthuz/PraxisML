@@ -133,9 +133,9 @@ async def upload_dataset(
     file_type = detect_file_type(file.filename)
 
     # ── Guardar en Storage ───────────────────────────────────────────────────
+    from app.services.storage_service import StorageKeyBuilder
 
-    # Key format: tenants/{tenant_id}/datasets/{filename}
-    storage_key = f"tenants/{tenant.id}/datasets/{file.filename}"
+    storage_key = StorageKeyBuilder.dataset_raw(tenant.id, file.filename)
 
     try:
         # Read file content
@@ -154,8 +154,8 @@ async def upload_dataset(
         if not config_file.filename.endswith(".json"):
             raise HTTPException(status_code=400, detail="Config file must be a JSON")
 
-        config_storage_key = (
-            f"tenants/{tenant.id}/datasets/{name}_config_{config_file.filename}"
+        config_storage_key = StorageKeyBuilder.dataset_config(
+            tenant.id, name, config_file.filename
         )
         try:
             config_content = await config_file.read()

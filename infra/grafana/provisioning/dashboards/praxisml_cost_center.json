@@ -1,185 +1,347 @@
 {
-    "__requires": [
-        {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
-        {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"},
-        {"type": "panel", "id": "timeseries", "name": "Time series", "version": ""},
-        {"type": "panel", "id": "stat", "name": "Stat", "version": ""},
-        {"type": "panel", "id": "bargauge", "name": "Bar gauge", "version": ""}
-    ],
-    "annotations": {"list": []},
-    "description": "Costes agregados por tenant — PraxisML Fase 0",
-    "editable": true,
-    "fiscalYearStartMonth": 0,
-    "graphTooltip": 1,
-    "id": null,
-    "links": [],
-    "panels": [
-        {
-            "datasource": {"type": "prometheus", "uid": "Prometheus"},
-            "fieldConfig": {
-                "defaults": {
-                    "color": {"mode": "palette-classic"},
-                    "custom": {"lineWidth": 2, "fillOpacity": 10},
-                    "unit": "USD"
-                },
-                "overrides": []
-            },
-            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-            "id": 1,
-            "options": {
-                "legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom"},
-                "tooltip": {"mode": "multi"}
-            },
-            "targets": [
-                {
-                    "datasource": {"type": "prometheus", "uid": "Prometheus"},
-                    "expr": "sum by(tenant_id) (increase(praxisml_inference_cost_usd[1d]))",
-                    "legendFormat": "{{tenant_id}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Coste de Inferencia por Tenant (diario)",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {"type": "prometheus", "uid": "Prometheus"},
-            "fieldConfig": {
-                "defaults": {
-                    "color": {"mode": "palette-classic"},
-                    "custom": {"lineWidth": 2, "fillOpacity": 10},
-                    "unit": "USD"
-                },
-                "overrides": []
-            },
-            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-            "id": 2,
-            "options": {
-                "legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom"},
-                "tooltip": {"mode": "multi"}
-            },
-            "targets": [
-                {
-                    "datasource": {"type": "prometheus", "uid": "Prometheus"},
-                    "expr": "sum by(tenant_id) (increase(praxisml_training_cost_usd[1d]))",
-                    "legendFormat": "{{tenant_id}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Coste de Entrenamiento por Tenant (diario)",
-            "type": "timeseries"
-        },
-        {
-            "datasource": {"type": "prometheus", "uid": "Prometheus"},
-            "fieldConfig": {
-                "defaults": {
-                    "color": {"mode": "continuous-GrYlRd"},
-                    "custom": {"lineWidth": 2, "fillOpacity": 10},
-                    "unit": "USD"
-                },
-                "overrides": []
-            },
-            "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
-            "id": 3,
-            "options": {
-                "displayMode": "basic",
-                "orientation": "horizontal",
-                "showUnfilled": true
-            },
-            "targets": [
-                {
-                    "datasource": {"type": "prometheus", "uid": "Prometheus"},
-                    "expr": "praxisml_cost_budget_remaining",
-                    "legendFormat": "{{tenant_id}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Presupuesto Restante por Tenant",
-            "type": "bargauge"
-        },
-        {
-            "datasource": {"type": "prometheus", "uid": "Prometheus"},
-            "fieldConfig": {
-                "defaults": {
-                    "color": {"mode": "thresholds"},
-                    "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "orange", "value": 0.5}, {"color": "red", "value": 0.8}]},
-                    "unit": "percentunit"
-                },
-                "overrides": []
-            },
-            "gridPos": {"h": 8, "w": 4, "x": 8, "y": 8},
-            "id": 4,
-            "options": {
-                "orientation": "horizontal",
-                "reduceOptions": {"calcs": ["lastNotNull"]},
-                "showThresholdLabels": true,
-                "showThresholdMarkers": true
-            },
-            "targets": [
-                {
-                    "datasource": {"type": "prometheus", "uid": "Prometheus"},
-                    "expr": "praxisml_cost_budget_remaining / on(tenant_id) group_left (praxisml_cost_budget_remaining offset 1d)",
-                    "legendFormat": "{{tenant_id}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Budget Utilizado (%)",
-            "type": "gauge"
-        },
-        {
-            "datasource": {"type": "prometheus", "uid": "Prometheus"},
-            "fieldConfig": {
-                "defaults": {
-                    "color": {"mode": "palette-classic"},
-                    "custom": {"lineWidth": 2, "fillOpacity": 10},
-                    "unit": "USD"
-                },
-                "overrides": []
-            },
-            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
-            "id": 5,
-            "options": {
-                "legend": {"calcs": ["sum"], "displayMode": "table", "placement": "bottom"},
-                "tooltip": {"mode": "multi"}
-            },
-            "targets": [
-                {
-                    "datasource": {"type": "prometheus", "uid": "Prometheus"},
-                    "expr": "sum by(tenant_id, cost_type) (praxisml_inference_cost_usd)",
-                    "legendFormat": "{{tenant_id}} - {{cost_type}}",
-                    "refId": "A"
-                }
-            ],
-            "title": "Coste por Tipo (Inferencia)",
-            "type": "timeseries"
-        }
-    ],
-    "schemaVersion": 38,
-    "style": "dark",
-    "tags": ["praxisml", "cost", "observability"],
-    "templating": {
-        "list": [
-            {
-                "current": {"selected": true, "text": "All", "value": "$__all"},
-                "datasource": {"type": "prometheus", "uid": "Prometheus"},
-                "definition": "label_values(praxisml_cost_budget_remaining, tenant_id)",
-                "hide": 0,
-                "includeAll": true,
-                "multi": true,
-                "name": "tenant_id",
-                "options": [],
-                "query": "label_values(praxisml_cost_budget_remaining, tenant_id)",
-                "refresh": 1,
-                "regex": "",
-                "skipUrlSync": false,
-                "sort": 1,
-                "type": "query"
-            }
-        ]
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "10.0.0"
     },
-    "time": {"from": "now-7d", "to": "now"},
-    "timepicker": {},
-    "timezone": "",
-    "title": "Cost Center",
-    "uid": "praxisml-cost-center",
-    "version": 1
+    {
+      "type": "datasource",
+      "id": "prometheus",
+      "name": "Prometheus",
+      "version": "1.0.0"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "bargauge",
+      "name": "Bar gauge",
+      "version": ""
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "description": "Costes agregados por tenant — PraxisML Fase 0",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "USD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "sum by(tenant_id) (increase(praxisml_inference_cost_usd_total[1d]))",
+          "legendFormat": "{{tenant_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Coste de Inferencia por Tenant (diario)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "USD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "sum by(tenant_id) (increase(praxisml_training_cost_usd_total[1d]))",
+          "legendFormat": "{{tenant_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Coste de Entrenamiento por Tenant (diario)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "USD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "displayMode": "basic",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "praxisml_cost_budget_remaining",
+          "legendFormat": "{{tenant_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Presupuesto Restante por Tenant",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 0.8
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 8,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "100 * (sum by(tenant_id) (praxisml_inference_cost_usd_total) / clamp_min(sum by(tenant_id) (praxisml_cost_budget_remaining) + sum by(tenant_id) (praxisml_inference_cost_usd_total), 1))",
+          "legendFormat": "{{tenant_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Budget Utilizado (%)",
+      "type": "gauge"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10
+          },
+          "unit": "USD"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [
+            "sum"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "expr": "sum by(tenant_id, cost_type) (praxisml_inference_cost_usd_total)",
+          "legendFormat": "{{tenant_id}} - {{cost_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Coste por Tipo (Inferencia)",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [
+    "praxisml",
+    "cost",
+    "observability"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "Prometheus"
+        },
+        "definition": "label_values(praxisml_cost_budget_remaining, tenant_id)",
+        "hide": 0,
+        "includeAll": true,
+        "multi": true,
+        "name": "tenant_id",
+        "options": [],
+        "query": "label_values(praxisml_cost_budget_remaining, tenant_id)",
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Cost Center",
+  "uid": "praxisml-cost-center",
+  "version": 1
 }

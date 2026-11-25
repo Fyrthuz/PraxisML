@@ -97,15 +97,27 @@ Stream: WebSocket ──► API ──► InferenceService ──► Stream resu
 LLM:    Client ──► API ──► RAGService + LLMGateway ──► SSE stream
 ```
 
-## Multi-Tenant Isolation
+## Multi-Tenant Isolation & Resource Organization
 
-- **Database**: All tables have `tenant_id` foreign key
-- **Storage**: Keys prefixed with `tenants/{tenant_id}/`
-- **MLflow**: Experiments named `tenant_{id}_training` / `tenant_{id}_nlp_training`, models prefixed `tenant_{id}_`
-- **DVC**: Separate repository per tenant
+- **Database**: All tables have `tenant_id` foreign key + PostgreSQL RLS (`SET LOCAL app.current_tenant_id`)
+- **Storage (MinIO / S3 / Local)** via `StorageKeyBuilder`:
+  ```text
+  praxisml/
+  ├── tenants/{tenant_id}/
+  │   ├── datasets/
+  │   │   ├── raw/{filename}          # Original uploaded datasets
+  │   │   ├── processed/{filename}    # Preprocessing pipeline outputs
+  │   │   ├── pipelines/{filename}    # UserPipeline outputs
+  │   │   └── configs/{filename}      # Optional dataset JSON configs
+  │   ├── artifacts/models/{model_id}/{filename}
+  │   └── predictions/{prediction_id}/{filename}
+  └── mlruns/{experiment_id}/{run_id}/artifacts/...
+  ```
+- **MLflow Experiments** via `MLFlowService.ensure_tenant_experiment()`: hierarchical naming `{tenant_slug}/{domain}` (or `tenant-{short_id}/{domain}`) with domains `tabular-training`, `nlp-training`, `preprocessing`, `pipelines`, `models`, `inference`, tagged with `praxisml.tenant_id`, `praxisml.domain`, and `praxisml.managed_by=praxisml`.
+- **Domain Compatibility Guards**: Model comparison, Canary endpoint pairing, and Tabular/NLP inference enforce `(domain, task_family)` compatibility across UI and API.
+- **DVC**: Separate repository per tenant (`praxisml-dvc/{tenant_id}/files/md5/...`)
 - **Embeddings**: `model_embeddings` filtered by `tenant_id` + semantic search returns only tenant rows
-- **Auth**: JWT tokens scoped to a single tenant
-- **RBAC**: 3 roles per tenant (admin, editor, viewer)
+- **Auth & RBAC**: JWT tokens + Scoped API Keys (`px_...`), 3 roles per tenant (`admin`, `editor`, `viewer`)
 
 ## Key Design Decisions
 

@@ -90,6 +90,13 @@ def _stop_mlflow_ui() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _start_mlflow_ui()
+    if settings.ENVIRONMENT != "testing":
+        try:
+            from app.observability.bootstrap import bootstrap_prometheus_metrics
+
+            bootstrap_prometheus_metrics()
+        except Exception as exc:
+            logger.warning("No se pudo inicializar bootstrap de métricas: %s", exc)
     yield
     _stop_mlflow_ui()
 

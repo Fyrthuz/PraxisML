@@ -32,6 +32,7 @@ from transformers import (
 )
 
 from app.core.config import settings
+from app.services.mlflow_service import MLFlowService
 from app.core_ml.hyperparams import (
     get_nlp_algorithm_info,
     get_nlp_default_hyperparams,
@@ -150,8 +151,7 @@ class NLPTrainer:
         self, run_name: str, algorithm: str, task_type: str,
         text_column: str, label_column: Optional[str], hp: Dict[str, Any],
     ) -> None:
-        experiment_name = f"tenant_{self.tenant_id}_nlp_training"
-        mlflow.set_experiment(experiment_name)
+        MLFlowService().ensure_tenant_experiment(self.tenant_id, "nlp-training")
         mlflow.transformers.autolog(log_models=False, log_datasets=False)
         self._run_name = run_name
         self._algorithm = algorithm

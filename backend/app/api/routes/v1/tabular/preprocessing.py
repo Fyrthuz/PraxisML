@@ -186,8 +186,10 @@ def apply_preprocessing(
     if y is not None and config.target_column:
         df_transformed[config.target_column] = y.values
 
+    from app.services.storage_service import StorageKeyBuilder
+
     new_filename = f"{dataset.name}_v{new_version}_preprocessed.csv"
-    storage_key = f"tenants/{tenant.id}/datasets/{new_filename}"
+    storage_key = StorageKeyBuilder.dataset_processed(tenant.id, new_filename)
 
     # ── Guardar temporalmente para DVC y extracción de metadata ──────────────
     tmp_path = None

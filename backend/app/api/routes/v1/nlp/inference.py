@@ -61,9 +61,10 @@ class PredictResponse(BaseModel):
     latency_ms: float = 0.0
 
 
-def _get_nlp_model(db: Session, model_id: str, tenant_id: str) -> MLModel:
-    from app.core_ml.tabular_parser import is_tabular  # noqa: F401
+_NLP_TASK_TYPES = {"text_classification", "token_classification", "sentiment_analysis", "ner"}
 
+
+def _get_nlp_model(db: Session, model_id: str, tenant_id: str) -> MLModel:
     ml_model = (
         db.query(MLModel)
         .filter(MLModel.id == model_id, MLModel.tenant_id == tenant_id)
@@ -72,16 +73,20 @@ def _get_nlp_model(db: Session, model_id: str, tenant_id: str) -> MLModel:
     if not ml_model:
         raise HTTPException(status_code=404, detail="Modelo no encontrado.")
     metadata = ml_model.metrics_metadata or {}
-    if metadata.get("domain") not in (None, "nlp") or metadata.get("framework") not in (
-        None,
-        "huggingface",
-    ):
-        # Modelos de otro dominio no son inferibles por NLP
-        if metadata.get("domain") != "nlp" and metadata.get("domain") is not None:
-            raise HTTPException(
-                status_code=400,
-                detail="El modelo no pertenece al dominio NLP.",
-            )
+    domain = str(metadata.get("domain") or "").lower()
+    framework = str(metadata.get("framework") or "").lower()
+    task_type = str(metadata.get("task_type") or "").lower()
+    is_nlp = (
+        domain == "nlp"
+        or framework == "huggingface"
+        or task_type in _NLP_TASK_TYPES
+        or bool(metadata.get("onnx_path") or metadata.get("tokenizer_path"))
+    )
+    if not is_nlp:
+        raise HTTPException(
+            status_code=400,
+            detail="El modelo seleccionado no pertenece al dominio NLP. Usa inferencia tabular para este modelo.",
+        )
     return ml_model
 
 

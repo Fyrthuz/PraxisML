@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, Loader2, PlayCircle, Settings2 } from 'lucide-re
 import { useAuth } from '../AuthContext';
 import { Button } from '@/components/ui/button';
 import { MLModel } from '@/lib/api';
+import { getModelCompatibilityProfile } from '@/lib/modelCompatibility';
 import { config } from '@/lib/config';
 
 interface SingleTabularInferenceProps {
@@ -12,8 +13,12 @@ interface SingleTabularInferenceProps {
 
 export default function SingleTabularInference({ models, onPredictionStarted }: SingleTabularInferenceProps) {
     const { token } = useAuth();
+    const tabularModels = useMemo(
+        () => models.filter((m) => getModelCompatibilityProfile(m).domain === 'tabular'),
+        [models]
+    );
     const [isUploading, setIsUploading] = useState(false);
-    const [selectedModel, setSelectedModel] = useState<string>(models.length > 0 ? models[0].id : '');
+    const [selectedModel, setSelectedModel] = useState<string>(tabularModels.length > 0 ? tabularModels[0].id : '');
     const [uncertaintyMethod, setUncertaintyMethod] = useState('none');
     const [error, setError] = useState<string | null>(null);
     const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -21,7 +26,7 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
     // Tabular features state
     const [featureValues, setFeatureValues] = useState<Record<string, string>>({});
 
-    const selectedModelObj = useMemo(() => models.find(m => m.id === selectedModel), [models, selectedModel]);
+    const selectedModelObj = useMemo(() => tabularModels.find(m => m.id === selectedModel), [tabularModels, selectedModel]);
     const featureNames = selectedModelObj?.metrics_metadata?.feature_names || [];
 
     const handleFeatureChange = (featureName: string, value: string) => {
@@ -42,7 +47,7 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
             formData.append('uncertainty_method', uncertaintyMethod);
             formData.append('features', JSON.stringify(featureValues));
 
-            const res = await fetch(config.getFullApiUrl('/predictions/predict/single'), {
+            const res = await fetch(config.getFullApiUrl('/tabular/predictions/predict/single'), {
                 method: 'POST',
                 headers: { Authorization: `Bearer ${token}` },
                 body: formData,
@@ -100,8 +105,8 @@ export default function SingleTabularInference({ models, onPredictionStarted }: 
                                     setUncertaintyMethod('none');
                                 }}
                             >
-                                <option value="" disabled>Select a model</option>
-                                {models.map(m => (
+                                <option value="" disabled>Select a tabular model</option>
+                                {tabularModels.map(m => (
                                     <option key={m.id} value={m.id} className="bg-neutral-900">{m.name}</option>
                                 ))}
                             </select>
