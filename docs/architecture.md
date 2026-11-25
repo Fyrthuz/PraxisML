@@ -123,6 +123,10 @@ LLM:    Client ──► API ──► RAGService + LLMGateway ──► SSE str
 
 ## Modular Core, Pluggable Registries & Model Serving (Fase 2)
 
+![PraxisML System Architecture](./demo/architecture_overview.png)
+
+> 🎥 **Walkthrough en vídeo:** [praxisml_demo.mp4](./demo/praxisml_demo.mp4) · [Guía por capítulos](./demo/README.md)
+
 A partir de Fase 2, el Control Plane en FastAPI queda completamente desacoplado de librerías y proveedores concretos mediante **7 registros pluggables** inspeccionables en vivo en `GET /api/v1/environments/capabilities`:
 
 | Registro | Contrato ABC | Backends incluidos | Extensible a |

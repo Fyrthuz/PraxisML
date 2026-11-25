@@ -55,6 +55,10 @@ Tipos compartidos en `src/lib/api.ts` (`NLPAlgorithm`, `NLPPrediction`, `Semanti
 
 ## 6. Evolución UX/UI y Nuevas Vistas (Fase 2)
 
+![PraxisML GUI Preview](./demo/gui_endpoints_preview.png)
+
+> 🎥 **Exploración completa de la GUI en vídeo:** [praxisml_demo.mp4](./demo/praxisml_demo.mp4) · [Capítulos y capturas](./demo/README.md)
+
 El frontend ha sido unificado bajo una estética oscura de ingeniería de alto contraste (`#0b0c0f` / `#101217`, bordes `zinc-800` de `1px`, tipografía monoespaciada `tabular-nums`, CTAs monocromos y acento naranja `#f97316` puntual).
 
 ### Navegación y Productividad

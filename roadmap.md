@@ -4,7 +4,8 @@
 > **Versión del Roadmap:** 2.0 (Reestructuración Modular & Lakehouse)  
 > **Fecha de actualización:** 2026-11-25  
 > **Estado actual del repositorio:** **Fase 0 ✅ Completada** (Observabilidad & FinOps) · **Fase 1 ✅ Completada** (NLP Engine + pgvector + vLLM RAG) · **Fase 2 ✅ Completada** (Core Modular, Compute Plane, Enterprise Security, LocalStack IaC & Model Serving Endpoints v1)  
-> **Base técnica actual:** FastAPI (~10,000 LOC backend) · Celery + Redis · PostgreSQL (`pgvector`) · MLflow 3.10 · MinIO/S3 · DVC · Next.js 16 · Prometheus/Grafana · vLLM opcional  
+> **Base técnica actual:** FastAPI · Celery + Redis Streams · PostgreSQL (`pgvector` + RLS) · MLflow 3.10 · MinIO/S3 · DVC · Next.js 16 · Prometheus/Grafana · Terraform LocalStack · vLLM opcional  
+> 🎥 **Vídeo Demo (Fases 0–2):** [docs/demo/praxisml_demo.mp4](docs/demo/praxisml_demo.mp4) · [Guía y capturas](docs/demo/README.md)  
 
 > 📁 **Especificaciones detalladas por fase:**
 > - ✅ [Fase 0 — Observabilidad, Cost Tracking & FinOps](roadmap/phase-0-observability.md) · [Catálogo de métricas](roadmap/metrics-catalog.md) · [Plan de implementación F0](roadmap/phase-0-implementation-plan.md)

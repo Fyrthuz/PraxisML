@@ -44,7 +44,9 @@
 
 ## 🎬 Vídeo Demo & Roadmap
 
-- 🎥 [**Demo Completa en Vídeo 1080p (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4): Recorrido por la arquitectura modular, los 7 registros pluggables y exploración en vivo de todas las pantallas de la GUI.
+[![Ver Demo de PraxisML (720p MP4)](docs/demo/architecture_overview.png)](docs/demo/praxisml_demo.mp4)
+
+- 🎥 [**Demo Completa en Vídeo (`docs/demo/praxisml_demo.mp4`)**](docs/demo/praxisml_demo.mp4) · [**Guía por capítulos y capturas (`docs/demo/README.md`)**](docs/demo/README.md): Recorrido por la arquitectura modular, los 7 registros pluggables y exploración en vivo de todas las pantallas de la GUI (`1m 44s`, H.264 Main@3.1 + AAC, `3.0 MB`).
 - 🗺️ [**Roadmap de Evolución v2.0 (`roadmap.md`)**](roadmap.md): Fases 0, 1 y 2 completadas; hoja de ruta detallada hacia **Fase 3 (Lakehouse Delta + DuckDB/Polars + Monitoring)**, **Fase 4 (Ray Serve + Notebooks + CV/TS)** y **Fase 5 (Agentic Copilot + MCP + K8s/BYOC)**.
 
 ---

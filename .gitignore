@@ -4,6 +4,7 @@ IPSeg/
 **/*.jpg
 **/*.png
 !**car.png
+!docs/demo/*.png
 **/*.jpeg
 carvana/train_images/
 **/*.tiff
