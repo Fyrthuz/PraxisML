@@ -24,7 +24,8 @@ class TestCostCalculator:
         query_mock.filter.return_value.first.return_value = mock_pricing
         self.db.query.return_value = query_mock
 
-        price = self.calculator.get_price(self.db, "compute_gpu", "A100", "per_hour")
+        with patch("app.core.redis.create_sync_redis_client", return_value=None):
+            price = self.calculator.get_price(self.db, "compute_gpu", "A100", "per_hour")
         assert price == 3.50
         self.db.query.assert_called_once_with(ResourcePricing)
 
@@ -33,7 +34,8 @@ class TestCostCalculator:
         query_mock.filter.return_value.first.return_value = None
         self.db.query.return_value = query_mock
 
-        price = self.calculator.get_price(self.db, "compute_gpu", "H100", "per_hour")
+        with patch("app.core.redis.create_sync_redis_client", return_value=None):
+            price = self.calculator.get_price(self.db, "compute_gpu", "H100", "per_hour")
         assert price is None
 
     def test_estimate_inference_cost_tabular(self):
