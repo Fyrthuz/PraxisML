@@ -21,8 +21,16 @@ celery_app = Celery(
     ],
 )
 
-# No explicit task routes; everything goes to the default 'celery' queue
-celery_app.conf.task_routes = {}
+# Enrutamiento de tareas por perfil de hardware / cola tipada
+celery_app.conf.task_default_queue = "cpu-light"
+celery_app.conf.task_routes = {
+    "app.worker.tasks.scheduled_checks.*": {"queue": "system-beat"},
+    "app.worker.tasks.predict.*": {"queue": "cpu-light"},
+    "app.worker.tasks.single_predict.*": {"queue": "cpu-light"},
+    "app.worker.tasks.predict_nlp.*": {"queue": "cpu-light"},
+    "app.worker.tasks.train.*": {"queue": "cpu-heavy"},
+    "app.worker.tasks.train_nlp.*": {"queue": "gpu-train"},
+}
 
 # Configuramos timeouts e integraciones en caso de fallos
 celery_app.conf.update(

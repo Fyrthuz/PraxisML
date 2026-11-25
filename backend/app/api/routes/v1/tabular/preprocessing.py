@@ -6,7 +6,7 @@ import logging
 import os
 import tempfile
 from io import BytesIO
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -38,20 +38,21 @@ router = APIRouter()
 
 
 class PreprocessingStep(BaseModel):
-    type: str  # "impute", "scale", "encode", "feature_eng", "drop"
+    type: str  # "impute", "scale", "encode", "feature_eng", "drop", "rename"
     columns: List[str]
-    strategy: Optional[str] = None  # para impute: mean, median, most_frequent, constant
-    method: Optional[str] = (
-        None  # para scale/encode/feature_eng: standard, minmax, robust / onehot, ordinal / log_transform, polynomial, binning
-    )
-    fill_value: Optional[str] = None  # para impute strategy=constant
-    bins: Optional[int] = None  # para feature_eng binning
+    strategy: Optional[str] = None
+    method: Optional[str] = None
+    fill_value: Optional[str] = None
+    bins: Optional[int] = None
+    output_names: Optional[Dict[str, str]] = None
 
 
 class PreprocessingConfig(BaseModel):
     dataset_id: str
     target_column: Optional[str] = None
     steps: List[PreprocessingStep]
+    column_renames: Optional[Dict[str, str]] = None
+    output_dataset_name: Optional[str] = None
 
 
 class PreprocessingPreviewResponse(BaseModel):
@@ -91,9 +92,17 @@ def preview_preprocessing(
         raise HTTPException(status_code=500, detail=f"Error downloading dataset from storage: {e}")
 
     try:
-        pipeline_config = {"steps": [s.model_dump() for s in config.steps]}
+        pipeline_config = {
+            "steps": [s.model_dump() for s in config.steps],
+            "column_renames": config.column_renames or {},
+        }
         pipeline = build_pipeline(pipeline_config, df.columns.tolist())
-        df_transformed, y = apply_pipeline(pipeline, df, config.target_column)
+        df_transformed, y = apply_pipeline(
+            pipeline,
+            df,
+            config.target_column,
+            column_renames=config.column_renames,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -149,9 +158,15 @@ def apply_preprocessing(
         pipeline_config = {
             "steps": [s.model_dump() for s in config.steps],
             "target_column": config.target_column,
+            "column_renames": config.column_renames or {},
         }
         pipeline = build_pipeline(pipeline_config, df.columns.tolist())
-        df_transformed, y = apply_pipeline(pipeline, df, config.target_column)
+        df_transformed, y = apply_pipeline(
+            pipeline,
+            df,
+            config.target_column,
+            column_renames=config.column_renames,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -215,8 +230,9 @@ def apply_preprocessing(
             logger.warning(f"Error al trackear con DVC: {e}")
 
         # ── Registrar nuevo dataset en BD ────────────────────────────────────
+        custom_name = (config.output_dataset_name or "").strip()
         new_dataset = Dataset(
-            name=f"{dataset.name} (v{new_version} preprocessed)",
+            name=custom_name or f"{dataset.name} (v{new_version} preprocessed)",
             description=f"Preprocesado desde '{dataset.name}' (v{dataset.version}). Target: {config.target_column or 'N/A'}",
             file_path=new_file_path,
             file_size_bytes=file_size,
@@ -226,6 +242,7 @@ def apply_preprocessing(
             column_names=df_transformed.columns.tolist(),
             version=new_version,
             pipeline_path=pipeline_path,
+            parent_dataset_id=dataset.id,
             tenant_id=tenant.id,
             # Campos DVC
             is_dvc_tracked=dvc_info.get("is_dvc_tracked", False),
@@ -296,11 +313,13 @@ def get_dataset_pipeline_config(
             import json
 
             steps_json = run.data.tags.get("pipeline_steps")
+            renames_json = run.data.tags.get("column_renames")
             if steps_json:
                 return {
                     "steps": json.loads(steps_json),
                     "run_id": run_id,
                     "target_column": run.data.tags.get("target_column"),
+                    "column_renames": json.loads(renames_json) if renames_json else {},
                 }
         except Exception as e:
             logger.warning(f"No se pudo recuperar info detallada de MLFlow: {e}")

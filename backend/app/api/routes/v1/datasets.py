@@ -425,7 +425,13 @@ def delete_dataset(
                 e,
             )
 
-    # Borrar registro de BD
+    # Desvincula predicciones para preservar el historial antes de eliminar el dataset
+    from app.models.prediction import Prediction
+
+    db.query(Prediction).filter(
+        Prediction.dataset_id == dataset.id, Prediction.tenant_id == tenant.id
+    ).update({Prediction.dataset_id: None}, synchronize_session=False)
+
     db.delete(dataset)
     db.commit()
 

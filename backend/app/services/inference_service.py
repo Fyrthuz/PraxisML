@@ -3,7 +3,9 @@ Unified Inference Service.
 Consolida la lógica de inferencia de predict.py, single_predict.py y streaming.py.
 """
 
+import hashlib
 import logging
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -51,12 +53,9 @@ class InferenceService:
                 return model
 
         if is_torchscript and torchscript_path:
-            if not Path(torchscript_path).exists():
-                raise FileNotFoundError(
-                    f"TorchScript file not found: {torchscript_path}"
-                )
-            logger.info("Cargando TorchScript model desde %s", torchscript_path)
-            model = torch.jit.load(torchscript_path, map_location=device)
+            local_ts_path = self._resolve_torchscript_path(torchscript_path)
+            logger.info("Cargando TorchScript model desde %s", local_ts_path)
+            model = torch.jit.load(str(local_ts_path), map_location=device)
         else:
             from app.services.mlflow_service import MLFlowService
 
@@ -77,6 +76,48 @@ class InferenceService:
             logger.info("Modelo %s almacenado en cache", model_id)
 
         return model
+
+    def _resolve_torchscript_path(self, torchscript_path: str) -> Path:
+        """
+        Resuelve un modelo TorchScript desde disco local o descargándolo desde
+        StorageService (MinIO/S3) a una caché temporal local para soporte stateless.
+        """
+        local_path = Path(torchscript_path)
+        if local_path.exists():
+            return local_path
+
+        # Las rutas absolutas del sistema de ficheros no son object keys de StorageService
+        if local_path.is_absolute():
+            raise FileNotFoundError(f"TorchScript file not found: {torchscript_path}")
+
+        from app.services.storage_service import get_storage
+
+        storage = get_storage()
+        try:
+            exists_in_storage = storage.exists(torchscript_path)
+        except Exception as exc:
+            raise FileNotFoundError(
+                f"TorchScript file not found locally or in storage: {torchscript_path}"
+            ) from exc
+
+        if not exists_in_storage:
+            raise FileNotFoundError(
+                f"TorchScript file not found locally or in storage: {torchscript_path}"
+            )
+
+        cache_dir = Path(tempfile.gettempdir()) / "praxisml_torchscript_cache"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        digest = hashlib.sha256(torchscript_path.encode("utf-8")).hexdigest()[:16]
+        cached_file = cache_dir / f"{digest}_{Path(torchscript_path).name}"
+        if not cached_file.exists():
+            data = storage.download(torchscript_path)
+            cached_file.write_bytes(data)
+            logger.info(
+                "TorchScript descargado desde storage '%s' -> '%s'",
+                torchscript_path,
+                cached_file,
+            )
+        return cached_file
 
     def load_preprocessing_pipeline(self, pipeline_path: str):
         """Carga el pipeline de preprocesamiento si existe."""

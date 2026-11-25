@@ -6,7 +6,10 @@ Provides centralized management of datasets with DVC.
 import hashlib
 import logging
 import os
+import shutil
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -15,14 +18,35 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def _resolve_dvc_executable() -> str:
+    venv_dvc = Path(sys.executable).parent / "dvc"
+    if venv_dvc.exists():
+        return str(venv_dvc)
+    return shutil.which("dvc") or "dvc"
+
+
 class DVCService:
     def __init__(self, tenant_id: str):
         self.tenant_id = tenant_id
-        # Alineamos con LocalStorageService: Path(settings.DATA_DIR) / "storage"
-        self.storage_base = Path(settings.DATA_DIR) / "storage"
-        self.tenant_dir = self.storage_base / "tenants" / tenant_id
+        self._dvc_bin = _resolve_dvc_executable()
+
+        primary_base = Path(settings.DATA_DIR) / "storage"
+        try:
+            self._init_dirs(primary_base)
+        except PermissionError:
+            fallback_base = Path(tempfile.gettempdir()) / "praxisml_dvc_storage"
+            logger.info(
+                "Directorio DVC '%s' sin permisos de escritura; usando workspace local '%s'.",
+                primary_base,
+                fallback_base,
+            )
+            self._init_dirs(fallback_base)
+
+    def _init_dirs(self, base: Path) -> None:
+        self.storage_base = base
+        self.tenant_dir = self.storage_base / "tenants" / self.tenant_id
         self.data_dir = self.tenant_dir / "datasets"
-        self.dvc_dir = self.tenant_dir # El root del repo DVC es el root del tenant en el storage
+        self.dvc_dir = self.tenant_dir
         self.tenant_dir.mkdir(parents=True, exist_ok=True)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -35,9 +59,10 @@ class DVCService:
     ) -> subprocess.CompletedProcess:
         """Run a shell command and return the result."""
         working_dir = cwd or self.dvc_dir
+        resolved_cmd = [self._dvc_bin, *cmd[1:]] if cmd and cmd[0] == "dvc" else cmd
         try:
             result = subprocess.run(
-                cmd,
+                resolved_cmd,
                 cwd=str(working_dir),
                 capture_output=True,
                 text=True,
@@ -45,7 +70,7 @@ class DVCService:
             )
             return result
         except subprocess.CalledProcessError as e:
-            logger.error(f"Command failed: {' '.join(cmd)}")
+            logger.error(f"Command failed: {' '.join(resolved_cmd)}")
             logger.error(f"Error: {e.stderr}")
             raise e
 

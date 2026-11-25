@@ -84,6 +84,23 @@ class Settings(BaseSettings):
 
     # ── MLFlow ─────────────────────────────────────────────────────────────────
     MLFLOW_TRACKING_URI: str = ""
+    ENABLE_EMBEDDED_MLFLOW_UI: bool = False  # Solo opt-in en dev single-process
+
+    # ── Compute Plane, Plugins & Copilot ───────────────────────────────────────
+    COMPUTE_BACKEND: str = "celery"  # celery | ray | k8s
+    # "*" habilita todos los plugins instalados; lista CSV (ej. "tabular,nlp") o "" para solo core
+    ENABLED_PLUGINS: str = "*"
+    COPILOT_MUTATE_APPROVAL_THRESHOLD_USD: float = 5.0
+
+    @property
+    def enabled_plugins_set(self) -> Optional[set[str]]:
+        """Devuelve None si todos los plugins instalados están habilitados ('*'), o set de nombres."""
+        raw = self.ENABLED_PLUGINS.strip()
+        if raw == "*":
+            return None
+        if not raw:
+            return set()
+        return {p.strip().lower() for p in raw.split(",") if p.strip()}
 
     # ── Storage Backend ────────────────────────────────────────────────────────
     # Valores: local | minio | s3
@@ -147,6 +164,16 @@ class Settings(BaseSettings):
             )
         return v
 
+    @field_validator("COMPUTE_BACKEND")
+    @classmethod
+    def validate_compute_backend(cls, v: str) -> str:
+        allowed = {"celery", "ray", "k8s"}
+        if v not in allowed:
+            raise ValueError(
+                f"COMPUTE_BACKEND debe ser uno de {allowed} — recibido: '{v}'"
+            )
+        return v
+
     @model_validator(mode="after")
     def check_production_security(self) -> "Settings":
         """En production/staging, la SECRET_KEY no puede ser el valor inseguro."""
@@ -188,7 +215,15 @@ class Settings(BaseSettings):
 @lru_cache()
 def get_settings() -> Settings:
     """Singleton cacheado de Settings — evita re-parsear .env en cada import."""
-    return Settings()
+    s = Settings()
+    if s.STORAGE_BACKEND.lower() == "minio":
+        # MLflow y DVC leen credenciales S3 directamente de os.environ (boto3)
+        os.environ.setdefault("AWS_ACCESS_KEY_ID", s.MINIO_ACCESS_KEY)
+        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", s.MINIO_SECRET_KEY)
+        os.environ.setdefault("AWS_DEFAULT_REGION", s.MINIO_REGION)
+        os.environ.setdefault("AWS_ENDPOINT_URL_S3", s.MINIO_ENDPOINT)
+        os.environ.setdefault("MLFLOW_S3_ENDPOINT_URL", s.MINIO_ENDPOINT)
+    return s
 
 
 settings = get_settings()

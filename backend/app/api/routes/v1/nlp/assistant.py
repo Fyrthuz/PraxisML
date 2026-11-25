@@ -9,6 +9,7 @@ Endpoints:
 
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -117,16 +118,33 @@ async def assistant_chat(
 
     async def _sse_stream():
         """SSE: {delta} chunks + cierre con {sources, tokens, conversation_id}."""
+        t0 = time.perf_counter()
+        accumulated_chunks: List[str] = []
+        usage_payload: Dict[str, int] = {"input": 0, "output": 0}
         try:
             async for chunk in gateway.stream(
                 messages, system=rag.SYSTEM_PROMPT + "\n\nContexto:\n" + rag_data["context"]
             ):
                 if "delta" in chunk:
+                    accumulated_chunks.append(chunk["delta"])
                     yield f"data: {json.dumps({'delta': chunk['delta']}, ensure_ascii=False)}\n\n"
                 elif "usage" in chunk:
-                    _append_message(db, conv, "assistant", "«respuesta streamed»")
+                    usage_payload = chunk["usage"]
+                    full_answer = "".join(accumulated_chunks).strip()
+                    _append_message(db, conv, "assistant", full_answer)
+                    try:
+                        gateway.record_usage(
+                            db=db,
+                            tenant_id=tenant.id,
+                            usage=usage_payload,
+                            latency_ms=(time.perf_counter() - t0) * 1000,
+                            tags={"domain": "assistant", "stream": True},
+                        )
+                        db.commit()
+                    except Exception as exc:
+                        logger.warning("LLM streaming usage recording failed (non-critical): %s", exc)
                     yield (
-                        f"data: {json.dumps({'sources': rag_data['sources'], 'tokens': chunk['usage'], 'conversation_id': conv.id}, ensure_ascii=False)}\n\n"
+                        f"data: {json.dumps({'sources': rag_data['sources'], 'tokens': usage_payload, 'conversation_id': conv.id}, ensure_ascii=False)}\n\n"
                     )
             yield "data: [DONE]\n\n"
         except Exception as exc:

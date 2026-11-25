@@ -23,11 +23,13 @@ class CostCalculator:
         cache_key = f"pricing:{category}:{resource_id}:{pricing_unit}"
 
         try:
-            from app.core.redis import create_redis_client
-            redis = create_redis_client()
-            cached = redis.get(cache_key)
-            if cached:
-                return float(cached)
+            from app.core.redis import create_sync_redis_client
+
+            redis = create_sync_redis_client()
+            if redis is not None:
+                cached = redis.get(cache_key)
+                if cached:
+                    return float(cached)
         except Exception:
             pass
 
@@ -46,9 +48,11 @@ class CostCalculator:
             return None
 
         try:
-            from app.core.redis import create_redis_client
-            redis = create_redis_client()
-            redis.setex(cache_key, REDIS_PRICING_TTL, str(pricing.price_per_unit))
+            from app.core.redis import create_sync_redis_client
+
+            redis = create_sync_redis_client()
+            if redis is not None:
+                redis.setex(cache_key, REDIS_PRICING_TTL, str(pricing.price_per_unit))
         except Exception:
             pass
 

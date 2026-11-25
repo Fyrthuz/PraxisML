@@ -74,9 +74,9 @@ class AlertEngine:
     def set_cooldown(self, alert: AlertConfig) -> None:
         """Marca cooldown en Redis para evitar spam de notificaciones."""
         try:
-            from app.core.redis import create_redis_client
+            from app.core.redis import create_sync_redis_client
 
-            redis = create_redis_client()
+            redis = create_sync_redis_client()
             if redis is None:
                 return
             key = f"alert_cooldown:{alert.id}"
@@ -87,9 +87,9 @@ class AlertEngine:
     def is_in_cooldown(self, alert: AlertConfig) -> bool:
         """Verifica si la alerta está en periodo de cooldown."""
         try:
-            from app.core.redis import create_redis_client
+            from app.core.redis import create_sync_redis_client
 
-            redis = create_redis_client()
+            redis = create_sync_redis_client()
             if redis is None:
                 return False
             key = f"alert_cooldown:{alert.id}"
@@ -100,9 +100,9 @@ class AlertEngine:
     def get_active_cooldowns(self, tenant_id: str) -> list[str]:
         """Retorna los IDs de alertas en cooldown para un tenant."""
         try:
-            from app.core.redis import create_redis_client
+            from app.core.redis import create_sync_redis_client
 
-            redis = create_redis_client()
+            redis = create_sync_redis_client()
             if redis is None:
                 return []
             pattern = "alert_cooldown:*"
@@ -174,9 +174,9 @@ class AlertEngine:
         self, tenant_id: str, alert: AlertConfig, result: AlertResult
     ) -> None:
         try:
-            from app.core.redis import create_redis_client
+            from app.core.redis import create_sync_redis_client
 
-            redis = create_redis_client()
+            redis = create_sync_redis_client()
             if redis is None:
                 return
             channel = f"praxisml:alerts:{tenant_id}"

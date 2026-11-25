@@ -31,11 +31,15 @@ MLFLOW_UI_PORT = 5001
 
 def _start_mlflow_ui() -> None:
     """
-    Lanza `mlflow ui` en background en el puerto MLFLOW_UI_PORT.
-    Si MLFlow no está disponible o ya hay algo corriendo en ese puerto,
-    lo registra y sigue (no es crítico para la API).
+    Lanza `mlflow ui` en background en el puerto MLFLOW_UI_PORT solo si
+    ENABLE_EMBEDDED_MLFLOW_UI=True (desactivado por defecto para despliegues
+    stateless / multi-worker).
     """
     global _mlflow_proc
+    if not settings.ENABLE_EMBEDDED_MLFLOW_UI:
+        logger.debug("Embedded MLFlow UI desactivado (ENABLE_EMBEDDED_MLFLOW_UI=False).")
+        return
+
     from app.services.mlflow_service import MLFlowService
 
     try:
@@ -208,33 +212,55 @@ def create_app() -> FastAPI:
             return RedirectResponse(url=tracking_uri)
         return RedirectResponse(url=f"http://localhost:{MLFLOW_UI_PORT}")
 
-    # ── Routers ───────────────────────────────────────────────────────────────
+    # ── Routers Core (Control Plane) ──────────────────────────────────────────
     from app.api.routes.v1 import (
+        api_keys,
+        audit,
         auth,
+        copilot,
         datasets,
         drift,
+        environments,
         models,
         observability,
+        pipelines,
         profiling,
+        serving,
         tenants,
         users,
+        workspaces,
     )
-    from app.api.routes.v1.tabular import (
-        predictions as tabular_predictions,
-        preprocessing as tabular_preprocessing,
-        streaming as tabular_streaming,
-        training as tabular_training,
-    )
-    from app.api.routes.v1.nlp import (
-        assistant as nlp_assistant,
-        embeddings as nlp_embeddings,
-        inference as nlp_inference,
-        training as nlp_training,
-    )
+    from app.platform.copilot.registry import get_copilot_tool_registry
+    from app.plugins.registry import get_plugin_registry
 
     app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["Auth"])
     app.include_router(
         tenants.router, prefix=f"{settings.API_V1_STR}/tenants", tags=["Tenants"]
+    )
+    app.include_router(
+        workspaces.router,
+        prefix=f"{settings.API_V1_STR}/workspaces",
+        tags=["Workspaces"],
+    )
+    app.include_router(
+        environments.router,
+        prefix=f"{settings.API_V1_STR}/environments",
+        tags=["Runtime Environments"],
+    )
+    app.include_router(
+        pipelines.router,
+        prefix=f"{settings.API_V1_STR}/pipelines",
+        tags=["User Pipelines"],
+    )
+    app.include_router(
+        api_keys.router,
+        prefix=f"{settings.API_V1_STR}/api-keys",
+        tags=["API Keys"],
+    )
+    app.include_router(
+        audit.router,
+        prefix=f"{settings.API_V1_STR}/audit",
+        tags=["Audit"],
     )
     app.include_router(
         datasets.router, prefix=f"{settings.API_V1_STR}/datasets", tags=["Datasets"]
@@ -245,6 +271,12 @@ def create_app() -> FastAPI:
     app.include_router(
         models.router, prefix=f"{settings.API_V1_STR}/models", tags=["Models"]
     )
+    app.include_router(
+        serving.router, prefix=f"{settings.API_V1_STR}/serving", tags=["Model Serving"]
+    )
+    app.include_router(
+        serving.invocation_router, prefix="/serving/v1", tags=["Model Serving"]
+    )
     app.include_router(drift.router, prefix=f"{settings.API_V1_STR}", tags=["Drift"])
     app.include_router(
         users.router, prefix=f"{settings.API_V1_STR}/users", tags=["Users"]
@@ -254,76 +286,21 @@ def create_app() -> FastAPI:
         prefix=f"{settings.API_V1_STR}/observability",
         tags=["Observability"],
     )
-
-    # ── NLP Domain ───────────────────────────────────────────────────────────
     app.include_router(
-        nlp_training.router,
-        prefix=f"{settings.API_V1_STR}/nlp",
-        tags=["NLP"],
-    )
-    app.include_router(
-        nlp_inference.router,
-        prefix=f"{settings.API_V1_STR}/nlp",
-        tags=["NLP"],
-    )
-    app.include_router(
-        nlp_embeddings.router,
-        prefix=f"{settings.API_V1_STR}/nlp",
-        tags=["NLP"],
-    )
-    app.include_router(
-        nlp_assistant.router,
-        prefix=f"{settings.API_V1_STR}/nlp",
-        tags=["NLP"],
+        copilot.router,
+        prefix=f"{settings.API_V1_STR}/copilot",
+        tags=["Copilot"],
     )
 
-    # ── Tabular Domain (primary routes) ───────────────────────────────────────
-    app.include_router(
-        tabular_predictions.router,
-        prefix=f"{settings.API_V1_STR}/tabular",
-        tags=["Tabular"],
-    )
-    app.include_router(
-        tabular_preprocessing.router,
-        prefix=f"{settings.API_V1_STR}/tabular/preprocessing",
-        tags=["Tabular"],
-    )
-    app.include_router(
-        tabular_training.router,
-        prefix=f"{settings.API_V1_STR}/tabular/training",
-        tags=["Tabular"],
-    )
-    app.include_router(
-        tabular_streaming.router,
-        prefix=f"{settings.API_V1_STR}/tabular",
-        tags=["Tabular"],
-    )
+    # ── Plugins de Dominio activos ────────────────────────────────────────────
+    plugin_registry = get_plugin_registry()
+    plugin_registry.discover_builtin_plugins()
+    plugin_registry.register_routes(app, settings.API_V1_STR)
 
-    # ── Tabular Domain (backwards-compat aliases, deprecated) ─────────────────
-    app.include_router(
-        tabular_predictions.router,
-        prefix=f"{settings.API_V1_STR}",
-        tags=["Tabular (Deprecated)"],
-        include_in_schema=False,
-    )
-    app.include_router(
-        tabular_preprocessing.router,
-        prefix=f"{settings.API_V1_STR}/preprocessing",
-        tags=["Tabular (Deprecated)"],
-        include_in_schema=False,
-    )
-    app.include_router(
-        tabular_training.router,
-        prefix=f"{settings.API_V1_STR}/training",
-        tags=["Tabular (Deprecated)"],
-        include_in_schema=False,
-    )
-    app.include_router(
-        tabular_streaming.router,
-        prefix=f"{settings.API_V1_STR}",
-        tags=["Tabular (Deprecated)"],
-        include_in_schema=False,
-    )
+    # ── Copilot Tool Registry (Core + Plugins activos) ────────────────────────
+    tool_registry = get_copilot_tool_registry()
+    tool_registry.register_core_platform_tools()
+    plugin_registry.register_copilot_tools(tool_registry)
 
     return app
 

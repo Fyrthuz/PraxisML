@@ -57,14 +57,11 @@ def read_tabular(file_path: str, file_type: Optional[str] = None) -> pd.DataFram
         else:
             raise ValueError("file_type is required when passing a file-like object")
 
-    if file_type == "csv":
-        return pd.read_csv(file_path)
-    elif file_type == "xlsx":
-        return pd.read_excel(file_path, engine="openpyxl")
-    elif file_type == "parquet":
-        return pd.read_parquet(file_path, engine="pyarrow")
-    else:
+    from app.core_ml.data_engine import get_data_engine
+
+    if not file_type:
         raise ValueError(f"Formato tabular no soportado: {file_type}")
+    return get_data_engine().read(file_path, file_type)
 
 
 def extract_metadata(file_path: str, file_type: Optional[str] = None) -> Dict[str, Any]:

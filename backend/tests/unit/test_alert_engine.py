@@ -129,7 +129,7 @@ class TestAlertEngine:
             mock_post.assert_called_once()
 
     def test_cooldown_roundtrip(self):
-        with patch("app.core.redis.create_redis_client") as mock_redis_factory:
+        with patch("app.core.redis.create_sync_redis_client") as mock_redis_factory:
             mock_redis = MagicMock()
             mock_redis_factory.return_value = mock_redis
             mock_redis.exists.return_value = 1

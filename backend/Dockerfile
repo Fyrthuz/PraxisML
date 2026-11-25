@@ -1,26 +1,40 @@
-FROM python:3.10-slim
+FROM python:3.10-slim AS base
 
-# Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Definimos dónde vivirá el entorno virtual (FUERA de /app)
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv
-# Aseguramos que el PATH apunte allí
 ENV PATH="/opt/venv/bin:$PATH"
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Copiamos solo los archivos de dependencias primero para aprovechar la caché
 COPY pyproject.toml uv.lock ./
 
-# Instalamos las dependencias. 
-# Nota: Quitamos --path y dejamos que use UV_PROJECT_ENVIRONMENT
-RUN uv sync --frozen --no-dev --no-install-project
+# Perfil de instalación opcional:
+#   all     -> instala todas las dependencias del lockfile
+#   core    -> solo Control Plane ligero (sin torch/transformers/tabular)
+#   tabular -> Control Plane + extra [tabular]
+#   nlp     -> Control Plane + extras [pytorch, nlp]
+#   cv      -> Control Plane + extras [pytorch, cv]
+#   ts      -> Control Plane + extra [ts]
+ARG PROFILE=all
+RUN if [ "$PROFILE" = "core" ]; then \
+        uv sync --frozen --no-dev --no-install-project; \
+    elif [ "$PROFILE" = "tabular" ]; then \
+        uv sync --frozen --no-dev --no-install-project --extra tabular --extra storage-s3; \
+    elif [ "$PROFILE" = "nlp" ]; then \
+        uv sync --frozen --no-dev --no-install-project --extra pytorch --extra nlp --extra storage-s3; \
+    elif [ "$PROFILE" = "cv" ]; then \
+        uv sync --frozen --no-dev --no-install-project --extra pytorch --extra cv --extra storage-s3; \
+    elif [ "$PROFILE" = "ts" ]; then \
+        uv sync --frozen --no-dev --no-install-project --extra ts --extra storage-s3; \
+    else \
+        uv sync --frozen --no-dev --no-install-project; \
+    fi
 
-# Ahora copiamos el resto del código
 COPY . .
 
 EXPOSE 8000
 
-# Script de arranque: aplica migraciones y luego lanza el servidor
 CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

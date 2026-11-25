@@ -105,6 +105,51 @@ class TestApplyPipeline:
         pipeline = build_pipeline(config, ["age", "target"])
         X, y = apply_pipeline(pipeline, df, target_column="target")
         assert not np.any(np.isnan(X))
+        assert list(X.columns) == ["age"]
+
+    def test_sequential_steps_and_custom_variable_names(self):
+        from app.core_ml.preprocessing import apply_pipeline, build_pipeline
+
+        df = pd.DataFrame(
+            {
+                "Age": [20.0, None, 40.0, 50.0],
+                "Sex": ["male", "female", "female", "male"],
+                "Survived": [0, 1, 1, 0],
+            }
+        )
+        config = {
+            "steps": [
+                {
+                    "type": "impute",
+                    "columns": ["Age"],
+                    "strategy": "median",
+                    "output_names": {"Age": "passenger_age"},
+                },
+                {"type": "scale", "columns": ["Age"], "method": "standard"},
+                {"type": "encode", "columns": ["Sex"], "method": "onehot"},
+            ],
+            "column_renames": {
+                "Sex_female": "is_female",
+                "Sex_male": "is_male",
+            },
+        }
+        pipeline = build_pipeline(config, ["Age", "Sex", "Survived"])
+        X, y = apply_pipeline(pipeline, df, target_column="Survived")
+        assert not X.isna().any().any()
+        assert list(X.columns) == ["passenger_age", "is_female", "is_male"]
+        assert len(y) == 4
+
+    def test_duplicate_custom_column_names_raise(self):
+        from app.core_ml.preprocessing import apply_pipeline, build_pipeline
+
+        df = pd.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
+        config = {
+            "steps": [{"type": "scale", "columns": ["a", "b"], "method": "standard"}],
+            "column_renames": {"a": "same_name", "b": "same_name"},
+        }
+        pipeline = build_pipeline(config, ["a", "b"])
+        with pytest.raises(ValueError, match="duplicadas"):
+            apply_pipeline(pipeline, df)
 
 
 class TestSaveLoadPipeline:

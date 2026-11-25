@@ -19,6 +19,7 @@ from typing import BinaryIO
 import boto3
 from botocore.exceptions import ClientError
 
+from app.core.config import settings
 from app.core.exceptions import StorageError, StorageObjectNotFoundError
 from app.core.logging import get_logger
 from app.services.storage_service import StorageService
@@ -29,11 +30,15 @@ logger = get_logger(__name__)
 class S3StorageService(StorageService):
 
     def __init__(self):
-        self.bucket = os.getenv("S3_BUCKET", "praxisml-prod")
-        region = os.getenv("AWS_DEFAULT_REGION", "eu-west-1")
+        self.bucket = os.getenv("S3_BUCKET") or settings.S3_BUCKET
+        region = os.getenv("AWS_DEFAULT_REGION") or settings.AWS_DEFAULT_REGION
+        endpoint_url = os.getenv("AWS_ENDPOINT_URL_S3") or None
 
         # boto3 lee AWS_ACCESS_KEY_ID y AWS_SECRET_ACCESS_KEY automáticamente
-        self._client = boto3.client("s3", region_name=region)
+        client_kwargs = {"region_name": region}
+        if endpoint_url:
+            client_kwargs["endpoint_url"] = endpoint_url
+        self._client = boto3.client("s3", **client_kwargs)
 
     def upload(self, key: str, data: bytes | BinaryIO, content_type: str = "application/octet-stream") -> str:
         try:
@@ -84,3 +89,14 @@ class S3StorageService(StorageService):
             return True
         except ClientError:
             return False
+
+    def list_objects(self, prefix: str = "") -> list[str]:
+        paginator = self._client.get_paginator("list_objects_v2")
+        keys: list[str] = []
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                keys.append(obj["Key"])
+        return keys
+
+    def get_uri(self, key: str) -> str:
+        return f"s3://{self.bucket}/{key}"

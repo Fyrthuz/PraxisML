@@ -176,6 +176,7 @@ def run_training(
                 "feature_names": feature_names,
                 "dataset_id": dataset_id,
                 "dataset_name": dataset.name,
+                "preprocessing_pipeline_path": dataset.pipeline_path,
                 **{
                     hp_name: hp_val
                     for hp_name, hp_val in hyperparams.items()
@@ -194,6 +195,25 @@ def run_training(
         db.refresh(new_model)
 
         logger.info("Modelo registrado en BD: id=%s", new_model.id)
+
+        try:
+            from app.core.event_bus import get_event_bus
+
+            get_event_bus().publish(
+                event_type="model.trained",
+                tenant_id=tenant_id,
+                payload={
+                    "model_id": new_model.id,
+                    "name": new_model.name,
+                    "algorithm": algorithm,
+                    "framework": framework,
+                    "dataset_id": dataset_id,
+                    "has_preprocessing_pipeline": bool(dataset.pipeline_path),
+                },
+                source="worker-train",
+            )
+        except Exception:
+            pass
 
         # ── Observability: registrar métricas de uso y coste ─────────────
         try:

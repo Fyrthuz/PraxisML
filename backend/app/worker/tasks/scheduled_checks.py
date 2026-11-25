@@ -99,27 +99,35 @@ def evaluate_alerts():
 
 @celery_app.task(name="app.worker.tasks.scheduled_checks.check_zombie_models")
 def check_zombie_models():
-    """Detecta modelos en Production sin inferencias en 7 días."""
+    """Detecta modelos en Production sin inferencias en los últimos 7 días."""
     db = SessionLocal()
     try:
+        from sqlalchemy import func
         from app.models.ml_model import MLModel
+        from app.models.prediction import Prediction
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-        zombies = (
+        prod_models = (
             db.query(MLModel)
-            .filter(
-                MLModel.stage == "Production",
-                MLModel.is_active,
-                MLModel.updated_at < cutoff,
-            )
+            .filter(MLModel.stage == "Production", MLModel.is_active)
             .all()
         )
-        for model in zombies:
-            logger.warning(
-                "Modelo zombie detectado: %s (tenant=%s)",
-                model.id,
-                model.tenant_id,
+        for model in prod_models:
+            last_pred = (
+                db.query(func.max(Prediction.created_at))
+                .filter(Prediction.model_id == model.id)
+                .scalar()
             )
+            last_activity = last_pred or model.promoted_at or model.created_at
+            if last_activity and last_activity.tzinfo is None:
+                last_activity = last_activity.replace(tzinfo=timezone.utc)
+            if last_activity and last_activity < cutoff:
+                logger.warning(
+                    "Modelo zombie detectado: %s (tenant=%s, last_activity=%s)",
+                    model.id,
+                    model.tenant_id,
+                    last_activity.isoformat(),
+                )
     finally:
         db.close()
 

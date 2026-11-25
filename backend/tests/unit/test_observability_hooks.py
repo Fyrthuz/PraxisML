@@ -60,7 +60,7 @@ class TestPricingCacheInvalidation:
         calc = CostCalculator()
         mock_db = MagicMock()
 
-        with patch("app.core.redis.create_redis_client") as mock_redis_factory:
+        with patch("app.core.redis.create_sync_redis_client") as mock_redis_factory:
             mock_redis = MagicMock()
             mock_redis_factory.return_value = mock_redis
             mock_redis.get.return_value = "3.50"
@@ -84,7 +84,7 @@ class TestPricingCacheInvalidation:
         mock_chain.filter.return_value = mock_chain
         mock_chain.filter.return_value.first.return_value = mock_pricing
 
-        with patch("app.core.redis.create_redis_client") as mock_redis_factory:
+        with patch("app.core.redis.create_sync_redis_client") as mock_redis_factory:
             mock_redis_factory.side_effect = Exception("Redis unavailable")
             price = calc.get_price(mock_db, "compute_gpu", "V100", "per_hour")
             assert price == 2.50

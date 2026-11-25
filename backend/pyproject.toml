@@ -75,6 +75,61 @@ dev = [
     "aiosqlite>=0.20.0",
     "ruff>=0.4.0",
 ]
+# Grupos modulares por perfil de despliegue (Fase 2.2)
+tabular = [
+    "scikit-learn>=1.3.0",
+    "pandas>=2.0.0",
+    "pyarrow>=14.0.0",
+    "openpyxl>=3.1.0",
+    "shap>=0.44.0",
+    "evidently>=0.4.0",
+    "joblib>=1.3.0",
+]
+pytorch = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+]
+nlp = [
+    "transformers>=4.46,<5",
+    "datasets>=5.0.1",
+    "sentence-transformers>=5.7.0",
+    "onnxruntime>=1.17,<1.22",
+    "onnx>=1.16,<1.18",
+    "seqeval>=1.2.2",
+    "langdetect>=1.0.9",
+    "openai>=2.53.0",
+    "accelerate>=0.26.0",
+]
+lakehouse = [
+    "deltalake>=0.22.0",
+    "duckdb>=1.1.0",
+    "polars>=1.10.0",
+]
+cv = [
+    "ultralytics>=8.3.0",
+    "albumentations>=1.4.0",
+]
+ts = [
+    "statsforecast>=1.7.0",
+    "mlforecast>=0.13.0",
+]
+serving = [
+    "ray[serve]>=2.38.0",
+]
+# Adaptadores opcionales de almacenamiento multi-cloud
+storage-s3 = [
+    "boto3>=1.34.0",
+]
+storage-gcs = [
+    "google-cloud-storage>=2.18.0",
+]
+storage-azure = [
+    "azure-storage-blob>=12.23.0",
+]
+storage-multicloud = [
+    "obstore>=0.4.0",
+    "fsspec>=2024.9.0",
+]
 
 [tool.ruff]
 target-version = "py310"

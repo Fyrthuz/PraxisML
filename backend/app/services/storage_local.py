@@ -73,3 +73,17 @@ class LocalStorageService(StorageService):
 
     def exists(self, key: str) -> bool:
         return self._resolve(key).exists()
+
+    def list_objects(self, prefix: str = "") -> list[str]:
+        root = self._resolve(prefix) if prefix else self.base_dir
+        if not root.exists():
+            return []
+        base = self.base_dir.resolve()
+        return sorted(
+            str(p.resolve().relative_to(base))
+            for p in root.rglob("*")
+            if p.is_file()
+        )
+
+    def get_uri(self, key: str) -> str:
+        return f"file://{self._resolve(key)}"

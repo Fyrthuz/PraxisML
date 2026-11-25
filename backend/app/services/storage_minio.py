@@ -21,6 +21,7 @@ from typing import BinaryIO
 import boto3
 from botocore.exceptions import ClientError
 
+from app.core.config import settings
 from app.core.exceptions import StorageError, StorageObjectNotFoundError
 from app.core.logging import get_logger
 from app.services.storage_service import StorageService
@@ -31,11 +32,11 @@ logger = get_logger(__name__)
 class MinIOStorageService(StorageService):
 
     def __init__(self):
-        endpoint = os.getenv("MINIO_ENDPOINT", "http://minio:9000")
-        access_key = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-        secret_key = os.getenv("MINIO_SECRET_KEY", "minioadmin")
-        self.bucket = os.getenv("MINIO_BUCKET", "praxisml")
-        region = os.getenv("MINIO_REGION", "us-east-1")
+        endpoint = os.getenv("MINIO_ENDPOINT") or settings.MINIO_ENDPOINT
+        access_key = os.getenv("MINIO_ACCESS_KEY") or settings.MINIO_ACCESS_KEY
+        secret_key = os.getenv("MINIO_SECRET_KEY") or settings.MINIO_SECRET_KEY
+        self.bucket = os.getenv("MINIO_BUCKET") or settings.MINIO_BUCKET
+        region = os.getenv("MINIO_REGION") or settings.MINIO_REGION
 
         self._client = boto3.client(
             "s3",
@@ -116,3 +117,14 @@ class MinIOStorageService(StorageService):
             return True
         except ClientError:
             return False
+
+    def list_objects(self, prefix: str = "") -> list[str]:
+        paginator = self._client.get_paginator("list_objects_v2")
+        keys: list[str] = []
+        for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                keys.append(obj["Key"])
+        return keys
+
+    def get_uri(self, key: str) -> str:
+        return f"s3://{self.bucket}/{key}"

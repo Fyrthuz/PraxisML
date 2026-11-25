@@ -19,34 +19,88 @@ Uso:
     _ = Depends(check_training_quota)
 """
 
+import hashlib
 from datetime import datetime, timezone
+from typing import Optional
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.exceptions import QuotaExceededError
+from app.core.rls import set_tenant_rls_context
 from app.database import get_db
+from app.models.api_key import APIKey
 from app.models.tenant import Tenant
 from app.models.user import User, UserRole
 from app.services.storage_service import StorageService, get_storage
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+
+def _authenticate_api_key(raw_key: str, db: Session, request: Optional[Request] = None) -> Optional[User]:
+    """Valida una API key (`px_...`) mediante SHA-256 y devuelve el usuario propietario."""
+    key_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    api_key = (
+        db.query(APIKey)
+        .filter(APIKey.key_hash_sha256 == key_hash, APIKey.revoked_at.is_(None))
+        .first()
+    )
+    if api_key is None:
+        return None
+
+    now = datetime.now(timezone.utc)
+    if api_key.expires_at is not None:
+        exp = api_key.expires_at
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        if exp < now:
+            return None
+
+    user = db.query(User).filter(User.id == api_key.user_id).first()
+    if user is None or not user.is_active:
+        return None
+
+    api_key.last_used_at = now
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    if request is not None:
+        request.state.auth_type = "api_key"
+        request.state.api_key_id = api_key.id
+        request.state.api_key_scopes = api_key.scopes or ["*"]
+        request.state.tenant_id = user.tenant_id
+
+    return user
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request,
+    token: Optional[str] = Depends(oauth2_scheme),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    db: Session = Depends(get_db),
 ) -> User:
-    """Valida el JWT y retorna el User activo de la BD."""
+    """Valida JWT Bearer o API Key (`X-API-Key` / `Bearer px_...`) y retorna el User activo."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Intenta decodificar de Custom Secret Key o desde JWKS Externo (Clerk/Auth0)
+    candidate_api_key = x_api_key or (token if token and token.startswith("px_") else None)
+    if candidate_api_key:
+        user = _authenticate_api_key(candidate_api_key, db, request=request)
+        if user is None:
+            raise credentials_exception
+        return user
+
+    if not token:
+        raise credentials_exception
+
     payload = security.decode_token(token)
     if payload is None:
         raise credentials_exception
@@ -56,17 +110,14 @@ def get_current_user(
         raise credentials_exception
 
     user = db.query(User).filter(User.id == user_id).first()
-
-    # Si tenemos Clerk y el usuario no existe, podríamos crearlo On The Fly aquí
-    # asumiendo que el ID de Clerk es el `sub` y extrayendo un tenant_id base.
-    # Por ahora simplemente fallaremos si el User no está en DB.
-
     if user is None:
         raise credentials_exception
 
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
+    request.state.auth_type = "jwt"
+    request.state.tenant_id = user.tenant_id
     return user
 
 
@@ -78,10 +129,11 @@ def get_current_tenant(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Tenant:
-    """Extrae el tenant completo asociado al usuario."""
+    """Extrae el tenant asociado al usuario y configura el contexto RLS en PostgreSQL."""
     tenant = db.query(Tenant).filter(Tenant.id == current_user.tenant_id).first()
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found for user")
+    set_tenant_rls_context(db, tenant.id)
     return tenant
 
 

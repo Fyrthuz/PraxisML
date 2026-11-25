@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_tenant, get_storage_service, require_viewer
+from app.core_ml.tabular_parser import read_tabular
 from app.database import get_db
 from app.models.dataset import Dataset
 from app.models.ml_model import MLModel
@@ -77,12 +78,8 @@ def get_dataset_drift_report(
         logger.info(f"Descargando dataset desde storage: {dataset.file_path}")
 
         try:
-            # Descargar como bytes y cargar en pandas
             data_bytes = storage.download(dataset.file_path)
-            # Usar StringIO para leer el CSV desde bytes
-            from io import BytesIO
-
-            df_current = pd.read_csv(BytesIO(data_bytes))
+            df_current = read_tabular(BytesIO(data_bytes), dataset.file_type or "csv")
         except Exception as e:
             logger.error(f"Error descargando dataset: {e}")
             raise HTTPException(
@@ -115,7 +112,9 @@ def get_dataset_drift_report(
                         f"Descargando dataset de referencia desde: {parent_dataset.file_path}"
                     )
                     parent_data_bytes = storage.download(parent_dataset.file_path)
-                    df_reference = pd.read_csv(BytesIO(parent_data_bytes))
+                    df_reference = read_tabular(
+                        BytesIO(parent_data_bytes), parent_dataset.file_type or "csv"
+                    )
                 except Exception as e:
                     logger.warning(f"No se pudo cargar dataset padre: {e}")
 
@@ -160,7 +159,7 @@ def get_dataset_drift_report(
                     col_match = _re.search(r"column=([^,)]+)", metric_name)
                     col_name = col_match.group(1) if col_match else metric_name
                     drift_by_columns[col_name] = {
-                        "drift_detected": bool(value < 0.05),
+                        "drift_detected": bool(value < ks_threshold),
                         "p_value": float(value),
                     }
 
@@ -244,7 +243,7 @@ def get_model_drift_report(
                 try:
                     logger.info(f"Cargando dataset de entrenamiento: {dataset.file_path}")
                     ref_bytes = storage.download(dataset.file_path)
-                    df_reference = pd.read_csv(BytesIO(ref_bytes))
+                    df_reference = read_tabular(BytesIO(ref_bytes), dataset.file_type or "csv")
 
                     # Si el dataset tiene pipeline, aplicarlo para tener los datos post-procesados
                     if model.preprocessing_pipeline_path:
@@ -478,3 +477,89 @@ def update_model_drift_thresholds(
         raise HTTPException(
             status_code=500, detail=f"Error actualizando umbrales: {str(e)}"
         )
+
+
+def calculate_drift_for_model(model_id: str, db: Session) -> Optional[dict]:
+    """
+    Calcula métricas resumidas de drift (PSI y KS aproximado) para un modelo
+    comparando su dataset de referencia contra las inferencias recientes.
+    """
+    from app.models.prediction import Prediction as PredictionModel
+    from app.services.storage_service import get_storage
+
+    model = db.query(MLModel).filter(MLModel.id == model_id).first()
+    if not model:
+        return None
+
+    metadata = model.metrics_metadata or {}
+    dataset_id = metadata.get("dataset_id")
+    if not dataset_id:
+        return None
+
+    dataset = (
+        db.query(Dataset)
+        .filter(Dataset.id == dataset_id, Dataset.tenant_id == model.tenant_id)
+        .first()
+    )
+    if not dataset or not dataset.file_path:
+        return None
+
+    predictions = (
+        db.query(PredictionModel)
+        .filter(
+            PredictionModel.model_id == model_id,
+            PredictionModel.tenant_id == model.tenant_id,
+            PredictionModel.status == "COMPLETED",
+            PredictionModel.input_image_path.isnot(None),
+        )
+        .order_by(PredictionModel.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    if not predictions:
+        return None
+
+    inference_rows = []
+    for pred in predictions:
+        if pred.input_image_path and os.path.exists(pred.input_image_path):
+            try:
+                inference_rows.append(np.load(pred.input_image_path).flatten())
+            except Exception:
+                continue
+
+    if not inference_rows:
+        return None
+
+    storage = get_storage()
+    ref_bytes = storage.download(dataset.file_path)
+    df_ref = read_tabular(BytesIO(ref_bytes), dataset.file_type or "csv")
+    feature_names = metadata.get("feature_names") or [
+        f"feature_{i}" for i in range(len(inference_rows[0]))
+    ]
+    df_cur = pd.DataFrame(inference_rows, columns=feature_names)
+    common = [c for c in feature_names if c in df_ref.columns and pd.api.types.is_numeric_dtype(df_ref[c])]
+    if not common:
+        return {"psi": 0.0, "ks": 0.0, "drifted_columns": 0}
+
+    psi_values = []
+    ks_values = []
+    for col in common:
+        ref_vals = pd.to_numeric(df_ref[col], errors="coerce").dropna().to_numpy()
+        cur_vals = pd.to_numeric(df_cur[col], errors="coerce").dropna().to_numpy()
+        if len(ref_vals) < 5 or len(cur_vals) < 5:
+            continue
+        bins = np.unique(np.quantile(ref_vals, np.linspace(0, 1, 11)))
+        if len(bins) < 2:
+            continue
+        ref_hist, _ = np.histogram(ref_vals, bins=bins)
+        cur_hist, _ = np.histogram(cur_vals, bins=bins)
+        ref_pct = np.clip(ref_hist / max(len(ref_vals), 1), 1e-6, 1.0)
+        cur_pct = np.clip(cur_hist / max(len(cur_vals), 1), 1e-6, 1.0)
+        psi_values.append(float(np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))))
+        ks_values.append(float(np.max(np.abs(np.cumsum(ref_pct) - np.cumsum(cur_pct)))))
+
+    return {
+        "psi": round(float(np.mean(psi_values)), 4) if psi_values else 0.0,
+        "ks": round(float(np.mean(ks_values)), 4) if ks_values else 0.0,
+        "evaluated_columns": len(psi_values),
+    }

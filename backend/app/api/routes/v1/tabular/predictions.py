@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import (
     check_prediction_quota,
     get_current_tenant,
+    get_storage_service,
     require_editor,
     require_viewer,
 )
@@ -33,6 +34,7 @@ from app.models.ml_model import MLModel
 from app.models.prediction import Prediction
 from app.models.tenant import Tenant
 from app.models.user import User
+from app.services.storage_service import StorageService
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.prediction import PredictionResponse
 
@@ -486,3 +488,77 @@ def get_prediction_visualization(
         raise HTTPException(
             status_code=500, detail=f"Error generating visualization: {str(e)}"
         )
+
+
+@router.get("/predictions/{prediction_id}/explain")
+def get_prediction_explainability(
+    prediction_id: str,
+    _user: User = Depends(require_viewer),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage_service),
+):
+    """
+    Devuelve los valores SHAP asociados a una predicción completada.
+    Busca primero artefacto SHAP precomputado en storage; si no existe,
+    intenta calcularlo para predicciones tabulares.
+    """
+    import json as _json
+
+    prediction = (
+        db.query(Prediction)
+        .filter(Prediction.id == prediction_id, Prediction.tenant_id == tenant.id)
+        .first()
+    )
+    if not prediction:
+        raise HTTPException(status_code=404, detail="Prediction not found")
+
+    if prediction.status != "COMPLETED":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Explicabilidad disponible solo en predicciones COMPLETED (actual: {prediction.status}).",
+        )
+
+    # 1. Intentar artefacto SHAP guardado en storage
+    shap_key = f"{tenant.id}/predictions/{prediction_id}/shap.json"
+    try:
+        if storage.exists(shap_key):
+            data = _json.loads(storage.download(shap_key).decode("utf-8"))
+            return {"prediction_id": prediction_id, **data}
+    except Exception as exc:
+        logger.debug("No hay SHAP precomputado para %s: %s", prediction_id, exc)
+
+    # 2. Fallback: calcular sobre input_data tabular guardado si existe modelo
+    ml_model = db.query(MLModel).filter(MLModel.id == prediction.model_id).first()
+    feature_names = (ml_model.metrics_metadata or {}).get("feature_names", []) if ml_model else []
+
+    if (
+        ml_model
+        and prediction.input_image_path
+        and os.path.exists(prediction.input_image_path)
+        and prediction.input_image_path.endswith(".npy")
+    ):
+        try:
+            from app.core_ml.explainability import get_shap_values
+            from app.services.inference_service import InferenceService
+
+            arr = np.load(prediction.input_image_path)
+            if arr.ndim == 1:
+                arr = arr.reshape(1, -1)
+            loaded = InferenceService().load_model(ml_model)
+            shap_res = get_shap_values(
+                loaded, arr, feature_names=feature_names or [f"f_{i}" for i in range(arr.shape[1])]
+            )
+            return {
+                "prediction_id": prediction_id,
+                "shap_values": shap_res.get("shap_values", []),
+                "expected_value": shap_res.get("expected_value", 0.0),
+                "feature_names": shap_res.get("feature_names", feature_names),
+            }
+        except Exception as exc:
+            logger.warning("SHAP on-the-fly falló para %s: %s", prediction_id, exc)
+
+    raise HTTPException(
+        status_code=404,
+        detail="No hay explicaciones SHAP disponibles para esta predicción (actívala con explain=true al predecir).",
+    )
