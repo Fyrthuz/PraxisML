@@ -95,22 +95,21 @@ Inferencia de baja latencia para flujos de datos continuos.
 - **Cuotas**: Límite de 10 conexiones simultáneas por Tenant.
 - **Procesamiento**: Cada mensaje recibido se preprocesa y predice en tiempo real, devolviendo también incertidumbre y XAI si se solicita.
 
-### 5.3. Explicabilidad (XAI con SHAP)
-Uso de `KernelExplainer` para proporcionar interpretabilidad agnóstica al modelo.
-- **Cálculo**: Al vuelo durante la predicción (opcional) o bajo demanda vía endpoint `/explain`.
-- **Visualización**: Contribuciones de cada variable al valor final de la predicción.
+### 5.3. Explicabilidad (XAI: SHAP & Token Attribution)
+- **Tabular (`explain_tabular_fast`)**: usa `shap.TreeExplainer` para modelos basados en árboles (exacto incluso con 1 sola fila), atribución lineal para modelos con `coef_` y perturbación por feature como fallback universal (más `KernelExplainer` para batch). Persistido como `shap.json` en `StorageService` o calculado al vuelo en `/explain` y en Model Serving (`explain: true`).
+- **NLP (`explain_nlp_text`)**: atribución por palabra mediante oclusión (`token_occlusion`) reutilizando el runtime ONNX/Transformers cargado.
 
-### 5.4. NLP Engine (Fase 1)
+### 5.4. NLP Engine (`app/domains/nlp/`)
 
-**Entrenamiento NLP (`nlp_trainer.py`)** — flujo asíncrono:
+**Entrenamiento NLP (`trainer.py`)** — flujo asíncrono:
 1. El usuario lanza `POST /api/v1/nlp/train` con `dataset_id`, `text_column`, `label_column`, `algorithm` y `task_type`.
-2. La tarea Celery `run_nlp_training` carga el dataset desde Storage, entrena con HuggingFace `Trainer` (MLflow autolog en `tenant_{id}_nlp_training`), exporta a ONNX y registra el `MLModel`.
+2. La tarea Celery `run_nlp_training` carga el dataset desde Storage, entrena con HuggingFace `Trainer` (MLflow autolog en `{tenant}/nlp-training`), exporta a ONNX y registra el `MLModel`.
 3. Métricas de clasificación (accuracy/F1/precision/recall) o NER (`seqeval`, por entidad + overall).
 
-**Inferencia NLP (`nlp_inference.py`)**:
-- ONNX Runtime si el modelo tiene `onnx_path`; si no, fallback a checkpoint transformers.
-- `POST /predict` síncrono; `POST /predict/batch` vía Celery (`run_nlp_batch_inference`); `WS /streaming/{model_id}` en tiempo real.
-- Devuelve `{label, confidence, entities[], tokens[], latency_ms}`.
+**Inferencia NLP (`inference.py`)**:
+- ONNX Runtime si el modelo tiene `onnx_path` (con resolución portable host ↔ contenedor vía `_resolve_artifact_path`); si no, fallback a checkpoint transformers.
+- `POST /predict` síncrono (acepta `explain: true`); `POST /predict/batch` vía Celery (`run_nlp_batch_inference`); `WS /streaming/{model_id}` en tiempo real.
+- Devuelve `{label, confidence, entities[], tokens[], latency_ms, explanation?}`.
 
 **Semantic Search (`embedding_service.py`)**:
 - Modelo `sentence-transformers/all-MiniLM-L6-v2` (384 dims) cargado lazy como singleton.
@@ -118,11 +117,11 @@ Uso de `KernelExplainer` para proporcionar interpretabilidad agnóstica al model
 - Búsqueda: operador `<=>` (coseno) en PostgreSQL con índice IVFFlat; fallback a coseno numpy en SQLite (tests).
 
 **Asistente LLM + RAG (`llm_gateway.py` + `rag_service.py`)**:
-- Gateway multi-provider con API OpenAI-compatible (vLLM default). `stream()` emite `{delta}` y `{usage}`; `complete()` para respuestas no-stream.
-- `RAGService.retrieve_context()` consulta modelos del tenant, drift reciente, costes y búsqueda semántica; el LLM **solo recibe metadatos, nunca datos crudos**.
+- Gateway multi-provider con API OpenAI-compatible (vLLM default) y fallback automático a síntesis RAG local si no hay servidor LLM externo.
+- `RAGService.retrieve_context()` consulta modelos del tenant, Model Endpoints, drift reciente, costes y búsqueda semántica; el LLM **solo recibe metadatos, nunca datos crudos**.
 - `POST /assistant/chat` con `stream=true` responde en SSE (`text/event-stream`). Historial persistido en `assistant_conversations`.
 
-**NLP Profiler (`nlp_profiler.py`)**:
+**NLP Profiler (`profiler.py`)**:
 - Post-hook en `POST /datasets/`: detecta columnas de texto libre (heurística longitud/tokens), idioma (`langdetect`), longitud media, vocabulario estimado y sugiere pipeline (`suggested_task`, `suggested_algorithm`, `suggested_label_columns`).
 - Resultado guardado en `dataset.column_types_analysis` y usado para indexar el dataset.
 

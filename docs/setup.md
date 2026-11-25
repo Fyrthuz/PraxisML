@@ -17,10 +17,12 @@ cp .env.example .env
 docker compose up --build
 
 # 3. Access services
-# Frontend:  http://localhost:3000
-# API docs:  http://localhost:8000/docs
-# MLflow:    http://localhost:5000
-# MinIO:     http://localhost:9001
+# Frontend:   http://localhost:3000
+# API docs:   http://localhost:8000/docs
+# MLflow:     http://localhost:5000
+# Grafana:    http://localhost:3001 (admin/admin)
+# Prometheus: http://localhost:9090
+# MinIO:      http://localhost:9001 (minioadmin/minioadmin)
 ```
 
 ## Development Setup
@@ -82,13 +84,13 @@ uv run pytest tests/ --cov=app --cov-report=term-missing
 | `DVC_REMOTE_NAME` | `minio` | DVC remote name for dataset versioning |
 | `CELERY_BROKER_URL` | `redis://localhost:6379/0` | Redis broker for Celery |
 | `MLFLOW_TRACKING_URI` | `""` | MLflow tracking server URI |
-| `LLM_PROVIDER` | `vllm` | LLM provider: `vllm`, `openai`, `anthropic`, `ollama` (Fase 1) |
-| `VLLM_BASE_URL` | `http://vllm:8001/v1` | vLLM OpenAI-compatible endpoint (Fase 1) |
-| `VLLM_MODEL_NAME` | `Qwen/Qwen2.5-7B-Instruct` | Model served by vLLM (Fase 1) |
-| `LLM_API_KEY` | `EMPTY` | API key (vLLM uses `EMPTY`) (Fase 1) |
-| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | Embeddings model (Fase 1) |
+| `LLM_PROVIDER` | `vllm` | LLM provider: `vllm`, `openai`, `anthropic`, `ollama` |
+| `VLLM_BASE_URL` | `http://vllm:8001/v1` | vLLM OpenAI-compatible endpoint |
+| `VLLM_MODEL_NAME` | `Qwen/Qwen2.5-7B-Instruct` | Model served by vLLM |
+| `LLM_API_KEY` | `EMPTY` | API key (vLLM uses `EMPTY`) |
+| `EMBEDDING_MODEL_NAME` | `sentence-transformers/all-MiniLM-L6-v2` | Embeddings model |
 
-### NLP Engine (Fase 1) — opcional
+### NLP Engine & vLLM (opcional)
 
 Para el asistente LLM con vLLM (requiere GPU):
 ```bash
@@ -115,7 +117,10 @@ backend/
 │   ├── core_ml/           # ML engine (preprocessing, uncertainty, explainability, nlp/)
 │   ├── models/            # SQLAlchemy ORM models (incl. embedding, assistant)
 │   ├── schemas/           # Pydantic request/response schemas
-│   ├── services/          # Business logic (MLflow, DVC, training, inference, nlp_trainer, llm_gateway)
+│   ├── platform/          # 7 pluggable registries (storage, compute, serving, data_engine, tracker, events, copilot) + cache/audit
+│   ├── domains/           # Domain services (tabular/, nlp/, data/)
+│   ├── observability/     # Prometheus metrics (25), bootstrap, usage, FinOps costs, alerts, reports
+│   ├── plugins/           # Domain Plugin Registry (ENABLED_PLUGINS)
 │   ├── worker/tasks/      # Celery async tasks (train, predict, train_nlp, predict_nlp)
 │   ├── utils/             # Shared utilities
 │   ├── database.py        # DB engine & session

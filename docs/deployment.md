@@ -12,7 +12,8 @@ Guía completa para poner en marcha el stack completo en desarrollo, pruebas (Te
 | `mlflow_server` | `mlflow:v3.10.0` | Servidor central de Tracking de Modelos de ML. | `:5000` |
 | `praxisml_minio` | `minio:latest` | Objeto de almacenamiento compatible S3. | `:9000` / `:9001` (UI) |
 | `praxisml_api` | `Dockerfile` custom (UV + Python) | Bouncer y Gateway de FastAPI. Inyecta seguridad de JWT. | `:8000` |
-| `praxisml_worker` | `Dockerfile` custom (UV + Python) | Proceso en background para predicciones, inferencia y DL en Celery. | `--` |
+| `praxisml_worker` | `Dockerfile` custom (UV + Python) | Proceso en background para entrenamiento, inferencia y DL en Celery. | `--` |
+| `praxisml_celery_beat` | `Dockerfile` custom (UV + Python) | Planificador periódico (`system-beat`: chequeos de drift y alertas). | `--` |
 | `praxisml_frontend`| `Dockerfile` Next.js React | Server Rendering e inicio de sesión SPA para cliente. | `:3000` |
 | `praxisml_prometheus`| `prom/prometheus:latest` | Agente *Scraping* de métricas para FastAPI y Worker. | `:9090` |
 | `praxisml_grafana` | `grafana/grafana:latest` | Componente de Visualización en vivo (Dashboard por API / OS). | `:3001` |
@@ -89,7 +90,7 @@ EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
    
    cd backend
    uv sync
-   uv run python migrate.py
+   uv run alembic upgrade head
    uv run uvicorn app.main:app --reload
    ```
 
@@ -97,7 +98,7 @@ EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
    El CLI de `uv` es el manejador de este entorno, no `pip` estándar:
    ```bash
    cd backend
-   uv run pytest tests/ -v --cov=app --cov-fail-under=30
+   uv run pytest tests/ -v --cov=app --cov-fail-under=50
    uv run ruff check app/ --select=E,F,W --ignore=E501
    ```
 
@@ -112,8 +113,7 @@ El sistema genera una serie de *named volumes* mapeados globalmente:
 
 **Directorio Local (`/backend/data`)**: Montado solo para desarrollos nativos y para inicializar o explorar los directorios en host sin recurrir a accesos por MinIO Console.
 
-## 5. Visualización / Telemetría (Grafana)
+## 5. Visualización / Telemetría (Grafana & Prometheus)
 
-Por defecto, existe un panel de Telemetría (pre-importado vía carpeta `/provisioning/dashboards/*.json`) dentro de **http://localhost:3001** (Acceso nativo `admin:admin`).
-Analiza `API (Throughput/Durations)`, conteo global de incidencias/Rendimiento en ML, Picos de 5xx o Bloqueos y Fallas AuthN 403.
-Punto base del Scraping: **http://localhost:8000/metrics**.
+El stack provisiona automáticamente **18 dashboards** en `infra/grafana/provisioning/dashboards/*.json` accesibles en **http://localhost:3001** (`admin` / `admin`) y **5 reglas de alerta** en `infra/prometheus/alerts.yml`.
+Prometheus (**http://localhost:9090/targets**) scrapea los 4 servicios: `praxisml_api` (`api:8000/metrics`), `minio` (`minio:9000/minio/v2/metrics/cluster`), `grafana` (`grafana:3000/metrics`) y `prometheus` (`localhost:9090/metrics`). Ver detalle completo en [`docs/observability.md`](./observability.md).

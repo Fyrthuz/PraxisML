@@ -79,7 +79,7 @@ Router único `/api/v1/nlp/*` con cuatro submódulos:
 ```
 1. Upload CSV ──► NLP Profiler hook ──► column_types_analysis + index_dataset (embedding)
        │
-2. Train ──► NLPTrainer (HF Trainer) ──► MLflow (tenant_{id}_nlp_training) + export ONNX
+2. Train ──► NLPTrainer (HF Trainer) ──► MLflow ({tenant}/nlp-training) + export ONNX
        │
 3. Index ──► EmbeddingService.index_model ──► model_embeddings (pgvector)
        │

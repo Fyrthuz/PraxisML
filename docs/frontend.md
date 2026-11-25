@@ -49,7 +49,7 @@ El tab **NLP** de la Sidebar (`Sparkles`) contiene 4 sub-tabs gestionados por `u
 | Sub-tab | Componente | Funcionalidad |
 |---------|-----------|---------------|
 | **Training** | `NLPTrainingTab.tsx` | Selección de dataset + `text_column`/`label_column` + arquitectura (`GET /nlp/algorithms`) + tarea + estado del job (polling 3s). |
-| **Inference** | `NLPInferenceTab.tsx` | Modelo NLP (filtro por `domain:"nlp"` en `useModels`) + textarea → label/confianza/entidades/tokens/latencia. Batch CSV con `POST /nlp/predict/batch`. |
+| **Inference** | `NLPInferenceTab.tsx` | Modelo NLP (filtro por dominio NLP) + textarea → label/confianza/entidades/tokens/latencia y mapa de calor de **atribución por palabra** (`explain: true`). Batch CSV con `POST /nlp/predict/batch`. |
 | **Semantic Search** | `SemanticSearchTab.tsx` | Búsqueda semántica sobre modelos/datasets (`GET /nlp/search`) con score y metadata. |
 | **Assistant** | `AssistantTab.tsx` | Chat con streaming SSE (`POST /nlp/assistant/chat`), fuentes citadas, historial y borrado. |
 
@@ -71,9 +71,9 @@ El frontend ha sido unificado bajo una estética oscura de ingeniería de alto c
 | Vista / Componente | Archivo | Funcionalidad |
 |---|---|---|
 | **Workspace Overview** | `WorkspaceOverviewTab.tsx` | Resumen ejecutivo de datasets, modelos, predicciones y plugins activos. |
-| **Model Endpoints** | `ServingEndpointsTab.tsx` | Despliegue en 1 clic de endpoints dedicados, tráfico Canary (`0–100%`), consola JSON en vivo, snippet `curl` y visor de **Recent Invocation Logs**. |
+| **Model Endpoints** | `ServingEndpointsTab.tsx` | Despliegue en 1 clic, tráfico Canary (`0–100%`) con guardia de compatibilidad, percentiles **P50/P95/P99**, consola JSON con **SHAP `TreeExplainer` / NLP Token Attribution**, snippet `curl` y **Invocation Logs** filtrables. |
 | **Environments & Code** | `EnvironmentsPipelinesTab.tsx` | Gestión de `RuntimeEnvironments` (paquetes PyPI/uv, imagen base), editor de pipelines Python `def transform(df)` y panel de **Pluggable Backends** (7 registros). |
 | **API Keys & Audit** | `GovernanceTab.tsx` | Creación/revocación de PATs (`px_...`), gestión de Workspaces, Audit Log y stream en vivo de eventos Redis Streams. |
-| **Side-by-Side Compare** | `ModelCompareModal.tsx` | Comparador de 2–4 modelos en `ModelsTab` con resaltado de mejor métrica MLflow, hiperparámetros y acciones directas (*Deploy* / *Promote*). |
+| **Side-by-Side Compare** | `ModelCompareModal.tsx` | Comparador de 2–4 modelos en `ModelsTab` con **Guardia de Compatibilidad Tabular ↔ NLP** (`modelCompatibility.ts`), resaltado de mejor métrica MLflow, hiperparámetros y acciones directas (*Deploy* / *Promote*). |
 | **Preprocessing Builder** | `PipelineBuilder.tsx` | Botón **Auto-suggest**, chips clicables con tipo/nulos y editor interactivo para renombrar cualquier columna de salida. |
 | **Plugins & Tools** | `CopilotStudioTab.tsx` | Inspección de plugins de dominio activos y catálogo de herramientas del Copilot gobernadas por RBAC. |
