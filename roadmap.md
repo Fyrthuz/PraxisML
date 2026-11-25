@@ -1,1226 +1,334 @@
 # 🗺️ Roadmap de Evolución Tecnológica — PraxisML
-# IA & Innovación (Q1 2027 → Q4 2027)
+# Plataforma Modular de Datos, ML & IA (Estilo Lakehouse / Databricks)
 
-> **Autor:** CTO & AI Solutions Architect  
-> **Fecha:** 2026-04-04 (Actualizado 2026-06-30: añadida Fase 0 — Observabilidad)  
-> **Base:** Análisis exhaustivo del repositorio PraxisML (~9,800 LOC backend, Next.js frontend, 9 servicios Docker)  
-> **Arquitectura actual:** FastAPI monolito modular + Celery workers + MLflow + PostgreSQL + MinIO + Redis + Prometheus/Grafana
+> **Versión del Roadmap:** 2.0 (Reestructuración Modular & Lakehouse)  
+> **Fecha de actualización:** 2026-11-25  
+> **Estado actual del repositorio:** **Fase 0 ✅ Completada** (Observabilidad & FinOps) · **Fase 1 ✅ Completada** (NLP Engine + pgvector + vLLM RAG)  
+> **Base técnica actual:** FastAPI (~10,000 LOC backend) · Celery + Redis · PostgreSQL (`pgvector`) · MLflow 3.10 · MinIO/S3 · DVC · Next.js 16 · Prometheus/Grafana · vLLM opcional  
 
-> 📁 **Documentos detallados por fase:** consulte la carpeta [`roadmap/`](roadmap/) para especificaciones técnicas completas de cada fase, especialmente [Fase 0 — Observabilidad](roadmap/phase-0-observability.md) y el [Catálogo completo de métricas](roadmap/metrics-catalog.md).
+> 📁 **Especificaciones detalladas por fase:**
+> - ✅ [Fase 0 — Observabilidad, Cost Tracking & FinOps](roadmap/phase-0-observability.md) · [Catálogo de métricas](roadmap/metrics-catalog.md) · [Plan de implementación F0](roadmap/phase-0-implementation-plan.md)
+> - ✅ [Fase 1 — NLP Engine (Clásico + Embeddings + LLM RAG)](roadmap/phase-1-nlp.md) · [Plan ejecutado F1](docs/plan-fase-1-nlp-engine.md)
+> - 🚧 [Fase 2 — Modularización del Core, Compute Plane & Fundaciones Enterprise](roadmap/phase-2-modular-core-compute.md)
+> - 📐 [Fase 3 — Data Lakehouse, Praxis Catalog, Workflows & Feature Store](roadmap/phase-3-lakehouse-catalog-workflows.md)
+> - 📐 [Fase 4 — Dedicated Model Serving, Workspace Interactivo & Verticales CV/TS](roadmap/phase-4-serving-workspace-verticals.md) · [Detalle CV & Time Series](roadmap/phase-2-cv-timeseries.md)
+> - 📐 [Fase 5 — Smart Platform, Agentic Copilot & Cloud-Native Scale](roadmap/phase-3-smart-platform.md) · [AI DevOps & Copilot](roadmap/phase-4-ai-devops.md)
 
 ---
 
-## 📊 Mapa de Capacidades Actuales vs Futuras
+## 1. Diagnóstico Arquitectónico del Estado Actual
+
+Antes de seguir apilando verticales de ML (Computer Vision, Time Series, AutoML, Copilot), un análisis profundo del repositorio revela tanto **fortalezas muy sólidas** como **cuellos de botella estructurales** que conviene resolver primero para escalar como una plataforma modular comparable en pilares a Databricks.
+
+### ✅ Qué está bien hecho (Fortalezas a preservar)
+
+| Pilar | Implementación actual | Valor arquitectónico |
+|---|---|---|
+| **Multi-tenancy & Seguridad base** | `tenant_id` en tablas ORM, prefijos `tenants/{id}/` en Storage y MLflow, RBAC (`admin > editor > viewer`), cuotas por tenant y validación estricta de `SECRET_KEY` en `config.py`. | Cimiento SaaS claro desde el inicio; fácil de reforzar con RLS y Service Principals. |
+| **Abstracciones limpias puntuales** | `StorageService` (Local/MinIO/S3), `IUncertaintyAlgorithm` + `PredictionFactory`, `VectorType` dual (pgvector/JSON) y `LLMGateway` multi-provider sin lock-in a LangChain. | Demuestra buen criterio de desacople cuando se diseña por contrato. |
+| **Observabilidad y FinOps (Fase 0)** | `UsageCollector`, `CostCalculator` con `resource_pricing` dinámico + caché Redis, `AlertEngine`, Celery Beat, 19 métricas Prometheus, 7+ dashboards Grafana y UI integrada. | Ventaja diferencial temprana: visibilidad de costes y latencia antes de escalar el cómputo. |
+| **Vertical NLP end-to-end (Fase 1)** | Transformers + export ONNX nativo (`torch.onnx.export`), `seqeval` (NER), embeddings `all-MiniLM-L6-v2` + `pgvector`, `vLLM` default + **RAG solo-metadatos** (privacidad multi-tenant). | Valida el ciclo completo multi-modal en backend, worker, migraciones, métricas y UI. |
+| **Ciclo MLOps base** | MLflow Tracking & Registry, DVC Data Registry, Evidently Drift (PSI/KS), SHAP XAI, WebSocket Streaming, SSE y `model_ci.yml`. | Cobertura funcional amplia para ML tabular y NLP sobre un stack reproducible con `uv` y Docker Compose. |
+
+### ⚠️ Qué hay que mejorar (Deuda técnica y brechas de escalabilidad)
+
+| Dimensión | Problema detectado en el código actual | Impacto si no se corrige |
+|---|---|---|
+| **Modularidad y Plugins** | `SklearnTrainer`/`PyTorchTrainer` (`training_service.py`, 1,104 LOC) y `NLPTrainer` (`nlp_trainer.py`, 518 LOC) no comparten contrato (`BaseTrainer` / `DomainPlugin`). `train.py` (262 LOC) y `train_nlp.py` (260 LOC) duplican toda la tubería. `models.py` (838 LOC) y `datasets.py` (640 LOC) son *fat routers* y `services/` está plano. | Añadir CV y Time Series multiplicará la duplicación ×4 y hará el código difícil de mantener y testear. |
+| **Dependencias e Imágenes monolíticas** | `backend/pyproject.toml` mete `torch`, `transformers`, `sentence-transformers`, `onnxruntime`, `shap`, `evidently`, `dvc`, `mlflow` en una única imagen compartida por `api`, `worker` y `celery-beat`. | Imágenes >12–15 GB al sumar CV/TS, arranques lentos y conflictos de dependencias (como `optimum` vs `torch 2.10`). |
+| **Capa de Datos y Escalado Stateless** | `train.py` / `datasets.py` descargan ficheros enteros a RAM (`BytesIO` + `pandas`). `DVCService` lanza `subprocess.run(["dvc", ...])` sobre disco local (`DATA_DIR/storage`). | Colapsa con datasets >1–2 GB; **rompe el escalado horizontal** en múltiples réplicas/pods y provoca carreras en escrituras concurrentes. |
+| **Control Plane acoplado al Compute/Serving** | `celery_app.py` tiene `task_routes = {}` (una sola cola con `--pool=prefork`, incompatible con GPU/CUDA). `InferenceService` carga modelos en la RAM de FastAPI con `ModelCache` local (y `Path(torchscript_path).exists()` falla si solo vive en S3/MinIO). `main.py` lanza `mlflow ui` como subproceso. | Un entrenamiento bloquea inferencias y alertas; imposible escalar API independientemente del Model Serving; sin A/B, Canary ni GPU isolation. |
+| **Sin Lakehouse, Catálogo Unificado ni Workflows** | Metadatos fragmentados en 5 sitios (`dataset`, `.dvc`, `ml_model`, `mlflow_db`, `model_embeddings`). Sin linaje, sin Feature Store y sin motor de DAGs/pipelines declarativos. | Uso 100% manual paso a paso; *training-serving skew*; imposible auditar linaje de datos a predicciones. |
+| **Workspace / DX & Seguridad Enterprise** | Solo UI de formularios (`DashboardMVP.tsx` con 11 tabs en `useState`, sin rutas Next.js reales; selector de tenant con `alert()`). Sin Notebooks, SQL Explorer, SDK Python, CLI ni Asset Bundles. Sin PostgreSQL RLS, sin Service Principals/PATs, rate limit en memoria por IP y sin `audit_log` transversal. | Fricción para Data Scientists/ML Engineers y barreras para adopción en clientes enterprise. |
+| **Higiene del repositorio** | Ficheros `.db` de test, `mlruns/` y `backend/data/tenants/*` presentes en el árbol local; migraciones Alembic redundantes en `migrations/versions/`. | Riesgo de inconsistencias en entornos nuevos y migraciones frágiles. |
+
+---
+
+## 2. Visión Objetivo: PraxisML como Plataforma Modular tipo Databricks
+
+La evolución no abandona la filosofía de **despliegue ágil (Docker Compose en local / Kubernetes en producción)**, pero adopta los **8 pilares arquitectónicos de una plataforma Lakehouse moderna**:
+
+| Pilar tipo Databricks | Equivalente en PraxisML | Tecnología & Estrategia | Fase |
+|---|---|---|---|
+| **Modularidad por Contratos** | **Praxis Plugin System** (`DomainPlugin`, `BaseTrainer`, `BaseInferenceEngine`) | Contratos ABC + `PluginRegistry` + extras `uv` (`[tabular]`, `[nlp]`, `[cv]`, `[ts]`) + Event Bus (Redis Streams) | **Fase 2** |
+| **Control Plane vs Compute Plane** | API Gateway stateless + Compute elástico por perfil de hardware | Colas tipadas (`cpu-light`, `cpu-heavy`, `gpu-train`, `system-beat`) + imágenes separadas → **Ray / K8s Jobs** | **Fase 2 → 3** |
+| **Enterprise Governance & Workspaces** | `Tenant → Workspace → Environment` + RLS + PATs + Audit Log | PostgreSQL **RLS**, Service Principals / API Keys, Rate Limit Redis por `tenant_id`, `audit_log` transversal | **Fase 2** |
+| **Delta Lakehouse (Medallion)** | Tablas ACID **Bronze / Silver / Gold** sobre MinIO/S3 | **Delta Lake (`deltalake-rs`)** + **DuckDB / Polars** out-of-core (con `DataEngine` extensible a Spark / Ray Data / Iceberg) | **Fase 3** |
+| **Unity Catalog + Lineage** | **Praxis Catalog** (`workspace.schema.asset`) | Catálogo unificado (tablas, volúmenes, features, modelos, prompts) + **OpenLineage** + ACLs/PII | **Fase 3** |
+| **Lakeflow Jobs / Workflows** | **Praxis Workflows** (Orquestador de DAGs) | Pipelines declarativos YAML/JSON (Ingesta → Transformación → Features → Train → Gate → Promote → Score) | **Fase 3** |
+| **Feature Store** | **Praxis Feature Store** (Offline + Online) | Offline en tablas Delta + Online en Redis + *point-in-time joins* | **Fase 3** |
+| **Model Serving + AI Gateway** | Serving Plane dedicado + AI Gateway v2 | **Ray Serve** / ONNX / TorchScript + A/B & Canary + **Inference Tables** + Guardrails LLM + Prompt Registry | **Fase 4** |
+| **Workspace, Notebooks & Asset Bundles** | Experiencia híbrida No-Code + Code-First | **JupyterLab / Marimo** (kernel remoto) + SQL Explorer + `praxisml-sdk` + CLI `praxis` + `praxis.yml` (GitOps) | **Fase 4** |
+| **Full-Environment Agentic Copilot** | Agente transversal sobre todo el entorno + MCP | `CopilotToolRegistry` alimentado por Plugins + **PolicyEngine 4-Tier (Human-in-the-Loop)** + AI Gateway v2 + **MCP Server** | **F2 → F5** |
+
+### Arquitectura Objetivo (Control Plane · Data Lakehouse · Compute & Serving Plane)
 
 ```mermaid
-graph LR
-    subgraph "HOY — PraxisML v1.x"
-        A[Tabular ML<br/>Sklearn + PyTorch MLP]
-        B[Inferencia + Incertidumbre<br/>MC Dropout / TTA / Ensemble]
-        C[XAI — SHAP<br/>KernelExplainer]
-        D[Data Drift<br/>Evidently PSI/KS]
-        E[Preprocessing<br/>ColumnTransformer]
-        F[Streaming WS<br/>Tabular real-time]
+flowchart TB
+    subgraph UX["Workspace & Developer Experience"]
+        UI["Web Workspace (Next.js App Router)"]
+        NB["Interactive Notebooks (JupyterLab / Marimo)"]
+        SQL["SQL & Data Explorer"]
+        SDK["Python SDK & CLI + Asset Bundles (GitOps)"]
     end
-    subgraph "Fase 0 — Observabilidad (Transversal)"
-        O0[UsageCollector]
-        O1[CostCalculator]
-        O2[Prometheus Custom]
-        O3[Grafana Dashboards]
-        O4[Alertas + Budget]
-    end
-    subgraph "Q4 2027 — PraxisML v2.x"
-        G[NLP Engine<br/>BERT + LLM + Embeddings]
-        H[Computer Vision<br/>Clasificación + Segmentación + Detección]
-        I[Time Series<br/>Forecasting + Anomalías]
-        J[Recommendation<br/>Engine + AutoML]
-        K[AI-Powered<br/>DevOps + Copilot]
-        L[Vector DB<br/>Búsqueda semántica]
-    end
-    A --> G
-    A --> H
-    A --> I
-    A --> J
-    C --> K
-    D --> K
-    E --> L
 
-    A -.-> O0
-    B -.-> O0
-    G -.-> O1
-    H -.-> O2
-    I -.-> O3
-    J -.-> O4
-    K -.-> O4
+    subgraph CP["Control Plane (Stateless FastAPI Core)"]
+        GW["API Gateway + OAuth2/PAT + Redis Tenant Rate Limit"]
+        CAT["Praxis Catalog & OpenLineage"]
+        WF["Praxis Workflows (DAG Orchestrator)"]
+        PLUG["Plugin Registry (Tabular / NLP / CV / TS)"]
+        OBS["Observability, FinOps & Audit Log"]
+        BUS["Domain Event Bus (Redis Streams)"]
+    end
+
+    subgraph DATA["Data Lakehouse & Governance Layer"]
+        PG["PostgreSQL + pgvector + Row-Level Security"]
+        OBJ["Object Storage (MinIO / S3)"]
+        DELTA["Medallion Tables: Delta Lake (Bronze / Silver / Gold)"]
+        FS["Feature Store (Offline Delta + Online Redis)"]
+        MLF["MLflow Tracking & Model Registry"]
+    end
+
+    subgraph COMP["Compute & Serving Plane (Elástico & Aislado)"]
+        WCPU["CPU Compute (DuckDB / Polars / Sklearn / TS)"]
+        WGPU["GPU Compute (Ray / K8s Jobs: NLP / CV / DL)"]
+        SRV["Dedicated Model Serving (Canary / A-B / Inference Tables)"]
+        AIGW["AI Gateway v2 (vLLM / OpenAI / Cache / Guardrails)"]
+    end
+
+    UX --> GW
+    GW --> CAT & WF & PLUG & OBS
+    PLUG <--> BUS
+    OBS <--> BUS
+    WF --> WCPU & WGPU
+    CAT --> PG & DELTA & MLF
+    WCPU & WGPU --> DELTA & FS & MLF & OBJ
+    SRV --> MLF & FS & DELTA
+    SRV --> OBS
+    AIGW --> OBS
 ```
 
-## 🏗️ Arquitectura de Rutas por Dominio
-
-La evolución reorganiza los endpoints actuales (`/api/v1/*`) en **dominios verticales**, cada uno con su propio router, trainer y servicio de inferencia.
-
-**Decisión: Monolito Modular** (no microservicios) — FastAPI único con rutas organizadas por dominio.
+### Mapa de Capacidades: Hoy vs. Plataforma Objetivo
 
 ```mermaid
-graph TB
-    subgraph "main.py — Router Registration"
-        R[FastAPI App]
+flowchart LR
+    subgraph HOY["HOY — PraxisML v1.5 (F0 + F1 Completadas)"]
+        H1["Tabular ML (Sklearn + PyTorch MLP)"]
+        H2["NLP Engine (Transformers + ONNX + pgvector + vLLM RAG)"]
+        H3["Observability & FinOps (Usage + Cost + Alerts + Grafana)"]
+        H4["MLflow Registry + DVC + Evidently Drift + SHAP"]
     end
-    subgraph "/api/v1/tabular — HOY"
-        T1[training.py]
-        T2[predictions.py]
-        T3[preprocessing.py]
-        T4[streaming.py]
+
+    subgraph F2["Fase 2 — Core Modular & Compute"]
+        M1["Plugin Architecture & Fat-Router Refactor"]
+        M2["Typed Queues + Split Docker Images + ComputeBackend"]
+        M3["Event Bus + RLS + PATs + Audit Log + Workspaces"]
+        M4["Next.js App Router + TanStack Query"]
     end
-    subgraph "/api/v1/nlp — Q1"
-        N1[nlp/training.py]
-        N2[nlp/inference.py]
-        N3[nlp/embeddings.py]
-        N4[nlp/assistant.py]
+
+    subgraph F3["Fase 3 — Lakehouse & Workflows"]
+        L1["Delta Lake (Bronze/Silver/Gold) + DuckDB/Polars"]
+        L2["Praxis Catalog (Unity-style) + OpenLineage"]
+        L3["Praxis Workflows (DAGs) + Feature Store"]
     end
-    subgraph "/api/v1/cv — Q2"
-        C1[cv/training.py]
-        C2[cv/inference.py]
-        C3[cv/segmentation.py]
-        C4[cv/detection.py]
+
+    subgraph F4["Fase 4 — Serving, Workspace & Verticales"]
+        S1["Dedicated Model Serving (A/B, Canary, Inference Tables)"]
+        S2["AI Gateway v2 (Guardrails, Cache, Prompt Registry)"]
+        S3["Notebooks + SQL Explorer + Python SDK/CLI + Bundles"]
+        S4["Plugins CV & Time Series"]
     end
-    subgraph "/api/v1/timeseries — Q2"
-        TS1[timeseries/training.py]
-        TS2[timeseries/forecast.py]
-        TS3[timeseries/anomalies.py]
+
+    subgraph F5["Fase 5 — Smart Platform & Cloud-Native"]
+        A1["Recommender + Distributed AutoML + Predictive Drift"]
+        A2["Intelligent Model Gate + Agentic Copilot"]
+        A3["Kubernetes Helm + KEDA Autoscaling + BYOC"]
     end
-    R --> T1 & T2 & T3 & T4
-    R --> N1 & N2 & N3 & N4
-    R --> C1 & C2 & C3 & C4
-    R --> TS1 & TS2 & TS3
+
+    HOY --> F2 --> F3 --> F4 --> F5
 ```
-
-**Impacto en `main.py`:**
-```python
-# Registro de routers por dominio vertical
-# --- Tabular (existente, se renombra prefijo) ---
-app.include_router(training.router, prefix=f"{API}/tabular", tags=["Tabular"])
-app.include_router(predictions.router, prefix=f"{API}/tabular", tags=["Tabular"])
-
-# --- NLP (Q1) ---
-app.include_router(nlp_training.router, prefix=f"{API}/nlp", tags=["NLP"])
-app.include_router(nlp_inference.router, prefix=f"{API}/nlp", tags=["NLP"])
-app.include_router(assistant.router, prefix=f"{API}/nlp", tags=["NLP"])
-
-# --- Computer Vision (Q2) ---
-app.include_router(cv_training.router, prefix=f"{API}/cv", tags=["Computer Vision"])
-app.include_router(cv_inference.router, prefix=f"{API}/cv", tags=["Computer Vision"])
-
-# --- Time Series (Q2) ---
-app.include_router(ts_training.router, prefix=f"{API}/timeseries", tags=["Time Series"])
-app.include_router(ts_forecast.router, prefix=f"{API}/timeseries", tags=["Time Series"])
-```
-
-### 🔄 Estrategia de Migración para Tabular
-
-**Fase de transición** (implementar después de Fase 0):
-1. Crear carpeta `app/api/routes/v1/tabular/`
-2. Mover archivos tabulares existentes (`training.py`, `predictions.py`, `preprocessing.py`, `streaming.py`)
-3. Mantener aliases de compatibilidad en rutas antiguas con headers de deprecation
-4. Registrar routers con prefijo `/api/v1/tabular/`
-
-```python
-# Aliases de compatibilidad (deprecated)
-app.include_router(
-    tabular_training.router, 
-    prefix=f"{API}/training", 
-    tags=["Tabular (Deprecated)"]
-)
-```
-
-**Backwards compatibility**: Los endpoints antiguos (`/api/v1/training/*`) seguirán funcionando pero marcarán deprecation headers.
-
-### 🏢 Infraestructura por Dominio
-
-| Dominio | Requisitos | Servicios Docker | GPU |
-|---------|-----------|-----------------|-----|
-| **Tabular** | CPU principalmente | api, worker, db, redis, mlflow, minio | Opcional (MLP) |
-| **NLP** | GPU para fine-tuning | + ollama (LLM local) | Requerida para BERT/RoBERTa |
-| **CV** | GPU intensiva | + gpu-worker (separado) | Requerida (clasificación, segmentación) |
-| **Time Series** | CPU principalmente | api, worker | No requerida |
-| **Observability** | Métricas + alertas | prometheus, grafana, celery-beat | No requerida |
-
-**Docker Compose Evolucionado (Fase 2):**
-```yaml
-services:
-  # Core (existente)
-  db, redis, mlflow, minio, api, worker, celery-beat
-  
-  # NLP (Fase 1)
-  ollama:
-    image: ollama/ollama
-    ports: ["11434:11434"]
-    volumes: ["ollama_data:/root/.ollama"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
-  
-  # CV (Fase 2)
-  gpu-worker:
-    build: ./backend
-    command: ["celery", "-A", "app.worker.celery_app", "worker", 
-              "--loglevel=info", "--queues=gpu", "--concurrency=1"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
-```
-
-### 🎨 Integración Frontend de Observabilidad
-
-**Estado actual**: Observability solo accesible via Grafana dashboards  
-**Objetivo**: Métricas visibles en el frontend Next.js principal
-
-**Estructura frontend a implementar:**
-```
-frontend/src/
-├── components/dashboard/tabs/
-│   ├── ObservabilityTab.tsx          # Tab principal con sub-secciones
-│   ├── UsageMetrics.tsx              # Uso de recursos
-│   ├── CostDashboard.tsx             # Desglose de costes
-│   ├── AlertsPanel.tsx               # Alertas activas
-│   └── DriftTimeline.tsx             # Timeline de drift
-├── hooks/
-│   ├── useObservability.ts           # Hook principal
-│   ├── useUsageMetrics.ts
-│   ├── useCostTracking.ts
-│   └── useAlerts.ts
-└── lib/api.ts                        # Añadir tipos y endpoints observability
-```
-
-**Sidebar.tsx** — Añadir item "Observability":
-```typescript
-type View = "datasets" | "preprocessing" | "models" | "predictions" | 
-            "training" | "registry" | "data_registry" | "streaming" | 
-            "users" | "observability";  // ← NUEVO
-
-const NAV_ITEMS: NavItem[] = [
-  // ... existing items
-  { id: "observability", label: "Observability", icon: <Activity className="w-5 h-5" /> },
-];
-```
-
-> [!NOTE]
-> **Decisión de arquitectura**: Mantener monolito FastAPI (no microservicios) con rutas organizadas por dominio. Workers únicos con queues específicas (gpu, cpu) en lugar de workers separados por dominio.
 
 ---
 
-## Fase 0 — Observabilidad, Trazabilidad y Cost Tracking
+## 3. Plan de Evolución por Fases
 
-**Carácter:** Transversal. Se construye incrementalmente en paralelo a las Fases 1-4.
-**Duración estimada:** Continuo (sub-fases 0.1→0.7 a lo largo de Q1-Q2 2027)
-**Dependencias:** Ninguna
+### ✅ Fase 0 — Observabilidad, Trazabilidad, Cost Tracking & API Tabular (COMPLETADA)
 
-> 📖 Documentación detallada en: [`roadmap/phase-0-observability.md`](roadmap/phase-0-observability.md)
-> Catálogo completo de ~200 métricas en: [`roadmap/metrics-catalog.md`](roadmap/metrics-catalog.md)
+> 📖 Detalle técnico: [phase-0-observability.md](roadmap/phase-0-observability.md) · [metrics-catalog.md](roadmap/metrics-catalog.md) · [FASE_0_COMPLETADO.md](FASE_0_COMPLETADO.md)
 
-### 🎯 Objetivo
-
-Construir un sistema unificado de observabilidad multi-tenant que permita:
-- **Saber cuánto cuesta cada modelo** (cómputo, almacenamiento, tokens, API externas)
-- **Detectar anomalías** antes de que impacten al usuario (drift predictivo, degradación de latencia)
-- **Facturar por uso real** a los tenants
-- **Hacer forecasting** de costes y recursos
-- **Alertar proactivamente** basado en ~200 métricas por modelo y tipo
-
-### 📍 Componentes Clave
-
-| Componente | Descripción | Documentación |
-|-----------|-------------|---------------|
-| **UsageCollector** | Middleware asíncrono que captura métricas de cada inferencia/entrenamiento | [phase-0-observability.md](roadmap/phase-0-observability.md#01-usagemetrics--usagecollector) |
-| **CostCalculator** | Motor de estimación de costes con tablas por tipo de GPU/recurso/API LLM | [phase-0-observability.md](roadmap/phase-0-observability.md#02-costcalculator) |
-| **Prometheus custom metrics** | 12 métricas nuevas (latencia, tokens, coste, drift, cuotas) | [phase-0-observability.md](roadmap/phase-0-observability.md#03-prometheus-custom-metrics) |
-| **6 Grafana dashboards** | Cost Center, Model Performance, Tenant Usage, LLM Spend, Training, Drift Timeline | [phase-0-observability.md](roadmap/phase-0-observability.md#04-grafana-dashboards) |
-| **Sistema de alertas** | 15 alertas predefinidas con webhooks, email, dashboard badges | [phase-0-observability.md](roadmap/phase-0-observability.md#05-alertas-y-notificaciones) |
-| **Budget por tenant** | `monthly_budget_usd`, billing cycle, forecast de coste, reportes | [phase-0-observability.md](roadmap/phase-0-observability.md#07-budget-por-tenant) |
-
-### 📊 Métricas por Tipo de Modelo
-
-| Modelo | Lo más caro | Métricas clave |
-|--------|-------------|----------------|
-| **Tabular sklearn** | CPU-hours | latency, throughput, prediction drift, model size |
-| **Tabular MLP** | GPU-hours | latency, uncertainty metrics, GPU utilization |
-| **NLP BERT** | GPU-hours + tokens | tokens/sec, perplexity, TTFT, seq_length |
-| **LLM API** | **$ tokens** | tokens in/out, cost/request, TTFT, hallucination rate, budget burn |
-| **CV Classification** | GPU-hours | images/sec, confidence distribution, class balance |
-| **CV Segmentation** | GPU-hours | IoU/Dice, mask size, uncertainty heatmap |
-| **Time Series** | CPU-hours | forecast horizon, CI width, seasonal period |
-
-### 🧠 Early Warning System
-
-| Señal | Detecta | Ventana |
-|-------|---------|---------|
-| ↑ uncertainty + ↑ entropy + ↑ feature_volatility | Drift inminente | 3-7 días antes |
-| ↑ p99 + ↑ stddev + ↑ queue_depth | Degradación de latencia | 1-2 horas antes |
-| ↑ tokens/output_ratio + cost_daily_avg 3 días | Coste fuera de control | 2-3 días antes |
-| ↓ predictions + ↓ logins + 0 trainings en 14d | Abandono del tenant | 14-30 días antes |
-
-### 🏗️ Plan de Implementación
-
-| Sub-fase | Contenido | Esfuerzo | Prioridad |
-|----------|-----------|----------|-----------|
-| **0.1** | Tablas SQL, `UsageCollector`, migraciones Alembic | 🟡 1-2 sem | P0 |
-| **0.2** | 12 Prometheus metrics, integración training + inference | 🟡 2 sem | P0 |
-| **0.3** | `CostCalculator`, registro automático de costes | 🟡 1-2 sem | P0 |
-| **0.4** | 5 API endpoints REST (usage, costs, drift, alerts, health) | 🟡 2 sem | P1 |
-| **0.5** | 6 Grafana dashboards nuevos | 🔴 2-3 sem | P1 |
-| **0.6** | Sistema de alertas con webhooks + Celery Beat | 🔴 3 sem | P1 |
-| **0.7** | Budget por tenant, billing, forecast, reportes PDF | 🟢 1 sem | P2 |
+- [x] 5 modelos ORM (`UsageMetric`, `CostRecord`, `DriftHistory`, `AlertConfig`, `ResourcePricing`) + extensión budget en `Tenant`
+- [x] `UsageCollector` + `CostCalculator` con pricing dinámico en BD y caché Redis (TTL 5m)
+- [x] 12 métricas Prometheus base + `AlertEngine` + Celery Beat (drift cada 6h, alertas 5m, modelos zombie diario, budget diario)
+- [x] 14 endpoints REST `/api/v1/observability/*` + reportes PDF/CSV + forecast de costes
+- [x] 6 dashboards Grafana nuevos + 5 enriquecidos + `ObservabilityTab.tsx` (5 sub-tabs) en frontend
+- [x] Reorganización API Tabular en `/api/v1/tabular/*` con aliases de compatibilidad deprecated
 
 ---
 
-## Fase 1 — Q1 2027: NLP Engine (Clásico + Generativo)
+### ✅ Fase 1 — NLP Engine: Clásico + Semantic Search + LLM RAG (COMPLETADA)
 
-> 📖 Documentación detallada en: [`roadmap/phase-1-nlp.md`](roadmap/phase-1-nlp.md)
+> 📖 Detalle técnico actualizado: [phase-1-nlp.md](roadmap/phase-1-nlp.md) · [docs/plan-fase-1-nlp-engine.md](docs/plan-fase-1-nlp-engine.md)
 
-### 🎯 Objetivo
-
-Introducir NLP como vertical completa de la plataforma, con **dos ejes diferenciados**:
-
-- **NLP Clásico (BERT / Transformers fine-tuned):** Clasificación de texto, NER, análisis de sentimiento — modelos entrenables dentro de PraxisML.
-- **NLP Generativo (LLMs vía API / local):** Chatbot asistente RAG, resúmenes, generación de config.
-
-Todo bajo el nuevo router `/api/v1/nlp/*`.
+- [x] **NLP Clásico (`/api/v1/nlp/train`, `/predict`, `/predict/batch`, `WS /streaming`)**: Fine-tuning de DistilBERT/BERT/RoBERTa/XLM-R/BioBERT (`text_classification`, `token_classification`/NER con `seqeval`, `sentiment_analysis`) + export ONNX nativo (`torch.onnx.export` sin `optimum`) + inferencia ONNX Runtime en CPU
+- [x] **Semantic Search (`pgvector`)**: `EmbeddingService` (`all-MiniLM-L6-v2`, 384d), `VectorType` dual (pgvector/JSON para SQLite en tests), tabla `model_embeddings` con índice IVFFlat y búsqueda coseno
+- [x] **LLM Gateway + Asistente RAG**: Gateway multi-provider (`vLLM` default OpenAI-compatible, `openai`, `ollama`, `anthropic`, sin LangChain), **RAG solo-metadatos**, streaming SSE e historial persistido en `assistant_conversations`
+- [x] **NLP Profiler**: Post-hook en subida de datasets (`langdetect`, detección de texto, sugerencia de pipeline) guardado en `dataset.column_types_analysis`
+- [x] **Observabilidad y UI NLP**: 7 nuevas métricas Prometheus (`praxisml_nlp_*`, `praxisml_llm_*`, total 19), dashboard Grafana `praxisml-nlp`, perfil Docker `vllm` y `NLPTab.tsx` (4 sub-tabs)
 
 ---
 
-### 📍 Componentes
+### 🚧 Fase 2 — Modularización del Core, Compute Plane & Fundaciones Enterprise (Q2 2027)
 
-#### 1.1 — NLP Training Pipeline (Clásico)
+> 📖 Especificación técnica completa: [phase-2-modular-core-compute.md](roadmap/phase-2-modular-core-compute.md)
 
-**Nuevo router:** `app/api/routes/v1/nlp/training.py`
+**Objetivo:** Desacoplar el monolito antes de incorporar más verticales, separar **Control Plane** de **Compute Plane**, eliminar deuda técnica estructural y establecer las fundaciones de seguridad y UX multi-workspace.
 
-Permite al usuario subir datasets textuales (CSV con columna de texto + label) y entrenar modelos transformer fine-tuneados.
-
-**Endpoints:**
-```
-POST /api/v1/nlp/train              → Entrenar modelo NLP (clasificación, NER, sentimiento)
-GET  /api/v1/nlp/algorithms          → Listar arquitecturas disponibles
-GET  /api/v1/nlp/training/status/{id} → Estado del entrenamiento
-```
-
-**Servicio:** Nuevo `NLPTrainer` que hereda la misma interfaz que `SklearnTrainer` / `PyTorchTrainer`:
-
-```python
-# app/services/nlp_trainer.py
-class NLPTrainer:
-    """
-    Entrena modelos de NLP con HuggingFace Transformers + MLflow autologging.
-    Soporta: text classification, token classification (NER), sentiment analysis.
-    """
-    PRETRAINED_MODELS = {
-        "bert-base": "bert-base-uncased",
-        "bert-multilingual": "bert-base-multilingual-cased",
-        "distilbert": "distilbert-base-uncased",
-        "roberta": "roberta-base",
-        "xlm-roberta": "xlm-roberta-base",       # Multiidioma
-        "biobert": "dmis-lab/biobert-v1.1",        # Dominio médico
-    }
-    
-    TASK_TYPES = {
-        "text_classification": AutoModelForSequenceClassification,
-        "token_classification": AutoModelForTokenClassification,  # NER
-        "sentiment_analysis": AutoModelForSequenceClassification,  # Wrapper
-    }
-    
-    def train(self, df, text_column, label_column, algorithm="distilbert",
-              task_type="text_classification", hyperparams=None, ...):
-        tokenizer = AutoTokenizer.from_pretrained(self.PRETRAINED_MODELS[algorithm])
-        model = self.TASK_TYPES[task_type].from_pretrained(
-            self.PRETRAINED_MODELS[algorithm], num_labels=num_labels
-        )
-        # HuggingFace Trainer + MLflow autolog
-        training_args = TrainingArguments(
-            output_dir=f"tenants/{self.tenant_id}/nlp_models/",
-            num_train_epochs=hyperparams.get("epochs", 3),
-            learning_rate=hyperparams.get("learning_rate", 2e-5),
-            per_device_train_batch_size=hyperparams.get("batch_size", 16),
-            evaluation_strategy="epoch",
-        )
-        # ... fit, evaluate, save to MLflow, return metrics
-```
-
-**Integración con `hyperparams.py`:** Añadir registry de algoritmos NLP:
-```python
-# hyperparams.py — nueva sección
-NLP_ALGORITHMS = {
-    "distilbert": {"display_name": "DistilBERT", "hf_model": "distilbert-base-uncased", ...},
-    "bert-base": {"display_name": "BERT Base", "hf_model": "bert-base-uncased", ...},
-    "roberta":   {"display_name": "RoBERTa",   "hf_model": "roberta-base", ...},
-    "xlm-roberta":{"display_name": "XLM-RoBERTa", "hf_model": "xlm-roberta-base", ...},
-}
-```
-
-#### 1.2 — NLP Inference
-
-**Nuevo router:** `app/api/routes/v1/nlp/inference.py`
-
-```
-POST /api/v1/nlp/predict              → Clasificar texto / extraer entidades
-POST /api/v1/nlp/predict/batch        → Batch inference sobre CSV
-WS   /api/v1/nlp/streaming/{model_id} → Streaming NLP (clasificación en tiempo real)
-```
-
-Reutiliza `InferenceService` + `ModelCache` existentes. La clave es que los modelos HuggingFace se exportan a ONNX o TorchScript para inferencia rápida.
-
-#### 1.3 — Semantic Search & Embeddings Service
-
-**Nuevo router:** `app/api/routes/v1/nlp/embeddings.py`
-
-Endpoints:
-```
-POST /api/v1/nlp/embed          → Generar embeddings de texto libre
-GET  /api/v1/nlp/search          → Búsqueda semántica sobre modelos/datasets
-```
-
-- Usa `sentence-transformers/all-MiniLM-L6-v2` (80MB, CPU) para embeddings.
-- Almacena en **PostgreSQL + pgvector** (extensión nativa para Postgres 15).
-
-#### 1.4 — Chatbot Asistente (LLM + RAG)
-
-**Nuevo router:** `app/api/routes/v1/nlp/assistant.py`
-
-Gateway a LLM (OpenAI / Anthropic / Ollama local) con patrón RAG:
-- Contexto construido consultando la API interna (modelos, drift, métricas).
-- El LLM **no recibe datos del dataset**, solo metadatos.
-
-#### 1.5 — NLP Profiler para Datasets
-
-Post-hook en `POST /api/v1/datasets/` que detecta automáticamente columnas de texto libre, idioma, y sugiere pipelines de preprocesamiento textual.
+| Sub-fase | Entregables clave | Esfuerzo | Prioridad |
+|---|---|---|---|
+| **2.1 — Plugin Architecture & Contratos** | Interfaces `DomainPlugin` (incluyendo `get_copilot_tools()`), `BaseTrainer`, `BaseInferenceEngine`, `BaseProfiler`; `PluginRegistry` + `CopilotToolRegistry` base (promoviendo el asistente a `/api/v1/copilot/*` y corrigiendo la persistencia SSE en `assistant.py`); unificación de `run_domain_training`. | 🔴 3 sem | **P0** |
+| **2.2 — Refactorización Interna & Dependencias Modulares** | Trocear *fat routers* (`models.py`, `datasets.py`, `observability.py`, `streaming.py`) hacia capa `services/{domain}/` + `repositories/`; dividir `training_service.py` (1,104 LOC); definir extras opcionales en `pyproject.toml` (`[tabular]`, `[nlp]`, `[cv]`, `[ts]`, `[lakehouse]`) y construir Dockerfiles multi-perfil (`api`, `worker-cpu`, `worker-gpu`). | 🟡 2-3 sem | **P0** |
+| **2.3 — Event Bus Interno (Redis Streams)** | Bus de eventos tipados (`dataset.uploaded`, `model.trained`, `model.promoted`, `prediction.completed`, `drift.detected`) para desacoplar Observability, Embeddings, Profiling, Alerting y Audit Log del camino crítico de los endpoints. | 🟡 1-2 sem | **P0** |
+| **2.4 — Compute Plane Separation** | Enrutamiento real de colas Celery (`cpu-light`, `cpu-heavy`, `gpu-train`, `system-beat`); `--pool=threads`/`solo` para workers GPU; eliminar subproceso `mlflow ui` de `main.py`; corregir lectura remota en `InferenceService` (soporte S3/MinIO); abstraer `ComputeBackend` (`CeleryBackend`, preparado para `RayBackend` / `K8sJobBackend`). | 🟡 2 sem | **P0** |
+| **2.5 — Enterprise Security & Workspaces** | Entidad `Workspace/Project` (`Tenant → Workspace → Environment`); **PostgreSQL Row-Level Security (RLS)** con contexto por sesión; **Service Principals & Scoped API Keys (PATs)** con revocación y refresh tokens; Rate Limiting distribuido en Redis por `tenant_id`; tabla `audit_log` transversal (adelantada desde Fase 4). | 🔴 2-3 sem | **P1** |
+| **2.6 — Frontend App Router & Higiene Repo** | Migrar `DashboardMVP.tsx` (estado plano) a rutas reales de **Next.js App Router** (`/workspaces/[id]/...`), selector real de tenant/workspace, TanStack Query; limpiar `.db`/artefactos locales del repo, consolidar política de migraciones Alembic y elevar cobertura CI a ≥70%. | 🟡 2 sem | **P1** |
 
 ---
 
-### 🛠️ Stack Tecnológico Q1
+### 📐 Fase 3 — Data Lakehouse, Praxis Catalog, Workflows & Feature Store (Q3 2027)
 
-| Componente | Tecnología | Justificación |
-|-----------|-----------|---------------|
-| **NLP Clásico** | `transformers` (HuggingFace) + `datasets` | Estándar de facto. Fine-tuning de BERT/RoBERTa con Trainer API |
-| **Tokenización** | `tokenizers` (HuggingFace) | Tokenización rápida (Rust), integrada con transformers |
-| **Embeddings** | `sentence-transformers` (MiniLM-L6-v2) | Modelo ligero (80MB), CPU, ideal para embeddings + profiling |
-| **Vector Store** | PostgreSQL + `pgvector` | Reutiliza nuestra BD existente sin nuevo servicio |
-| **LLM Gateway** | LangChain + OpenAI API ó Ollama (local) | Abstracción de provider. Ollama para deployments air-gapped |
-| **NER/Entities** | `spaCy` (modelos `xx_ent_wiki_sm`) | Complemento a transformers para NER rápido sin GPU |
-| **Export** | `optimum` (HuggingFace) | Exportar modelos a ONNX para inferencia rápida en CPU |
+> 📖 Especificación técnica completa: [phase-3-lakehouse-catalog-workflows.md](roadmap/phase-3-lakehouse-catalog-workflows.md)
 
-### 🏗️ Impacto en la Arquitectura
+**Objetivo:** Incorporar el corazón de una plataforma estilo **Databricks**: datos versionados ACID sobre Object Storage sin estado local, catálogo unificado con linaje, orquestación de DAGs y Feature Store reutilizable.
 
-| Cambio | Detalle |
-|--------|---------|
-| **Nuevo paquete de rutas** | `app/api/routes/v1/nlp/` — training, inference, embeddings, assistant |
-| **Nuevo servicio** | `app/services/nlp_trainer.py` — Fine-tuning de transformers |
-| **Nuevo servicio** | `app/services/embedding_service.py` — Singleton SentenceTransformer |
-| **Nueva extensión PostgreSQL** | `CREATE EXTENSION vector;` en `infra/postgres/` |
-| **Nueva tabla** | `model_embeddings(id, tenant_id, model_id, embedding vector(384), metadata jsonb)` |
-| **Nuevo campo ORM** | `Dataset.column_types_analysis: JSON` |
-| **Celery task** | `app/worker/tasks/train_nlp.py` — Entrenamiento NLP asíncrono |
-| **Docker Compose** | Servicio opcional `ollama` para LLM local |
-| **Variables .env** | `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL_NAME`, `OLLAMA_BASE_URL` |
-
-### ⚠️ Riesgos Q1
-
-| Riesgo | Mitigación |
-|--------|-----------|
-| **Tamaño de modelos BERT** | BERT-base = ~440MB. Usar DistilBERT (260MB) como default. Export a ONNX reduce latencia 2-3x |
-| **GPU para fine-tuning** | DistilBERT puede fine-tunear en CPU (~30min para datasets pequeños). Para datasets >10K rows, GPU recomendada |
-| **Coste de API LLM** | Rate limiting por tenant (reutilizar `slowapi`), cache en Redis |
-| **Privacidad de datos** | Chatbot solo recibe metadatos, no datos. Ollama para deployments on-premise |
-| **pgvector performance** | Suficiente para <100K registros. Migrar a Qdrant solo si 1M+ |
+| Sub-fase | Entregables clave | Esfuerzo | Prioridad |
+|---|---|---|---|
+| **3.1 — Medallion Lakehouse (Delta Lake + DuckDB/Polars)** | Sustituir la carga completa en RAM (`pandas` + `BytesIO`) y el acoplamiento de `DVCService` a disco local por **tablas Delta Lake (`deltalake-rs`)** en MinIO/S3 con zonas **Bronze (raw) / Silver (clean/validated) / Gold (features/serving)**, Time Travel, Schema Evolution y motor out-of-core **DuckDB + Polars** detrás de una interfaz `DataEngine` (extensible a Spark / Ray Data / Iceberg). DVC queda como adaptador opcional solo para binarios no tabulares/volúmenes externos. | 🔴 3-4 sem | **P0** |
+| **3.2 — Praxis Catalog (Estilo Unity Catalog) & Lineage** | Namespace unificado de 3 niveles (`workspace.schema.asset`) cubriendo **Tables, Volumes (imágenes/docs/binarios), Features, Models y Prompts**. Sincronización automática con MLflow Registry. **Data & Model Lineage** end-to-end basado en estándar **OpenLineage** (qué tabla/versión generó qué feature y qué modelo). ACLs granulares (tabla/columna), tagging PII y enmascaramiento. | 🔴 3 sem | **P0** |
+| **3.3 — Praxis Workflows (Orquestador de DAGs)** | Motor de pipelines declarativos (YAML/JSON + UI visual de grafos): `Ingest → Validate/Profile → SQL/Python Transform → Feature Materialize → Train → Eval Gate → Promote → Batch Score`. Soporte de dependencias, retries exponenciales, backfills, alertas de fallo y triggers (cron, webhook o evento de nueva versión de tabla). Adaptador sobre Celery/Ray o Prefect/Temporal. | 🔴 3 sem | **P1** |
+| **3.4 — Praxis Feature Store (Offline + Online)** | Definición declarativa de Feature Views (SQL DuckDB o Python Polars), materialización versionada en tablas Gold (Offline) + sincronización incremental a **Redis** (Online, baja latencia) y **point-in-time joins** para eliminar *training-serving skew* entre entrenamiento e inferencia. | 🟡 2-3 sem | **P1** |
 
 ---
 
-## Fase 2 — Q2 2027: Computer Vision & Time Series
+### 📐 Fase 4 — Dedicated Model Serving, Interactive Workspace & Verticales CV/TS (Q4 2027)
 
-> 📖 Documentación detallada en: [`roadmap/phase-2-cv-timeseries.md`](roadmap/phase-2-cv-timeseries.md)
+> 📖 Especificación técnica completa: [phase-4-serving-workspace-verticals.md](roadmap/phase-4-serving-workspace-verticals.md) · [Detalle CV & Time Series](roadmap/phase-2-cv-timeseries.md)
 
-### 🎯 Objetivo
+**Objetivo:** Desacoplar el serving de producción de la API principal, habilitar la experiencia **Code-First (Notebooks + SQL + SDK/CLI + Asset Bundles)** y desplegar **Computer Vision** y **Time Series** como plugins limpios sobre la nueva arquitectura.
 
-Introducir dos verticales nuevas bajo sus propios dominios de ruta: **Computer Vision** (`/api/v1/cv/*`) con clasificación, segmentación semántica y detección de objetos; y **Time Series** (`/api/v1/timeseries/*`) con forecasting y detección de anomalías temporales. Adicionalmente, se integra OCR como puente entre documentos y datos tabulares.
-
----
-
-### 📍 Componentes — Computer Vision (`/api/v1/cv/*`)
-
-#### 2.1 — Image Classification (Fine-tuning)
-
-**Router:** `app/api/routes/v1/cv/training.py`
-
-```
-POST /api/v1/cv/train                → Entrenar clasificador de imágenes
-GET  /api/v1/cv/algorithms           → Listar arquitecturas disponibles
-GET  /api/v1/cv/training/status/{id} → Estado del entrenamiento
-```
-
-**Servicio:** `app/services/vision_trainer.py` — `VisionTrainer` con transfer learning:
-
-```python
-class VisionTrainer:
-    """Entrena modelos CV con fine-tuning de modelos pre-entrenados."""
-    
-    CLASSIFICATION_MODELS = {
-        "resnet18": models.resnet18,
-        "resnet50": models.resnet50,
-        "efficientnet_b0": models.efficientnet_b0,
-        "efficientnet_b3": models.efficientnet_b3,
-        "mobilenet_v3": models.mobilenet_v3_small,
-        "vit_b_16": models.vit_b_16,              # Vision Transformer
-        "convnext_tiny": models.convnext_tiny,     # ConvNeXt
-    }
-    
-    SEGMENTATION_MODELS = {
-        "deeplabv3_resnet50": models.segmentation.deeplabv3_resnet50,
-        "deeplabv3_resnet101": models.segmentation.deeplabv3_resnet101,
-        "fcn_resnet50": models.segmentation.fcn_resnet50,
-        "lraspp_mobilenet_v3": models.segmentation.lraspp_mobilenet_v3_large,
-    }
-
-    def train(self, dataset_path, algorithm, task_type="classification", ...):
-        if task_type == "classification":
-            model = self._get_pretrained_classifier(algorithm, num_classes)
-        elif task_type == "segmentation":
-            model = self._get_pretrained_segmentor(algorithm, num_classes)
-        # ... training loop con MLflow autolog, métricas IoU/mAP/accuracy ...
-```
-
-**Dataset format:** ZIP con estructura `ImageFolder` (`class_name/image.jpg`) para clasificación, o con máscaras (`images/` + `masks/`) para segmentación.
-
-#### 2.2 — Semantic Segmentation
-
-**Router:** `app/api/routes/v1/cv/segmentation.py`
-
-```
-POST /api/v1/cv/segment                → Segmentar una imagen
-POST /api/v1/cv/segment/batch          → Batch segmentation
-WS   /api/v1/cv/streaming/{model_id}   → Streaming segmentación en tiempo real
-```
-
-Segmentación semántica pixel-wise con modelos DeepLabV3, FCN, o U-Net custom registrados en `ModelFactory`. Métricas: IoU (Intersection over Union), Dice coefficient, pixel accuracy.
-
-**Integración con incertidumbre existente:** Los estimadores MC Dropout en [mc_dropout.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/core_ml/uncertainty/mc_dropout.py) ya soportan outputs `(B, C, H, W)` — funciona directamente con modelos de segmentación.
-
-#### 2.3 — Object Detection
-
-**Router:** `app/api/routes/v1/cv/detection.py`
-
-```
-POST /api/v1/cv/detect                → Detectar objetos en imagen
-POST /api/v1/cv/detect/batch          → Batch detection
-```
-
-Integra modelos YOLO (`ultralytics`) y modelos custom TorchScript. Output: bounding boxes + classes + confidence scores.
-
-#### 2.4 — Document Intelligence (OCR → DataFrame)
-
-Post-hook en `POST /api/v1/datasets/`: acepta PDFs/imágenes escaneadas y los convierte automáticamente a DataFrames tabulares via OCR + layout analysis.
+| Sub-fase | Entregables clave | Esfuerzo | Prioridad |
+|---|---|---|---|
+| **4.1 — Dedicated Model Serving Plane** | Extraer la inferencia fuera del proceso FastAPI hacia un Serving Plane dedicado (**Ray Serve** / contenedores de serving ONNX & TorchScript). Endpoints versionados independientes por modelo con **Traffic Splitting (A/B, Canary, Shadow)**, autoscaling / scale-to-zero, micro-batching dinámico e **Inference Tables** automáticas en Delta Lake (base para drift real y reentrenamiento). | 🔴 3 sem | **P0** |
+| **4.2 — AI Gateway v2 (Estilo Mosaic AI Gateway)** | Evolucionar `LLMGateway` con: fallback automático multi-provider, **semantic cache** (Redis/pgvector), **guardrails** de entrada/salida (redacción PII, detección de prompt injection), **Prompt Registry** versionado en Praxis Catalog y suite de evaluación sistemática RAG/LLM (`faithfulness`, `relevancy`, latencia TTFT/TBT). | 🟡 2 sem | **P1** |
+| **4.3 — Interactive Workspace: Notebooks, SQL Explorer, SDK & Asset Bundles** | **Notebooks integrados** (runtime efímero con **JupyterLab** por defecto y opción **Marimo**) conectados a Praxis Catalog, Feature Store y MLflow con PAT inyectado. **SQL & Data Explorer** interactivo sobre DuckDB/Delta en el navegador. **Python SDK (`praxisml-sdk`)**, **CLI (`praxis`)** y **Asset Bundles (`praxis.yml`)** para definir datasets, workflows, modelos y endpoints como código (GitOps). | 🔴 3-4 sem | **P0** |
+| **4.4 — Plugin Computer Vision (`/api/v1/cv/*`)** | Implementado como `CVPlugin` con dependencias opcionales `[cv]` en worker GPU: Image Classification (`torchvision`: ResNet, EfficientNet, ConvNeXt, ViT), Semantic Segmentation (DeepLabV3/FCN + mapas de incertidumbre existentes), Object Detection (`ultralytics` YOLO) y Document Intelligence (`docTR` OCR → tabla Bronze/Silver). | 🔴 3 sem | **P1** |
+| **4.5 — Plugin Time Series (`/api/v1/timeseries/*`)** | Implementado como `TimeSeriesPlugin` con dependencias opcionales `[ts]`: forecasting con stack Nixtla (`statsforecast`, `mlforecast`, `neuralforecast`), intervalos de confianza conformales/cuantiles, streaming rolling forecast y detección de anomalías temporales sobre tablas Delta. | 🟡 2-3 sem | **P1** |
 
 ---
 
-### 📍 Componentes — Time Series (`/api/v1/timeseries/*`)
+### 📐 Fase 5 — Smart Platform, Agentic Copilot & Cloud-Native Scale (Q1–Q2 2028)
 
-#### 2.5 — Time Series Training
+> 📖 Detalle técnico actualizado: [phase-3-smart-platform.md](roadmap/phase-3-smart-platform.md) · [phase-4-ai-devops.md](roadmap/phase-4-ai-devops.md)
 
-**Router:** `app/api/routes/v1/timeseries/training.py`
+**Objetivo:** Transformar la plataforma en un sistema **proactivo, autorregulado y listo para despliegue enterprise multi-nodo en la nube**.
 
-```
-POST /api/v1/timeseries/train            → Entrenar modelo de forecasting
-GET  /api/v1/timeseries/algorithms       → Listar algoritmos disponibles
-GET  /api/v1/timeseries/training/status/{id} → Estado del entrenamiento
-```
-
-**Servicio:** `app/services/timeseries_trainer.py`:
-
-```python
-class TimeSeriesTrainer:
-    """Entrena modelos de series temporales con MLflow autologging."""
-    
-    ALGORITHMS = {
-        # --- Clásicos (statsforecast) ---
-        "arima":          {"lib": "statsforecast", "class": "AutoARIMA"},
-        "ets":            {"lib": "statsforecast", "class": "AutoETS"},
-        "theta":          {"lib": "statsforecast", "class": "AutoTheta"},
-        "ces":            {"lib": "statsforecast", "class": "AutoCES"},
-        # --- ML-based ---
-        "lightgbm_ts":    {"lib": "mlforecast",    "class": "LGBMRegressor"},
-        "xgboost_ts":     {"lib": "mlforecast",    "class": "XGBRegressor"},
-        # --- Deep Learning (neuralforecast) ---
-        "nbeats":         {"lib": "neuralforecast", "class": "NBEATS"},
-        "nhits":          {"lib": "neuralforecast", "class": "NHITS"},
-        "tft":            {"lib": "neuralforecast", "class": "TFT"},
-        "patchtst":       {"lib": "neuralforecast", "class": "PatchTST"},
-    }
-    
-    def train(self, df, time_column, target_column, algorithm="arima",
-              horizon=24, freq="H", hyperparams=None, ...):
-        # 1. Validar formato: df debe tener columna temporal + target numérico
-        # 2. Feature engineering: lag features, rolling stats, calendar features
-        # 3. Train/test split temporal (no aleatorio)
-        # 4. Entrenar con MLflow autolog
-        # 5. Métricas: MAE, RMSE, MAPE, SMAPE, MASE
-```
-
-**Dataset format:** CSV con al menos una columna temporal (`datetime`) y una columna target numérica. Opcionalmente columnas exógenas.
-
-#### 2.6 — Time Series Forecasting (Inference)
-
-**Router:** `app/api/routes/v1/timeseries/forecast.py`
-
-```
-POST /api/v1/timeseries/forecast           → Generar pronóstico N pasos adelante
-POST /api/v1/timeseries/forecast/streaming  → Streaming forecast (rolling window)
-GET  /api/v1/timeseries/forecast/{id}       → Obtener predicción con intervalos de confianza
-```
-
-Output enriquecido: predicción puntual + **intervalos de confianza** (conformal prediction o quantile regression) + componentes de la serie (tendencia, estacionalidad).
-
-#### 2.7 — Time Series Anomaly Detection
-
-**Router:** `app/api/routes/v1/timeseries/anomalies.py`
-
-```
-POST /api/v1/timeseries/anomalies          → Detectar anomalías en serie temporal
-PATCH /api/v1/timeseries/anomalies/config  → Configurar sensibilidad
-```
-
-Detecta puntos anómalos via residuos del modelo + thresholds estadísticos (Z-score, IQR) o modelos dedicados (Isolation Forest temporal).
+| Sub-fase | Entregables clave | Esfuerzo | Prioridad |
+|---|---|---|---|
+| **5.1 — Model Recommender & Distributed AutoML** | `ModelRecommender` basado en meta-features del Praxis Catalog + historial MLflow + embeddings `pgvector`. **AutoML distribuido** ejecutado como DAG de Praxis Workflows / Ray Tune (trials paralelos con budget cap y estimación de coste previa) con promoción automática a Staging. | 🔴 3 sem | **P1** |
+| **5.2 — Predictive Drift & Lakehouse Data Quality** | Monitorización continua leyendo automáticamente las **Inference Tables** (Fase 4.1); forecasting de PSI/KS con `statsforecast` para alertar 3–7 días antes del umbral crítico; **Data Quality Expectations** (Great Expectations / PyOD) en pipelines Bronze → Silver. | 🟡 2-3 sem | **P1** |
+| **5.3 — Intelligent Model Gate & AI Test Generation** | Evolución de `model_ci.yml` con score holístico (métricas + drift + latencia serving + `fairlearn` fairness + coste FinOps + linaje verificado). Generación asistida de tests en PRs con validación de calidad (cobertura de líneas nuevas, no-flaky, Ruff). | 🟡 2 sem | **P2** |
+| **5.4 — Full-Environment Agentic Copilot & MCP** | Agente transversal con acciones gobernadas sobre **todo el entorno** (Lakehouse SQL, Catalog/Lineage, Workflows, Feature Store, Training/AutoML multi-dominio, Serving Canary/Rollback, Notebooks, Asset Bundles, Observabilidad y Admin). Descubrimiento dinámico desde `CopilotToolRegistry`, **PolicyEngine de 4 niveles** (Tier 0–3 con aprobación Human-in-the-Loop para producción/destructivos), modos de privacidad `strict_metadata_only` vs. `governed_analyst` (PII masked), defensa contra *indirect prompt injection*, auditoría en `audit_log` y exposición **MCP (`/api/v1/mcp`)**. | 🔴 3-4 sem | **P1** |
+| **5.5 — Cloud-Native Scale & BYOC** | **Helm Charts** oficiales para Kubernetes, autoscaling con **KEDA** por profundidad de colas Redis/tráfico Serving/GPU, plantillas **Terraform** (AWS/GCP/Azure), **Resource Optimizer** (predicción de carga y detección de GPUs infrautilizadas/modelos zombie) y soporte de **BYOC (Bring Your Own Cloud)** separando Control Plane SaaS del Compute Plane en la VPC del cliente. | 🔴 3-4 sem | **P1** |
 
 ---
 
-### 🛠️ Stack Tecnológico Q2
+## 4. Cronograma Ejecutivo y Dependencias
 
-| Componente | Tecnología | Justificación |
-|-----------|-----------|---------------|
-| **Image Classification** | `torchvision.models` (pretrained) + fine-tuning | Ya tenemos PyTorch. Incluye ViT, ConvNeXt, EfficientNet |
-| **Segmentation** | `torchvision.models.segmentation` (DeepLabV3, FCN) | Modelos pre-entrenados integrados en torchvision |
-| **Object Detection** | `ultralytics` (YOLOv8/v11) | API limpia, TorchScript export, MLflow compatible |
-| **Image Augmentation** | `albumentations` | Augmentation para clasificación + segmentación (masks) |
-| **OCR** | `docTR` (Apache 2.0) | Layout analysis + OCR nativo. Modelos ~200MB |
-| **TS Clásica** | `statsforecast` (Nixtla) | ARIMA/ETS/Theta ultrarrápidos. 100x más rápido que `statsmodels` |
-| **TS ML** | `mlforecast` (Nixtla) | LightGBM/XGBoost con feature engineering temporal automático |
-| **TS Deep Learning** | `neuralforecast` (Nixtla) | N-BEATS, N-HiTS, TFT, PatchTST — state-of-the-art |
-| **TS Plotting** | `utilsforecast` | Visualización de forecasts con intervalos de confianza |
-
-### 🏗️ Impacto en la Arquitectura
-
-| Cambio | Detalle |
-|--------|---------|
-| **Nuevo paquete CV** | `app/api/routes/v1/cv/` — training, segmentation, detection |
-| **Nuevo paquete TS** | `app/api/routes/v1/timeseries/` — training, forecast, anomalies |
-| **Nuevo servicio** | `app/services/vision_trainer.py` — Clasificación + Segmentación |
-| **Nuevo servicio** | `app/services/timeseries_trainer.py` — Forecasting + anomalías |
-| **Nuevo servicio** | `app/services/document_intelligence.py` — OCR + tablas |
-| **Extensión ORM `Dataset`** | Nuevo campo `data_type: str` (values: `tabular`, `image`, `timeseries`, `document`) |
-| **Celery tasks** | `train_vision.py`, `train_timeseries.py` |
-| **Frontend** | `SegmentationViewer.tsx`, `DetectionViewer.tsx`, `ForecastChart.tsx` |
-| **`hyperparams.py`** | Nuevas secciones `CV_ALGORITHMS`, `TIMESERIES_ALGORITHMS` |
-
-### ⚠️ Riesgos Q2
-
-| Riesgo | Mitigación |
-|--------|-----------|
-| **GPU para CV** | Segmentación y clasificación requieren GPU para fine-tuning. Ofrecer modelos ligeros (MobileNet, EfficientNet-B0) como fallback CPU |
-| **Tamaño de modelos** | DeepLabV3 = ~200MB, YOLO = ~40MB. `ModelCache` existente con LRU eviction |
-| **Datasets de imagen pesados** | Quotas por `file_size_bytes`. Thumbnails automáticos en MinIO para UI |
-| **Frecuencia en TS** | El usuario debe especificar frecuencia (H, D, W, M). Auto-detección con `pd.infer_freq` como fallback |
-| **Nixtla ecosystem** | statsforecast + mlforecast + neuralforecast comparten API. Si una falla, las otras son drop-in replacements |
+| Horizonte | Fase | Foco Principal | Prerrequisito clave |
+|---|---|---|---|
+| **Completado ✅** | **Fase 0** | Observabilidad, Cost Tracking, Alertas, API Tabular | — |
+| **Completado ✅** | **Fase 1** | NLP Engine (Transformers + ONNX + pgvector + vLLM RAG) | Fase 0 |
+| **Q2 2027** | **Fase 2** | **Core Modular (Plugins), Compute Plane, Event Bus, RLS/PAT/Audit, App Router** | Fases 0–1 |
+| **Q3 2027** | **Fase 3** | **Delta Lakehouse (DuckDB/Polars), Praxis Catalog + Lineage, Workflows DAGs, Feature Store** | Fase 2 |
+| **Q4 2027** | **Fase 4** | **Dedicated Model Serving, AI Gateway v2, Notebooks/SDK/Bundles, Plugins CV & Time Series** | Fases 2–3 |
+| **Q1–Q2 2028** | **Fase 5** | **Recommender/AutoML, Predictive Drift, Intelligent Gate, Agentic Copilot, K8s/Helm/KEDA/BYOC** | Fases 3–4 |
 
 ---
 
-## Fase 3 — Q3 2027: Recommendation Engine & Predictive Analytics
-
-> 📖 Documentación detallada en: [`roadmap/phase-3-smart-platform.md`](roadmap/phase-3-smart-platform.md)
-
-### 🎯 Objetivo
-
-Convertir PraxisML de una herramienta de ML **reactiva** (el usuario pide, la plataforma ejecuta) a una plataforma **proactiva** que sugiere, predice y optimiza automáticamente:
-
-1. **Sistema de Recomendación de Modelos** — Dado un dataset, recomendar el mejor algoritmo, hiperparámetros y pipeline de preprocesamiento.
-2. **AutoML Lite** — Entrenamiento automático de N configuraciones y selección del mejor modelo.
-3. **Predictive Monitoring** — Predecir cuándo un modelo en producción sufrirá drift, antes de que ocurra.
-4. **Anomaly Detection en Ingesta** — Detectar datos anómalos al subir datasets.
-
----
-
-### 📍 Puntos de Integración en la Arquitectura Actual
-
-#### 3.1 — Recommendation Engine para Modelos
-
-**Punto de entrada:** [training.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/api/routes/v1/tabular/training.py) → `POST /api/v1/tabular/training/train`
-
-Actualmente, el usuario elige manualmente `algorithm`, `task_type`, e `hyperparams`. El sistema tiene ya un registry exhaustivo en [hyperparams.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/core_ml/hyperparams.py) con defaults por algoritmo.
-
-**Propuesta:**
-```python
-# Nuevo endpoint: POST /api/v1/training/recommend
-@router.post("/training/recommend")
-def recommend_training_config(
-    dataset_id: str,
-    task_type: str,  # classification | regression
-    db: Session = Depends(get_db),
-    current_tenant: Tenant = Depends(get_current_tenant),
-):
-    """
-    Analiza el dataset y recomienda los top-3 algoritmos + hiperparámetros.
-    Basado en: meta-features del dataset + historial de entrenamientos del tenant.
-    """
-    from app.services.recommendation_engine import ModelRecommender
-    
-    recommender = ModelRecommender()
-    
-    # 1. Extraer meta-features del dataset
-    # (n_rows, n_cols, n_categoricals, n_numericals, class_balance, ...)
-    meta_features = recommender.extract_meta_features(dataset)
-    
-    # 2. Consultar historial de entrenamientos (MLflow experiments del tenant)
-    past_experiments = mlflow_svc.search_runs(
-        experiment_name=f"tenant_{current_tenant.id}_training"
-    )
-    
-    # 3. Usar meta-learning para rankear algoritmos
-    recommendations = recommender.recommend(meta_features, past_experiments)
-    
-    return {
-        "recommendations": [
-            {
-                "algorithm": "gradient_boosting",
-                "confidence": 0.87,
-                "suggested_hyperparams": {"n_estimators": 200, "max_depth": 5},
-                "reasoning": "Dataset con 15 features numéricas, sin missing values, alta cardinalidad → tree-based models excel"
-            },
-            # ...
-        ]
-    }
-```
-
-**Fuentes de señal para el recommender:**
-
-| Señal | Fuente en PraxisML | Uso |
-|-------|-------------------|-----|
-| Meta-features del dataset | `Dataset.num_rows`, `num_columns`, `column_types_analysis` (Q1) | Reglas heurísticas + modelo de meta-learning |
-| Historial del tenant | MLflow experiments con métricas de test | Collaborative filtering: "usuarios con datasets similares obtuvieron buenos resultados con X" |
-| Registry de hiperparámetros | [hyperparams.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/core_ml/hyperparams.py) | Defaults optimizados por algoritmo |
-| Embeddings del dataset (Q1) | `model_embeddings` tabla pgvector | Similarity search: "datasets similares al tuyo usaron Y" |
-
-#### 3.2 — AutoML Lite
-
-**Punto de entrada:** Nuevo Celery task `app/worker/tasks/automl.py`
-
-**Propuesta:**
-- El usuario lanza un "AutoTrain" que automáticamente:
-  1. Ejecuta el recommender (3.1) para obtener los top-5 algoritmos
-  2. Para cada algoritmo, lanza un entrenamiento via Celery task existente
-  3. Compara resultados y promueve el mejor modelo a `Staging`
-
-```python
-# worker/tasks/automl.py
-@celery_app.task(bind=True)
-def automl_train(self, tenant_id, dataset_id, task_type, target_column):
-    """Entrenamiento automático: prueba múltiples algoritmos y selecciona el mejor."""
-    recommender = ModelRecommender()
-    meta_features = recommender.extract_meta_features(dataset)
-    top_algorithms = recommender.recommend(meta_features)
-    
-    results = []
-    for algo in top_algorithms[:5]:
-        # Reutilizar SklearnTrainer existente
-        trainer = SklearnTrainer(tenant_id)
-        result = trainer.train(df, target_column, algo["algorithm"], task_type, algo["hyperparams"])
-        results.append(result)
-    
-    # Seleccionar mejor por métrica principal
-    best = max(results, key=lambda r: r["metrics"].get("f1", r["metrics"].get("r2", 0)))
-    
-    # Promover automáticamente a Staging
-    mlflow_svc.promote_model(best["mlflow_run_id"], stage="Staging")
-    return best
-```
-
-#### 3.3 — Predictive Drift Monitoring
-
-**Punto de entrada:** [drift.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/api/routes/v1/drift.py) → endpoints de drift
-
-Actualmente, el drift se calcula **on-demand** (cuando el usuario solicita un reporte). No hay monitorización proactiva.
-
-**Propuesta:**
-- **Celery Beat scheduler** que ejecuta drift checks periódicos (cada 6h) para modelos en `stage=Production`.
-- **Modelo predictivo de drift**: entrenar un modelo de series temporales (Prophet o simple ARIMA) sobre el historial de métricas PSI/KS para **predecir cuándo el drift superará el umbral**.
-
-```python
-# Nuevo: app/worker/tasks/drift_monitor.py
-@celery_app.task
-def scheduled_drift_check():
-    """Chequeo periódico de drift para modelos en producción."""
-    db = SessionLocal()
-    production_models = db.query(MLModel).filter(MLModel.stage == "Production").all()
-    
-    for model in production_models:
-        drift_report = calculate_drift(model)
-        
-        # Almacenar histórico de drift
-        store_drift_timeseries(model.id, drift_report)
-        
-        # Predecir drift futuro
-        forecast = predict_future_drift(model.id)
-        
-        if forecast["days_until_critical"] < 7:
-            # Enviar alerta via webhook / notificación
-            send_drift_alert(model, forecast)
-```
-
-**Impacto en el frontend:**
-- Nuevo panel `DriftForecast.tsx` con gráfico de tendencia de PSI/KS + predicción.
-
-#### 3.4 — Anomaly Detection en Ingesta
-
-**Punto de entrada:** [datasets.py](file:///home/fyrthuz/Desktop/PraxisML/backend/app/api/routes/v1/datasets.py) → `POST /api/v1/datasets/`
-
-**Propuesta:**
-- Al subir un dataset, ejecutar Isolation Forest o Autoencoder para detectar filas anómalas.
-- Reportar al usuario el % de anomalías antes de entrenar.
-
----
-
-### 🛠️ Stack Tecnológico Q3
-
-| Componente | Tecnología | Justificación |
-|-----------|-----------|---------------|
-| **Meta-learning** | `meta-learn` library ó custom heurísticas | Para recomendar algoritmos basado en meta-features |
-| **AutoML orchestration** | Celery chains/chords | Reutilizar infraestructura existente de tareas async |
-| **Time-series forecasting** | `statsforecast` (Nixtla) ó `prophet` | Para predicción de drift. Statsforecast es más ligero |
-| **Anomaly detection** | `PyOD` (Python Outlier Detection) | Implementa IsolationForest, Autoencoders, LOF — API unificada |
-| **Notifications** | Webhooks + `redis` pub/sub | Alertas de drift → canal de Slack / email |
-
-### 🏗️ Impacto en la Arquitectura
-
-| Cambio | Detalle |
-|--------|---------|
-| **Celery Beat** | Añadir `celerybeat-schedule` en docker-compose para tareas periódicas |
-| **Nueva tabla** | `drift_history(id, model_id, timestamp, psi_values jsonb, ks_values jsonb)` |
-| **Nuevos servicios** | `recommendation_engine.py`, `drift_predictor.py`, `anomaly_detector.py` |
-| **Redis pub/sub** | Canal `praxisml:alerts` para notificaciones en tiempo real al frontend |
-| **Frontend** | Nuevo tab `DriftForecast`, badge de alertas en Sidebar, panel de anomalías en upload |
-
-### ⚠️ Riesgos Q3
-
-| Riesgo | Mitigación |
-|--------|-----------|
-| **Cold start del recommender** | Sin historial de entrenamientos suficiente, las recomendaciones serán genéricas. Seed con benchmarks públicos (OpenML) |
-| **Falsos positivos en anomalías** | Permitir al usuario configurar sensibilidad. Nunca bloquear upload, solo advertir |
-| **Carga de Celery Beat** | Drift checks para muchos modelos en producción pueden saturar workers. Limitar a 1 check/modelo/6h y usar concurrency del worker |
-| **Privacidad en meta-learning** | Los meta-features son estadísticos (n_rows, variance, etc.), no contienen datos reales → bajo riesgo |
-
----
-
-## Fase 4 — Q4 2027: AI-Powered DevOps & Platform Intelligence
-
-> 📖 Documentación detallada en: [`roadmap/phase-4-ai-devops.md`](roadmap/phase-4-ai-devops.md)
-
-### 🎯 Objetivo
-
-Cerrar el ciclo de madurez de la plataforma transformando la operación en un sistema **autoregulado**:
-
-1. **AI-Generated Tests** — Generación automática de tests unitarios e integración para nuevos servicios.
-2. **Intelligent CI/CD Pipeline** — El pipeline de CI decide automáticamente si un modelo puede promocionarse basándose en múltiples señales.
-3. **Cost & Resource Optimization** — Predicción de costes de inferencia y autoescalado basado en patrones de uso.
-4. **Platform Copilot** — Evolución del chatbot Q1 a un copilot que ejecuta acciones (entrena modelos, actualiza thresholds, promueve).
-
----
-
-### 📍 Puntos de Integración en la Arquitectura Actual
-
-#### 4.1 — AI-Generated Tests
-
-**Punto de entrada:** [ci.yml](file:///home/fyrthuz/Desktop/PraxisML/.github/workflows/ci.yml) + directorio `tests/`
-
-La cobertura actual es del **30%** (como detectó la auditoría). Áreas sin tests: `streaming.py`, `training_service.py`, `mlflow_service.py`.
-
-**Propuesta:**
-- Integrar un agente LLM en el workflow de CI que:
-  1. Detecta archivos cambiados en el PR
-  2. Analiza las funciones modificadas
-  3. Genera tests usando patrones del directorio `tests/` existente como few-shot examples
-  4. Los tests generados se añaden como sugerencia al PR (no auto-merge)
-
-```yaml
-# .github/workflows/ai_tests.yml
-- name: Generate AI Tests
-  uses: custom-action/ai-test-gen@v1
-  with:
-    model: "gpt-4o"
-    context_files: "backend/tests/"
-    changed_files: ${{ steps.changed.outputs.files }}
-    output: "tests/ai_generated/"
-```
-
-#### 4.2 — Intelligent Model Gate (CI/CD)
-
-**Punto de entrada:** [model_ci.yml](file:///home/fyrthuz/Desktop/PraxisML/.github/workflows/model_ci.yml)
-
-El workflow actual compara métricas con thresholds estáticos. Expandir con análisis multidimensional:
-
-**Propuesta:**
-```python
-# scripts/intelligent_gate.py
-def evaluate_model_promotion(run_id: str, target_stage: str) -> Dict:
-    """
-    Evaluación holística para promoción de modelos.
-    Combina: métricas, drift, coste de inferencia, fairness.
-    """
-    metrics = mlflow.get_run(run_id).data.metrics
-    
-    checks = {
-        "performance": metrics["test_f1"] > 0.85,
-        "no_drift": latest_drift_psi < 0.2,
-        "latency_ok": avg_inference_time_ms < 100,
-        "fairness": demographic_parity_diff < 0.1,
-        "resource_budget": estimated_monthly_cost < tenant_budget,
-    }
-    
-    # Score ponderado
-    score = sum(w * checks[k] for k, w in WEIGHTS.items())
-    recommendation = "APPROVE" if score > 0.8 else "REVIEW" if score > 0.5 else "REJECT"
-    
-    return {"checks": checks, "score": score, "recommendation": recommendation}
-```
-
-#### 4.3 — Platform Copilot (Agentic AI)
-
-**Punto de entrada:** Evolución del router `assistant.py` (Q1) a un agente con capacidad de ejecución.
-
-**Propuesta:** Usar LangChain Agents con tools que mapean a la API interna de PraxisML:
-
-```python
-# app/services/copilot_service.py
-from langchain.agents import AgentExecutor, create_tool_calling_agent
-from langchain.tools import StructuredTool
-
-# Definir tools que el LLM puede invocar
-tools = [
-    StructuredTool.from_function(
-        func=train_model,
-        name="train_model",
-        description="Entrena un modelo ML. Parámetros: dataset_id, algorithm, task_type",
-    ),
-    StructuredTool.from_function(
-        func=check_drift,
-        name="check_drift",
-        description="Verifica drift de un modelo en producción",
-    ),
-    StructuredTool.from_function(
-        func=promote_model,
-        name="promote_model",
-        description="Promueve un modelo a Production o lo archiva",
-    ),
-    StructuredTool.from_function(
-        func=get_predictions_history,
-        name="get_predictions",
-        description="Obtiene el historial de predicciones de un modelo",
-    ),
-]
-
-# El copilot puede ejecutar secuencias:
-# "Entrena un RandomForest con el dataset X, si el F1 > 0.9, promuévelo a producción"
-```
-
-**Seguridad del Copilot:**
-- El copilot hereda los permisos RBAC del usuario autenticado.
-- Acciones destructivas (DELETE, promote a Production) requieren confirmación explícita.
-- Audit log de todas las acciones del copilot en la tabla `audit_log`.
-
-#### 4.4 — Resource Optimization
-
-**Punto de entrada:** Prometheus métricas + Grafana dashboards existentes
-
-**Propuesta:**
-- Analizar métricas de Prometheus (latencia de inferencia, uso de CPU/RAM por tenant, cola de Celery) con un modelo simple de forecasting.
-- Dashboard de Grafana con paneles de predicción de carga.
-- Alertas proactivas: "El tenant X ha duplicado sus predicciones diarias en la última semana. Considerar aumentar concurrency del worker."
-
----
-
-### 🛠️ Stack Tecnológico Q4
-
-| Componente | Tecnología | Justificación |
-|-----------|-----------|---------------|
-| **Agentic AI** | LangChain Agents + LangGraph | Framework estándar para agentes con tools. LangGraph para flujos multi-step |
-| **AI Test Generation** | OpenAI API / Claude + `pytest` templates | Generar tests usando LLM contextualizado con el codebase |
-| **Fairness / Bias** | `fairlearn` (Microsoft) | Métricas de fairness integradas en el gate de promoción |
-| **Cost Estimation** | Custom model basado en latencia medida + token usage | Estimar coste mensual por modelo/tenant |
-| **Audit Log** | Nueva tabla PostgreSQL `audit_log` | Trazabilidad de acciones del copilot |
-
-### 🏗️ Impacto en la Arquitectura
-
-| Cambio | Detalle |
-|--------|---------|
-| **Nueva tabla** | `audit_log(id, tenant_id, user_id, action, params jsonb, result jsonb, timestamp, source)` — source: `user` / `copilot` / `ci` |
-| **Nuevo servicio** | `app/services/copilot_service.py` — LangChain Agent con tools PraxisML |
-| **Extensión CI/CD** | Nuevo workflow `ai_tests.yml` + script `intelligent_gate.py` |
-| **Nuevo middleware** | Interceptor de requests del copilot para audit log |
-| **Frontend** | Chat widget integrado en la Sidebar con historial de conversaciones. Botón de "approve/reject" para acciones del copilot |
-| **Grafana** | Nuevos dashboards de predicción de carga y cost tracker por tenant |
-
-### ⚠️ Riesgos Q4
-
-| Riesgo | Mitigación |
-|--------|-----------|
-| **Copilot ejecuta acciones no deseadas** | Confirmación explícita obligatoria para `promote`, `delete`, `archive`. Logging exhaustivo |
-| **Coste de LLM para CI** | Limitar generación de tests a PRs que tocan archivos críticos (services, core_ml). Cache de tests generados |
-| **Hallucinations del LLM** | Los tools del copilot validan inputs internamente. Si el LLM pide "entrenar con algoritmo inexistente", el tool falla gracefully |
-| **Adoption del equipo** | El copilot es opt-in. No reemplaza la UX existente, la complementa |
-
----
-
-## 📊 Resumen Ejecutivo del Roadmap
-
-```mermaid
-gantt
-    title PraxisML v2.x — AI Evolution Roadmap
-    dateFormat  YYYY-MM
-    axisFormat  %b %Y
-
-    section Fase 0 — Observabilidad
-    UsageCollector + DB Schema   :f0a, 2027-01, 1M
-    Prometheus Custom Metrics    :f0b, 2027-01, 1M
-    CostCalculator               :f0c, 2027-02, 1M
-    API Endpoints                :f0d, 2027-02, 1M
-    Grafana Dashboards           :f0e, 2027-03, 1M
-    Alertas + Budget             :f0f, 2027-03, 1M
-    
-    section Q1 — NLP Engine
-    NLP Trainer (BERT/RoBERTa)  :a1, 2027-01, 2M
-    NLP Inference + Streaming   :a2, 2027-01, 2M
-    Semantic Search (pgvector)  :a3, 2027-02, 1M
-    LLM Gateway / Chatbot RAG  :a4, 2027-02, 2M
-    NLP Profiler para Datasets  :a5, 2027-03, 1M
-    
-    section Q2 — CV & Time Series
-    CV Classification (training):b1, 2027-04, 2M
-    CV Segmentation (DeepLabV3) :b2, 2027-04, 2M
-    Object Detection (YOLO)     :b3, 2027-05, 1M
-    TS Training (Nixtla stack)  :b4, 2027-04, 2M
-    TS Forecast + Anomalies     :b5, 2027-05, 2M
-    Document Intelligence (OCR) :b6, 2027-06, 1M
-    
-    section Q3 — Smart Platform
-    Model Recommender           :c1, 2027-07, 2M
-    AutoML Lite                 :c2, 2027-08, 2M
-    Predictive Drift Monitor    :c3, 2027-07, 3M
-    Anomaly Detection (ingesta) :c4, 2027-08, 1M
-    
-    section Q4 — AI DevOps
-    AI Test Generation          :d1, 2027-10, 2M
-    Intelligent Model Gate      :d2, 2027-10, 1M
-    Platform Copilot (Agentic)  :d3, 2027-10, 3M
-    Cost & Resource Optimizer   :d4, 2027-11, 2M
-```
-
-### Mapa de Rutas por Dominio (Estado Final)
-
-| Dominio | Prefijo de Ruta | Routers | Fase |
-|---------|----------------|---------|------|
-| **Tabular** | `/api/v1/tabular/*` | training, predictions, preprocessing, streaming, drift | Existente (renombrado) |
-| **NLP** | `/api/v1/nlp/*` | training, inference, embeddings, assistant | Q1 |
-| **Computer Vision** | `/api/v1/cv/*` | training, segmentation, detection | Q2 |
-| **Time Series** | `/api/v1/timeseries/*` | training, forecast, anomalies | Q2 |
-| **Plataforma** | `/api/v1/*` | datasets, models, auth, tenants, users, profiling | Existente |
-| **Observabilidad** | `/api/v1/observability/*` | usage, costs, drift/history, alerts, health-reports | **Fase 0** |
-
-### Inversión Tecnológica Acumulativa
-
-| Fase | Nuevos Servicios | Nuevas Tablas | Nuevas Dependencias | Infra |
-|------|-----------------|--------------|--------------------|----|
-| **Fase 0** | 3 (usage_collector, cost_calculator, alert_engine) | 4 (usage_metrics, cost_records, drift_history, alert_config) | prometheus_client (ya presente), redis (ya presente) | — |
-| Q1 | 3 (nlp_trainer, embedding_svc, nlp_profiler) | 1 (model_embeddings) | transformers, sentence-transformers, langchain, spaCy, optimum, pgvector | pgvector ext, Ollama opcional |
-| Q2 | 3 (vision_trainer, timeseries_trainer, document_intelligence) | 0 | albumentations, ultralytics, docTR, statsforecast, mlforecast, neuralforecast | GPU worker opcional |
-| Q3 | 3 (recommendation_engine, drift_predictor, anomaly_detector) | 1 (drift_history) + reutiliza F0 | pyod | Celery Beat scheduler |
-| Q4 | 1 (copilot_service) | 1 (audit_log) | langchain-agents, langgraph, fairlearn | — |
-
----
-
-### Decisiones Clave Resueltas
-
-> ✅ **Decisiones ya tomadas:**
-
-1. **Arquitectura:** Monolito modular FastAPI (no microservicios) con rutas organizadas por dominio vertical.
-2. **Migración Tabular:** Mantener endpoints actuales como aliases de compatibilidad con headers de deprecation.
-3. **Workers:** Un solo worker con queues específicas (gpu, cpu) en lugar de workers separados por dominio.
-4. **GPU:** Opcional para Tabular (MLP), requerida para NLP (fine-tuning BERT) y CV (segmentación/clasificación).
-5. **Observability Frontend:** Integrar métricas de observabilidad en el frontend Next.js como nuevo tab "Observability".
-6. **LLM Provider:** Decision pendiente (OpenAI vs Ollama) — afecta a Q1 y Q4.
-7. **Presupuesto LLM:** Decision pendiente — determina rate limiting.
-8. **Prioridad CV:** Decision pendiente (clasificación vs segmentación primero).
-9. **Time Series DL:** Decision pendiente (neuralforecast desde inicio o solo clásicos + ML).
-
----
-
-### 📋 Plan de Ejecución Detallado
-
-#### ✅ Fase 0 — Observability (Completado)
-- [x] 5 modelos ORM (UsageMetric, CostRecord, DriftHistory, AlertConfig, ResourcePricing)
-- [x] 12 métricas Prometheus custom
-- [x] UsageCollector + CostCalculator con precios dinámicos
-- [x] AlertEngine + Celery Beat + scheduled checks
-- [x] 6 dashboards Grafana nuevos + 5 existentes enriquecidos
-- [x] 14 endpoints REST funcionales
-- [x] Tests: 49 unitarios + 24 integración pasando
-- [x] Migración Alembic con seed de precios
-
-#### 🔄 Fase 0.5 — Frontend Observability ✅ COMPLETADO
-**Objetivo:** Integrar métricas de observabilidad en el dashboard Next.js
-
-**Completado:**
-- [x] Crear `useObservability.ts` hook (fetch usage, costs, alerts, pricing, health)
-- [x] Crear `ObservabilityTab.tsx` con 5 sub-tabs (Overview, Usage, Costs, Alerts, Pricing)
-- [x] Añadir "Observability" al Sidebar con icono Activity
-- [x] Integrar en DashboardMVP
-- [x] 12 tipos TypeScript nuevos en api.ts
-- [x] TypeScript compila sin errores
-
-**Endpoints backend a consumir:**
-- `GET /api/v1/observability/usage`
-- `GET /api/v1/observability/costs`
-- `GET /api/v1/observability/costs/forecast`
-- `GET /api/v1/observability/alerts`
-- `GET /api/v1/observability/drift/history/{model_id}`
-
-#### 🔄 Fase 0.6 — Reorganización API Tabular ✅ COMPLETADO
-**Objetivo:** Mover rutas tabulares a dominio `/api/v1/tabular/`
-
-**Completado:**
-- [x] Crear carpeta `app/api/routes/v1/tabular/`
-- [x] Mover `training.py`, `predictions.py`, `preprocessing.py`, `streaming.py`
-- [x] Registrar routers con prefijo `/api/v1/tabular/` en main.py
-- [x] Añadir aliases de compatibilidad con `include_in_schema=False`
-- [x] 10 tests nuevos (rutas dominiales + compatibilidad + OpenAPI)
-- [x] Frontend actualizado a rutas `/tabular/*`
-
-**Estructura resultante:**
-```
-app/api/routes/v1/
-├── tabular/
-│   ├── training.py          → /api/v1/tabular/training/*
-│   ├── predictions.py       → /api/v1/tabular/predictions/*
-│   ├── preprocessing.py     → /api/v1/tabular/preprocessing/*
-│   └── streaming.py         → /api/v1/tabular/streaming/*
-├── observability/           → /api/v1/observability/*
-├── models.py                → /api/v1/models/* (cross-domain)
-├── datasets.py              → /api/v1/datasets/* (cross-domain)
-└── ...                      (otros cross-domain)
-```
-
-#### 📅 Fase 1 — NLP Engine (Q1 2027)
-**Objetivo:** Introducir NLP como vertical completa
-
-**Archivos a crear:**
-- `app/api/routes/v1/nlp/training.py`
-- `app/api/routes/v1/nlp/inference.py`
-- `app/api/routes/v1/nlp/embeddings.py`
-- `app/api/routes/v1/nlp/assistant.py`
-- `app/services/nlp_trainer.py`
-- `app/services/embedding_service.py`
-- `app/services/llm_gateway.py`
-- `app/worker/tasks/train_nlp.py`
-
-**Nuevas dependencias:**
-- `transformers` (HuggingFace)
-- `sentence-transformers`
-- `langchain`
-- `spaCy`
-- `optimum` (ONNX export)
-- PostgreSQL extension: `pgvector`
-
-**Infraestructura:**
-- Servicio opcional `ollama` en docker-compose
-- GPU recomendada para fine-tuning BERT
-
-#### 📅 Fase 2 — CV & Time Series (Q2 2027)
-**Objetivo:** Introducir Computer Vision y Time Series
-
-**Archivos a crear:**
-- `app/api/routes/v1/cv/training.py`
-- `app/api/routes/v1/cv/inference.py`
-- `app/api/routes/v1/cv/segmentation.py`
-- `app/api/routes/v1/cv/detection.py`
-- `app/api/routes/v1/timeseries/training.py`
-- `app/api/routes/v1/timeseries/forecast.py`
-- `app/api/routes/v1/timeseries/anomalies.py`
-- `app/services/vision_trainer.py`
-- `app/services/timeseries_trainer.py`
-
-**Nuevas dependencias:**
-- `torchvision` (CV models)
-- `ultralytics` (YOLO)
-- `albumentations` (augmentation)
-- `statsforecast`, `mlforecast`, `neuralforecast` (Nixtla stack)
-
-**Infraestructura:**
-- Nuevo servicio `gpu-worker` en docker-compose
-- Deploy resources con GPU capabilities
-
----
-
-### 🗂️ Estructura de Código por Dominio
-
-```
+## 5. Mapa Final de APIs y Estructura de Código Modular
+
+### Rutas de API (Control Plane vs Serving Plane)
+
+| Dominio / Capa | Prefijo de Ruta | Responsabilidad | Fase |
+|---|---|---|---|
+| **Core Platform** | `/api/v1/{auth,tenants,workspaces,users,api-keys,audit}/*` | Identidad, Workspaces, RBAC/RLS, PATs y Auditoría | Existente + F2 |
+| **Praxis Catalog** | `/api/v1/catalog/{schemas,tables,volumes,models,prompts,lineage}/*` | Gobierno unificado, SQL Explorer, esquemas y linaje | F3 |
+| **Workflows & Jobs** | `/api/v1/workflows/*` · `/api/v1/runs/*` | DAGs declarativos, scheduling, triggers y backfills | F3 |
+| **Feature Store** | `/api/v1/features/*` | Feature Views, materialización offline/online | F3 |
+| **Compute & Notebooks** | `/api/v1/compute/*` · `/api/v1/notebooks/*` | Perfiles de compute, clusters Ray/K8s, sesiones Notebook | F2 / F4 |
+| **Observability & FinOps** | `/api/v1/observability/*` | Uso, costes, pricing dinámico, alertas, health, reportes | ✅ F0 |
+| **Plugins de Dominio** | `/api/v1/{tabular,nlp,cv,timeseries}/*` | Entrenamiento, profiling y utilidades específicas por vertical | ✅ F0–F1 / F4 |
+| **Serving Plane & AI GW** | `/serving/v1/endpoints/{name}/invocations` · `/api/v1/ai-gateway/*` | Inferencia dedicada (A/B, Canary), Inference Tables y LLM Gateway v2 | F4 |
+| **Platform Intelligence & MCP** | `/api/v1/{automl,copilot,mcp,optimization}/*` | Recomendador, AutoML, Agente de entorno completo (4-Tier Policy + MCP) y FinOps Optimizer | F2 → F5 |
+
+### Estructura Modular del Backend (Target Fase 2+)
+
+```text
 backend/app/
-├── api/routes/v1/
-│   ├── tabular/                    # Reorganizado (Fase 0.6)
-│   ├── nlp/                        # Fase 1
-│   ├── cv/                         # Fase 2
-│   ├── timeseries/                 # Fase 2
-│   ├── observability/              # ✅ Fase 0 (completado)
-│   ├── auth.py                     # Cross-domain
-│   ├── datasets.py                 # Cross-domain
-│   ├── models.py                   # Cross-domain
-│   ├── tenants.py                  # Cross-domain
-│   ├── users.py                    # Cross-domain
-│   ├── drift.py                    # Cross-domain
-│   └── profiling.py                # Cross-domain
-├── services/
-│   ├── tabular/                    # Fase 0.6 (reorganizar)
-│   ├── nlp/                        # Fase 1
-│   ├── cv/                         # Fase 2
-│   ├── timeseries/                 # Fase 2
-│   ├── observability/              # ✅ Fase 0 (completado)
-│   ├── mlflow_service.py           # Cross-domain
-│   ├── storage_service.py          # Cross-domain
-│   └── dvc_service.py              # Cross-domain
-├── core_ml/                        # Shared utilities
-│   ├── factory.py
-│   ├── interfaces.py
-│   ├── preprocessing.py
-│   └── uncertainty/
-├── worker/tasks/
-│   ├── train.py                    # Tabular
-│   ├── predict.py                  # Tabular
-│   ├── single_predict.py           # Tabular
-│   ├── scheduled_checks.py         # ✅ Observability
-│   └── train_nlp.py                # Fase 1
-└── models/
-    ├── tenant.py                   # ✅ Actualizado (budget fields)
-    ├── user.py
-    ├── dataset.py
-    ├── ml_model.py
-    └── prediction.py
+├── core/                         # Config, seguridad JWT/PAT, RLS context, EventBus, excepciones
+├── plugins/                      # Contratos y registro de plugins
+│   ├── contracts.py              # DomainPlugin, BaseTrainer, BaseInferenceEngine, DataEngine, ComputeBackend
+│   ├── registry.py               # Auto-discovery + feature flags por extras instalados
+│   ├── tabular/                  # Plugin Tabular (routes, service, trainer, inference, schemas)
+│   ├── nlp/                      # Plugin NLP (routes, service, trainer, inference, embeddings, schemas)
+│   ├── cv/                       # Plugin CV (Fase 4, opcional [cv])
+│   └── timeseries/               # Plugin Time Series (Fase 4, opcional [ts])
+├── platform/                     # Servicios transversales del Control Plane
+│   ├── catalog/                  # Praxis Catalog + OpenLineage + PII/ACLs (Fase 3)
+│   ├── lakehouse/                # Delta Lake + DuckDB/Polars DataEngine (Fase 3)
+│   ├── workflows/                # Motor DAG + scheduler + triggers (Fase 3)
+│   ├── feature_store/            # Offline/Online Feature Store (Fase 3)
+│   ├── serving/                  # Controlador de endpoints Serving + AI Gateway v2 (Fase 4)
+│   ├── workspaces/               # Tenants, Workspaces, Notebooks, Asset Bundles (Fase 2/4)
+│   ├── observability/            # UsageCollector, CostCalculator, AlertEngine, Reports (✅ F0)
+│   ├── copilot/                  # CopilotToolRegistry, PolicyEngine 4-tier, Orchestrator, MCP Server (F2→F5)
+│   └── audit/                    # Audit Log transversal (Fase 2)
+├── repositories/                 # Capa de acceso a datos SQLAlchemy (con RLS)
+├── compute/                      # Adaptadores ComputeBackend (celery_backend, ray_backend, k8s_backend)
+├── core_ml/                      # Utilidades ML compartidas (uncertainty, explainability, preprocessing)
+└── worker/                       # Entrypoints por perfil de cola (cpu, gpu, beat, event_consumer)
 ```
 
 ---
 
-### Decisiones Clave Pendientes
+## 6. Inversión Tecnológica Acumulativa
 
-> [!WARNING]
-> **Decisiones abiertas que impactan el roadmap:**
+| Fase | Nuevas Capacidades / Servicios | Nuevas Tablas / Almacén | Dependencias Clave (como extras opcionales) | Infraestructura |
+|---|---|---|---|---|
+| **✅ F0** | UsageCollector, CostCalculator, AlertEngine, Reports | `usage_metrics`, `cost_records`, `drift_history`, `alert_config`, `resource_pricing` | `prometheus`, `reportlab` | Celery Beat, Grafana (6+5 dashboards) |
+| **✅ F1** | NLPTrainer, NLPInference, EmbeddingSvc, LLMGateway, RAG, NLPProfiler | `model_embeddings` (pgvector), `assistant_conversations` | `[nlp]`: `transformers`, `sentence-transformers`, `onnxruntime`, `pgvector`, `openai`, `seqeval` | Imagen `pgvector:pg15`, `vllm` opcional |
+| **F2** | PluginRegistry, EventBus, ComputeBackend, AuditSvc, WorkspaceSvc | `workspaces`, `api_keys`, `audit_log` + políticas RLS | `redis` (Streams + Rate Limit), `pyjwt` refresh/PAT | Imágenes Docker separadas (`api`, `worker-cpu`, `worker-gpu`), colas tipadas |
+| **F3** | DeltaLakehouse, DuckDB/Polars DataEngine, PraxisCatalog, Workflows, FeatureStore | `catalog_assets`, `lineage_events`, `workflow_definitions`, `workflow_runs`, `feature_views` | `[lakehouse]`: `deltalake`, `duckdb`, `polars`, `openlineage-python` | Tablas Delta en MinIO/S3, Redis Online Store |
+| **F4** | ServingController, AIGateway v2, NotebookMgr, SDK/CLI, CVPlugin, TSPlugin | `serving_endpoints`, `prompt_registry`, `notebook_sessions` + Inference Tables (Delta) | `[serving]`: `ray[serve]`; `[cv]`: `ultralytics`, `albumentations`, `python-doctr`; `[ts]`: `statsforecast`, `mlforecast`, `neuralforecast` | Ray cluster / Serving containers, JupyterLab/Marimo runtime |
+| **F5** | Recommender, AutoML, DriftPredictor, IntelligentGate, Copilot, Optimizer | `copilot_actions`, `optimization_recommendations` | `[smart]`: `pyod`, `fairlearn`, `ray[tune]` | Helm Charts, K8s + KEDA, Terraform (BYOC opcional) |
 
-1. **LLM Provider:** ¿OpenAI API (más simple, cloud dependency) vs Ollama on-premise (privacidad, más infra)? Esto afecta a Q1 y Q4.
+---
 
-2. **Presupuesto de API LLM:** ¿Hay un budget mensual estimado para llamadas a LLM? Esto determina si el chatbot puede ser "always-on" o necesita rate limiting agresivo.
+## 7. Decisiones Arquitectónicas
 
-3. **Prioridad CV:** ¿Clasificación primero, o segmentación primero? La segmentación requiere datasets con máscaras (más complejos de preparar).
+### ✅ Decisiones Resueltas
 
-4. **Time Series — Modelos DL:** ¿Incluir neuralforecast (N-BEATS, TFT) desde el inicio o empezar solo con clásicos (ARIMA, ETS) + ML (LightGBM)?
+1. **Monolito Modular por Plugins → Compute/Serving Desacoplados:** Mantener un **Control Plane modular único en FastAPI** (evitando la complejidad prematura de 15 microservicios REST), pero **separar físicamente** el **Compute Plane** (workers CPU/GPU → Ray/K8s) y el **Model Serving Plane** (inferencia aislada).
+2. **Lakehouse Ligero primero (`Delta Lake + DuckDB/Polars`):** Evita exigir un clúster JVM/Spark para correr PraxisML en local o PYMEs, mientras ofrece ACID, Time Travel y procesamiento out-of-core; la interfaz `DataEngine` permite enchufar Spark o Ray Data cuando el volumen lo requiera.
+3. **LLM Gateway nativo (sin LangChain obligatorio):** Ya validado en Fase 1 (`vLLM` default + OpenAI/Ollama/Anthropic con SDK `openai` estándar). Se extiende en Fase 4 con guardrails, caching semántico y Prompt Registry.
+4. **ONNX Nativo sobre `optimum`:** `torch.onnx.export` + `onnxruntime` garantiza compatibilidad con PyTorch moderno y menor huella de dependencias.
+5. **Dependencias opcionales por dominio (`extras` en `pyproject.toml`):** Ninguna vertical futura (`cv`, `ts`, `lakehouse`, `serving`) se instala por defecto en la imagen del API Gateway.
+6. **Evolución progresiva de Compute:** Colas Celery tipadas en Fase 2 → Ray / Kubernetes Jobs en Fases 3–5, manteniendo Docker Compose siempre operativo para desarrollo y despliegues self-hosted pequeños.
+7. **Notebooks vía runtime abstracto:** **JupyterLab** como default universal + soporte para **Marimo** (reactivo y git-friendly).
+8. **Agente Transversal de Entorno Completo (`CopilotToolRegistry` + 4-Tier `PolicyEngine` + MCP):** El Copilot deja de ser un chatbot aislado en NLP para convertirse en capa transversal del Control Plane; cada módulo/plugin registra sus propios tools tipados, toda acción hereda identidad/RBAC/RLS/ACLs con aprobación Human-in-the-Loop obligatoria en Tier 3 (`prod`/destructivos/gobernanza), y se expone vía estándar **MCP (`/api/v1/mcp`)**.
 
+### 🟡 Decisiones Abiertas para Evaluar al Entrar en Cada Fase
+
+1. **Orquestador subyacente de Workflows (Fase 3.3):** Implementar un motor DAG ligero nativo sobre Redis/Ray (cero servicios extra) vs. integrar **Temporal** o **Prefect** como backend de ejecución.
+2. **Feature Store (Fase 3.4):** Implementación nativa ligera sobre Delta + Redis (menor fricción multi-tenant) vs. embeber **Feast**.
+3. **Prioridad interna en Fase 4 (CV):** Definir si el primer entregable CV es clasificación + detección (YOLO) o segmentación médica/industrial con incertidumbre.
+4. **Modelo de licenciamiento / BYOC (Fase 5.5):** Definir qué capacidades enterprise (RLS avanzado, BYOC, SSO SAML/OIDC) forman parte del core Open Source vs. edición Enterprise.

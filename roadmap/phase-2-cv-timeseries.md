@@ -1,10 +1,12 @@
-# Fase 2 — Computer Vision & Time Series
+# Verticales Computer Vision & Time Series (Integrado en Fase 4.4 — 4.5)
 
-**Timeline:** Q2 2027 (Abril — Junio)
-**Carácter:** Dos verticales de producto con routers propios `/api/v1/cv/*` y `/api/v1/timeseries/*`
-**Dependencias:** Fase 0, Fase 1, infraestructura GPU opcional
+> **Timeline actualizado:** Q4 2027 (Octubre — Diciembre) — Sub-fases **4.4 (CV Plugin)** y **4.5 (Time Series Plugin)**  
+> **Carácter:** Dos verticales multimodales implementadas como **Plugins independientes** (`CVPlugin`, `TimeSeriesPlugin`) con extras opcionales (`[cv]`, `[ts]`)  
+> **Dependencias:** Fase 2 (`DomainPlugin`, `ComputeBackend` GPU/CPU, Event Bus) · Fase 3 (Lakehouse Delta + Praxis Catalog Volumes) · Fase 4.1 (Dedicated Model Serving)  
+> 📖 **Documentos de referencia:** [roadmap.md](../roadmap.md) · [Fase 4 — Serving, Workspace & Verticales](phase-4-serving-workspace-verticals.md)
 
-> 📖 Documentación de referencia: [roadmap.md](../roadmap.md#fase-2--q2-2027-computer-vision--time-series)
+> [!NOTE]
+> **Cambio arquitectónico (Roadmap v2.0):** Originalmente planificada como Fase 2 sobre el monolito, esta especificación se reubica en **Fase 4.4–4.5** para construirse sobre la **arquitectura de Plugins** (evitando hinchar la imagen del API Gateway con `ultralytics`, `docTR` y `neuralforecast`), almacenar imágenes/máscaras en **Praxis Catalog Volumes** (sin ZIPs gigantes en RAM), leer/escribir series temporales directamente desde **tablas Delta Lake** y desplegar los modelos en el **Model Serving Plane** dedicado.
 
 ---
 
@@ -253,15 +255,12 @@ Detecta puntos anómalos via:
 
 | Cambio | Detalle |
 |--------|---------|
-| **Nuevo paquete CV** | `app/api/routes/v1/cv/` — training, segmentation, detection |
-| **Nuevo paquete TS** | `app/api/routes/v1/timeseries/` — training, forecast, anomalies |
-| **Nuevo servicio** | `app/services/vision_trainer.py` — Clasificación + Segmentación |
-| **Nuevo servicio** | `app/services/timeseries_trainer.py` — Forecasting + anomalías |
-| **Nuevo servicio** | `app/services/document_intelligence.py` — OCR + tablas |
-| **Extensión ORM `Dataset`** | Nuevo campo `data_type: str` (values: `tabular`, `image`, `timeseries`, `document`) |
-| **Celery tasks** | `train_vision.py`, `train_timeseries.py` |
-| **Frontend** | `SegmentationViewer.tsx`, `DetectionViewer.tsx`, `ForecastChart.tsx` |
-| **`hyperparams.py`** | Nuevas secciones `CV_ALGORITHMS`, `TIMESERIES_ALGORITHMS` |
+| **Plugin CV (`[cv]`)** | `app/plugins/cv/` — `CVPlugin`, routers (`training`, `segmentation`, `detection`), `VisionTrainer(BaseTrainer)`, `VisionInferenceEngine(BaseInferenceEngine)` |
+| **Plugin TS (`[ts]`)** | `app/plugins/timeseries/` — `TimeSeriesPlugin`, routers (`training`, `forecast`, `anomalies`), `TimeSeriesTrainer(BaseTrainer)`, `TimeSeriesInferenceEngine` |
+| **Document Intelligence** | `app/plugins/cv/document_intelligence.py` — OCR (`docTR`) con escritura directa a tablas **Bronze/Silver (Delta Lake)** vía `DataEngine` |
+| **Catálogo & Almacenamiento** | Imágenes y máscaras gestionadas en **Praxis Catalog Volumes** (`<workspace>.volumes.<name>`); series temporales y forecasts en **tablas Delta** |
+| **Compute & Serving** | Tareas CV enrutadas a cola `gpu-train` / Ray GPU (`praxisml-worker-gpu`); inferencia desplegada en **Dedicated Model Serving Plane** (Fase 4.1) |
+| **Frontend (App Router)** | `/workspaces/[id]/cv` y `/workspaces/[id]/timeseries` con `SegmentationViewer.tsx`, `DetectionViewer.tsx`, `ForecastChart.tsx` |
 
 ---
 

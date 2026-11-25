@@ -1,10 +1,12 @@
-# Fase 3 — Smart Platform: Recommendation Engine & Predictive Analytics
+# Fase 5 (Parte A) — Smart Platform: Recommendation Engine, AutoML Distribuido & Predictive Monitoring
 
-**Timeline:** Q3 2027 (Julio — Septiembre)
-**Carácter:** Plataforma proactiva (recomendación, AutoML, monitorización predictiva)
-**Dependencias:** Fase 0, Fase 1, Fase 2
+> **Timeline actualizado:** Q1 2028 (Enero — Marzo) — Sub-fases **5.1 (Recommender & AutoML)** y **5.2 (Predictive Drift & Lakehouse Data Quality)**  
+> **Carácter:** Plataforma proactiva (recomendación, AutoML sobre Workflows/Ray, monitorización predictiva sobre Inference Tables)  
+> **Dependencias:** Fase 0 ✅ · Fase 1 ✅ · Fase 2 (Plugins + ComputeBackend) · Fase 3 (Lakehouse + Catalog + Workflows) · Fase 4 (Serving + Inference Tables)  
+> 📖 **Documentos de referencia:** [roadmap.md](../roadmap.md) · [Fase 5 (Parte B) — AI DevOps, Copilot & Cloud-Native](phase-4-ai-devops.md)
 
-> 📖 Documentación de referencia: [roadmap.md](../roadmap.md#fase-3--q3-2027-recommendation-engine--predictive-analytics)
+> [!NOTE]
+> **Sinergia con el Lakehouse (Roadmap v2.0):** Esta fase aprovecha los cimientos de Fases 2–4: **AutoML** se orquesta como un DAG paralelo de **Praxis Workflows / Ray Tune** (con budget cap FinOps previo), **Predictive Drift** consume automáticamente las **Inference Tables (Delta Lake)** generadas por el Serving Plane (Fase 4.1) y la detección de anomalías se integra como **Data Quality Expectations** en pipelines Bronze → Silver.
 
 ---
 
@@ -216,15 +218,13 @@ POST /api/v1/datasets/{id}/detect-anomalies   → Ejecutar detección de anomal�
 
 | Cambio | Detalle |
 |--------|---------|
-| **Celery Beat** | Añadir `celerybeat-schedule` en docker-compose para tareas periódicas |
-| **Nuevo servicio** | `app/services/recommendation_engine.py` — ModelRecommender |
-| **Nuevo servicio** | `app/services/drift_predictor.py` — Forecasting de drift |
-| **Nuevo servicio** | `app/services/anomaly_detector.py` — PyOD wrapper |
-| **Nuevo worker** | `app/worker/tasks/drift_monitor.py` — Drift checks periódicos |
-| **Nuevo worker** | `app/worker/tasks/automl.py` — AutoML orchestration |
-| **Redis pub/sub** | Canal `praxisml:alerts` para notificaciones en tiempo real al frontend |
-| **Tablas existentes** | Reutiliza `drift_history` (F0), `alert_config` (F0), `cost_records` (F0) |
-| **Frontend** | Drift forecast chart, badge de recomendaciones, panel de anomalías en upload |
+| **Orquestación AutoML** | DAG dinámico en **Praxis Workflows** (Fase 3.3) ejecutado sobre `ComputeBackend` (**Ray Tune** / workers CPU-GPU paralelos) con estimación previa de coste vía `CostCalculator` |
+| **Fuente de Drift Continuo** | Lectura directa de **Inference Tables** en Delta Lake (Fase 4.1) comparadas con la tabla Gold de entrenamiento (trazable por **OpenLineage**) |
+| **Data Quality en Ingesta** | Nodo `data_quality` en pipelines Bronze → Silver con reglas declarativas + `PyOD` (IsolationForest/Autoencoder) |
+| **Nuevos servicios** | `platform/intelligence/recommender.py`, `drift_predictor.py`, `data_quality.py` |
+| **Event Bus** | Publicación de eventos `drift.forecast_warning` y `data_quality.anomaly_detected` en **Redis Streams** (Fase 2.3) → `AlertEngine` + webhooks + UI |
+| **Tablas existentes** | Reutiliza `drift_history` (F0), `alert_config` (F0), `cost_records` (F0), `catalog_assets` (F3) e Inference Tables (F4) |
+| **Frontend (App Router)** | `/workspaces/[id]/automl`, gráficos de `DriftForecast` y badges de calidad de datos en Praxis Catalog |
 
 ---
 
