@@ -192,6 +192,8 @@ Documentación interactiva completa en **`http://localhost:8000/docs`**:
 ## Documentación Adicional
 
 - 🏗️ [Arquitectura Global (`docs/architecture.md`)](docs/architecture.md)
+- 📖 [Referencia ML/NLP, Seguridad, Registries y API (`docs/reference-ml-and-api.md`)](docs/reference-ml-and-api.md)
+- 📊 [Observabilidad, FinOps, Grafana y CI/CD (`docs/observability.md`)](docs/observability.md)
 - ⚙️ [Backend & Motor ML (`docs/backend.md`)](docs/backend.md)
 - 🎨 [Frontend (`docs/frontend.md`)](docs/frontend.md)
 - 🚀 [Despliegue y DevOps (`docs/deployment.md`)](docs/deployment.md)

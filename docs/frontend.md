@@ -14,14 +14,16 @@ El cliente principal de PraxisML, una SPA (Single Page Application) servida desd
 
 ## 2. Estilo de Código y Directrices Generales
 
-- **App Router (`src/app`)**: Navegación principal. Incluye secciones para `Datasets`, `Models`, `Predictions`, `Streaming`, `Observability` y la nueva sección de `NLP`.
-- **Auth Provider**: El patrón context encapsulado, persistiendo o refrescando el token de `FastAPI` transparentemente (OAuth2).
-- **Custom Hooks (`src/hooks`)**: Lógica encapsulada para funcionalidades complejas:
+- **App Router (`frontend/src/app`)**: Navegación principal con sincronización por query `?view=...` y **Command Palette (`⌘K`)**.
+- **Módulos por Dominio (`frontend/src/features/`)**: `overview`, `datasets`, `preprocessing`, `environments`, `tabular`, `nlp`, `models`, `serving`, `observability` y `governance`.
+- **Layout y Componentes Compartidos (`frontend/src/components/`)**: `layout/` (`DashboardMVP`, `Sidebar`, `CommandPalette`), `auth/` (`AuthContext`, `Login`), `shared/` (`ExplainabilityPanel`, `AuthImage`) y `ui/`.
+- **Auth Provider**: Contexto encapsulado que gestiona el JWT de `FastAPI` y cambio de tenant.
+- **Custom Hooks (`frontend/src/hooks/`)**:
     - `useDrift`: Gestión de reportes de drift y actualización de umbrales.
-    - `useStreamingInference`: Manejo del ciclo de vida de WebSockets para inferencia en tiempo real.
-    - `usePredictions`: Polling y resultados de inferencia batch/single.
-    - `useObservability`: Métricas de uso, costes, alertas y pricing (Fase 0).
-    - `useNLP`: Algoritmos NLP, entrenamiento (polling), inferencia, embeddings, búsqueda semántica y chat SSE (Fase 1).
+    - `useStreamingInference`: Ciclo de vida de WebSockets para inferencia en tiempo real con SHAP.
+    - `usePredictions`: Polling y resultados de inferencia batch/single (con SHAP).
+    - `useObservability`: Métricas de uso por dominio, costes, forecast mensual, alertas y pricing.
+    - `useNLP`: Algoritmos NLP, entrenamiento (polling), inferencia con atribución por palabra, búsqueda semántica (`pgvector`) y chat RAG SSE con buffer de chunks.
 - **Drag & Drop**: Funciones para la carga local de Datasets (`ZIP`, `.json`) y modelos seguros de Pytorch (`.pt`).
 - **Manejo de Errores de API (4xx / 5xx)**: Interceptor global que refleja errores en alertas flotantes amigables.
 - **Client Components (`"use client"`)**: Se delega el mínimo indispensable al navegador (hooks pre-compilados y polling).

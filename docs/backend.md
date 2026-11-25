@@ -31,13 +31,17 @@ El backend expone una API REST asíncrona robusta y maneja el motor de Machine L
     - `embedding.py`: `ModelEmbedding` + tipo `VectorType` (pgvector en PostgreSQL, JSON en SQLite para tests).
     - `assistant.py`: `AssistantConversation` (historial del chatbot).
 - **/schemas/**: Validadores Pydantic de Request y Response.
-- **services/**: Repositorios y adaptadores de servicios externos:
-    - `mlflow_service.py`: Registro y gestión de modelos.
-    - `dvc_service.py`: Versionado de datasets con DVC.
-    - `drift_service.py`: Motor de detección de drift usando Evidently.
-    - `storage_service.py`: Abstracción de almacenamiento (Local, MinIO, S3).
-    - `data_profiler.py`: Análisis exploratorio automatizado.
-    - `nlp_trainer.py`: Fine-tuning de transformers (clasificación, NER, sentimiento) + export ONNX + MLflow autolog.
+- **/platform/**: Los 7 registros pluggables y capas transversales:
+    - `storage/`: `StorageBackendRegistry` (`local`, `minio`, `s3`) y `StorageKeyBuilder`.
+    - `compute/`: `ComputeBackendRegistry` (`celery`) y `EnvironmentRunnerRegistry` (`uv_isolated`, `docker`).
+    - `serving/`: `ModelRuntimeRegistry` (`tabular_generic`, `nlp`, `pyfunc`) y motor Canary/A-B.
+    - `data_engine/`: `DataEngineRegistry` (`pandas`).
+    - `tracker/`: `TrackerRegistry` y `MLFlowService` (experimentos jerárquicos).
+    - `events/`, `audit/`, `cache/`, `copilot/`: Redis Streams EventBus, Audit Log, ModelCache y PolicyEngine.
+- **/domains/**: Servicios de negocio agrupados por vertical:
+    - `tabular/`: `training_service.py`, `training_utils.py`, `inference_service.py`.
+    - `nlp/`: `trainer.py`, `inference.py`, `embedding_service.py`, `llm_gateway.py`, `rag_service.py`, `profiler.py`.
+    - `data/`: `dvc_service.py`, `data_profiler.py`.
     - `nlp_inference.py`: Inferencia NLP con ONNX Runtime o fallback transformers, integrada con `ModelCache`.
     - `embedding_service.py`: Generación de embeddings y búsqueda semántica sobre `model_embeddings`.
     - `llm_gateway.py`: Abstracción multi-provider de LLM con tracking de tokens y costes.
