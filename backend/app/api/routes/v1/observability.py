@@ -183,7 +183,7 @@ def get_costs(
     return {
         "tenant_id": tenant.id,
         "period": period,
-        "total_cost_usd": round(float(total), 2),
+        "total_cost_usd": round(float(total), 6),
         "records": [
             {
                 "id": r.id,
@@ -230,22 +230,38 @@ def get_cost_forecast(
         logger.warning("date_trunc no soportado por la BD, omitiendo forecast")
         daily = []
 
+    now = datetime.now(timezone.utc)
+    days_in_month = (now.replace(day=28) + timedelta(days=4)).day
+    remaining_days = max(days_in_month - now.day, 0)
+
+    month_to_date = float(calculator.get_monthly_cost(db, tenant.id))
+
     if len(daily) >= 7:
         x = list(range(len(daily)))
         y = [float(d.total) for d in daily]
         n = len(x)
-        slope = (n * sum(xi * yi for xi, yi in zip(x, y)) - sum(x) * sum(y)) / (
-            n * sum(xi * xi for xi in x) - sum(x) * sum(x)
-        ) if (n * sum(xi * xi for xi in x) - sum(x) * sum(x)) != 0 else 0
+        denom = n * sum(xi * xi for xi in x) - sum(x) * sum(x)
+        slope = (
+            (n * sum(xi * yi for xi, yi in zip(x, y)) - sum(x) * sum(y)) / denom
+            if denom != 0
+            else 0.0
+        )
         intercept = (sum(y) - slope * sum(x)) / n
-
-        days_in_month = (
-            datetime.now(timezone.utc).replace(day=28) + timedelta(days=4)
-        ).day
-        today = datetime.now(timezone.utc).day
-        remaining_days = days_in_month - today + 1
-        projected = round(intercept + slope * (n + remaining_days), 2)
-        trend = round(slope, 4)
+        future_spend = sum(
+            max(0.0, intercept + slope * (n + offset))
+            for offset in range(1, remaining_days + 1)
+        )
+        projected = round(month_to_date + future_spend, 6)
+        trend = round(slope, 6)
+    elif len(daily) >= 1:
+        y = [float(d.total) for d in daily]
+        avg_daily = sum(y) / len(y)
+        projected = round(month_to_date + avg_daily * remaining_days, 6)
+        trend = round(avg_daily, 6)
+    elif month_to_date > 0:
+        avg_daily = month_to_date / max(now.day, 1)
+        projected = round(month_to_date + avg_daily * remaining_days, 6)
+        trend = round(avg_daily, 6)
 
     tenant_obj = (
         db.query(Tenant).filter(Tenant.id == tenant.id).first()
@@ -255,8 +271,8 @@ def get_cost_forecast(
     return CostForecastResponse(
         projected_month_end_usd=projected,
         budget_usd=budget,
-        overrun_risk_pct=round((projected / budget) * 100, 1)
-        if (projected and budget and budget > 0)
+        overrun_risk_pct=round((projected / budget) * 100, 2)
+        if (projected is not None and budget and budget > 0)
         else None,
         daily_trend_usd=trend,
     )

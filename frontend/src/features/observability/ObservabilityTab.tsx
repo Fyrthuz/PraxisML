@@ -206,6 +206,15 @@ export default function ObservabilityTab({ token }: ObservabilityTabProps) {
     );
 }
 
+function formatUsd(amount: number | null | undefined): string {
+    if (amount === null || amount === undefined || Number.isNaN(amount)) return "—";
+    if (amount === 0) return "$0.00";
+    const abs = Math.abs(amount);
+    if (abs < 0.01) return `$${amount.toFixed(5)}`;
+    if (abs < 1) return `$${amount.toFixed(4)}`;
+    return `$${amount.toFixed(2)}`;
+}
+
 // ── Overview Panel ─────────────────────────────────────────────────────────
 
 function OverviewPanel({
@@ -272,7 +281,7 @@ function OverviewPanel({
                 <StatCard
                     icon={<DollarSign className="w-4 h-4 text-emerald-400" />}
                     label="Monthly Cost"
-                    value={`$${totalCost.toFixed(2)}`}
+                    value={formatUsd(totalCost)}
                     sub={`${totalRecords} billing records`}
                     color="emerald"
                 />
@@ -680,13 +689,15 @@ function OverviewPanel({
                         <div>
                             <p className="text-zinc-400 text-xs">Projected end of month</p>
                             <p className="text-zinc-100 text-xl font-mono font-semibold tabular-nums mt-1">
-                                ${projected?.toFixed(2) ?? "—"}
+                                {formatUsd(projected)}
                             </p>
                         </div>
                         <div>
                             <p className="text-zinc-400 text-xs">Daily trend</p>
                             <p className="text-zinc-100 text-xl font-mono font-semibold tabular-nums mt-1">
-                                ${obs.costForecast?.daily_trend_usd?.toFixed(4) ?? "—"}/day
+                                {obs.costForecast?.daily_trend_usd != null
+                                    ? `${formatUsd(obs.costForecast.daily_trend_usd)}/day`
+                                    : "—"}
                             </p>
                         </div>
                     </div>

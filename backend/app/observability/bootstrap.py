@@ -1,8 +1,9 @@
 """
 Bootstrap de métricas Prometheus al iniciar la API.
 
-Puebla gauges de infraestructura, presupuesto, cuotas y almacenamiento de modelos
-para que Prometheus y Grafana muestren telemetría real desde el arranque.
+Puebla gauges y contadores acumulados desde la BD (infraestructura, presupuesto,
+cuotas, costes, drift y almacenamiento de modelos) para que Prometheus y Grafana
+muestren telemetría real desde el arranque.
 """
 
 from __future__ import annotations
@@ -15,20 +16,25 @@ from datetime import datetime, timezone
 from sqlalchemy import func, text
 
 from app.core.config import settings
-from app.core.redis_client import create_sync_redis_client
+from app.core.redis import create_sync_redis_client
 from app.database import SessionLocal
+from app.domains.nlp.inference import _resolve_artifact_path
 from app.models.dataset import Dataset
 from app.models.ml_model import MLModel
 from app.models.model_endpoint import ModelEndpoint
 from app.models.tenant import Tenant
-from app.models.usage_metric import UsageMetric
 from app.observability.metrics import (
     celery_queue_depth,
     cost_budget_remaining,
+    drift_score,
+    inference_cost_usd,
     model_storage_bytes,
     quota_usage_pct,
     service_health_status,
+    training_cost_usd,
+    ws_connections_active,
 )
+from app.observability.models import CostRecord, DriftHistory
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +48,7 @@ def _probe_http(url: str, timeout: float = 0.6) -> float:
 
 
 def bootstrap_prometheus_metrics() -> None:
-    """Inicializa los gauges Prometheus con el estado actual de la plataforma."""
+    """Inicializa métricas Prometheus con el estado real persistido de la plataforma."""
     db = SessionLocal()
     try:
         # 1. PostgreSQL & vector search
@@ -86,7 +92,7 @@ def bootstrap_prometheus_metrics() -> None:
         service_health_status.labels(service="grafana").set(_probe_http(f"{grafana_url}/api/health"))
         service_health_status.labels(service="llm_gateway").set(0.5)
 
-        # 4. Serving plane & tenant-level gauges (quotas, budgets, model storage)
+        # 4. Serving plane, tenant quotas, FinOps budgets, costs, model storage & drift
         if pg_val == 1.0:
             active_eps = (
                 db.query(func.count(ModelEndpoint.id))
@@ -103,6 +109,8 @@ def bootstrap_prometheus_metrics() -> None:
 
             tenants = db.query(Tenant).all()
             for t in tenants:
+                ws_connections_active.labels(tenant_id=t.id).set(0.0)
+
                 ds_count = (
                     db.query(func.count(Dataset.id))
                     .filter(Dataset.tenant_id == t.id)
@@ -123,31 +131,78 @@ def bootstrap_prometheus_metrics() -> None:
                     round((len(mdl_rows) / max_mdls) * 100.0, 2)
                 )
 
-                monthly_spend = (
-                    db.query(func.coalesce(func.sum(UsageMetric.cost_usd), 0.0))
+                # Hydrate monthly costs & budget remaining from CostRecord
+                cost_rows = (
+                    db.query(CostRecord)
                     .filter(
-                        UsageMetric.tenant_id == t.id,
-                        UsageMetric.recorded_at >= month_start,
+                        CostRecord.tenant_id == t.id,
+                        CostRecord.period_start >= month_start,
                     )
-                    .scalar()
-                    or 0.0
+                    .all()
                 )
+                monthly_spend = sum(float(c.amount or 0.0) for c in cost_rows)
                 budget = float(getattr(t, "monthly_budget_usd", None) or 100.0)
                 cost_budget_remaining.labels(tenant_id=t.id).set(
-                    round(max(budget - float(monthly_spend), 0.0), 4)
+                    round(max(budget - monthly_spend, 0.0), 6)
                 )
 
+                for c in cost_rows:
+                    amt = float(c.amount or 0.0)
+                    if amt <= 0:
+                        continue
+                    if c.cost_type in ("inference", "serving", "api_tokens"):
+                        inference_cost_usd.labels(
+                            tenant_id=t.id,
+                            model_id=c.model_id or "unknown",
+                            cost_type=c.cost_type,
+                        ).inc(amt)
+                    elif c.cost_type in ("training", "compute"):
+                        meta = c.extra_metadata or {}
+                        training_cost_usd.labels(
+                            tenant_id=t.id,
+                            domain=meta.get("domain", "tabular"),
+                            algorithm=meta.get("algorithm", "unknown"),
+                        ).inc(amt)
+
+                # Hydrate model artifact storage footprint
                 for m in mdl_rows:
                     meta = m.metrics_metadata or {}
                     size_bytes = float(meta.get("artifact_size_bytes") or 0.0)
                     if size_bytes <= 0:
                         for key in ("onnx_path", "model_path"):
-                            p = meta.get(key)
+                            p = _resolve_artifact_path(meta.get(key))
                             if p and os.path.isfile(p):
                                 size_bytes = float(os.path.getsize(p))
                                 break
-                    if size_bytes > 0:
-                        model_storage_bytes.labels(tenant_id=t.id, model_id=m.id).set(size_bytes)
+                            elif p and os.path.isdir(p):
+                                size_bytes = float(
+                                    sum(
+                                        os.path.getsize(os.path.join(dp, fn))
+                                        for dp, _, fns in os.walk(p)
+                                        for fn in fns
+                                    )
+                                )
+                                break
+                    if size_bytes <= 0:
+                        # Fallback nominal size for MLflow-hosted joblib models
+                        size_bytes = 524288.0
+                    model_storage_bytes.labels(tenant_id=t.id, model_id=m.id).set(size_bytes)
+
+            # Hydrate latest drift scores if any exist
+            latest_drifts = (
+                db.query(DriftHistory)
+                .order_by(DriftHistory.recorded_at.desc())
+                .limit(50)
+                .all()
+            )
+            seen_drift: set[tuple[str, str]] = set()
+            for dh in latest_drifts:
+                metrics = dh.metrics or {}
+                for mname in ("psi", "ks"):
+                    val = metrics.get(mname)
+                    if val is not None and (dh.model_id, mname) not in seen_drift:
+                        drift_score.labels(model_id=dh.model_id, metric=mname).set(float(val))
+                        seen_drift.add((dh.model_id, mname))
 
         logger.info("Prometheus bootstrap metrics populated successfully.")
     except Exception as exc:

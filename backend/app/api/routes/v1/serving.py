@@ -452,7 +452,7 @@ def get_endpoint_metrics(
         db.query(func.coalesce(func.sum(CostRecord.amount), 0.0))
         .filter(
             CostRecord.tenant_id == tenant.id,
-            CostRecord.source == f"serving:{ep.slug}",
+            CostRecord.source.in_([ep.slug, f"serving:{ep.slug}"]),
         )
         .scalar()
         or 0.0

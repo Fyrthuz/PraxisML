@@ -132,7 +132,7 @@ class CostCalculator:
 
         from app.observability.metrics import inference_cost_usd, training_cost_usd
 
-        if cost_type in ("inference", "api_tokens"):
+        if cost_type in ("inference", "serving", "api_tokens"):
             inference_cost_usd.labels(
                 tenant_id=tenant_id, model_id=model_id or "unknown", cost_type=cost_type
             ).inc(amount)
