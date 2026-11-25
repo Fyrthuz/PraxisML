@@ -21,8 +21,8 @@ Con un núcleo modular (Fase 2) y un Lakehouse gobernado (Fase 3), la Fase 4 com
 
 ## 2. Dedicated Model Serving Plane (Sub-fase 4.1)
 
-### Por Qué Separar el Serving del Control Plane
-Actualmente `InferenceService` y `NLPInferenceService` cargan modelos en la RAM de la API FastAPI (`ModelCache` en memoria local). Esto impide escalar inferencia independientemente, no soporta GPU dedicada por endpoint ni permite despliegues graduales seguros.
+### Por Qué Evolucionar el Serving Plane (de Lite Serving F2.8 a Dedicated Serving F4.1)
+En **Fase 2.8 (Lite Serving)** cualquier modelo registrado ya puede publicarse como endpoint dedicado (`/serving/v1/{slug}/invocations`) con API Keys, Canary routing y preprocesamiento automático ejecutándose en el runtime de inferencia ligero. En **Fase 4.1**, este mismo contrato se escala hacia un **Dedicated Model Serving Plane** físicamente aislado de la API principal para soportar GPU dedicada por endpoint, autoscaling independiente, scale-to-zero e Inference Tables en Delta Lake.
 
 ```mermaid
 flowchart LR

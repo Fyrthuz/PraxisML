@@ -144,7 +144,37 @@ Actualmente `ColumnTransformer` se serializa como `.joblib` acoplado a un único
 
 ---
 
-## 6. Integración con el Platform Copilot (Tools Lakehouse & Workflows)
+## 6. Praxis Lakehouse Monitoring: Dataset Tracking & Feature Distribution Sketches (Sub-fase 3.5)
+
+### Por Qué el Enfoque Actual Debe Cambiar
+La auditoría del código actual (`profiling.py`, `data_profiler.py`, `drift.py`, `scheduled_checks.py`) evidenció problemas estructurales y bugs:
+- **Sin persistencia de perfiles:** `GET /profiling/{id}/profile` descarga el archivo completo a RAM, calcula un histograma simple de 10 bins en `pandas` y descarta el resultado. No existe histórico de distribuciones por versión de dataset.
+- **Comparación de drift limitada y rota en varios casos:** `drift.py` usa `pd.read_csv()` (falla en Parquet/XLSX), hace un split aleatorio 80/20 del mismo archivo si no hay `parent_dataset_id` e ignora los umbrales `psi_threshold`/`ks_threshold` configurados.
+- **Jobs periódicos rotos silenciosamente:** `scheduled_checks.py` importa `calculate_drift_for_model` (no definida en `drift.py`) y filtra por `MLModel.updated_at` (columna inexistente).
+
+### Diseño Objetivo (Estilo Databricks Lakehouse Monitoring)
+
+1. **Dataset Tracking Inmutable & Schema Registry:**
+   - Cada versión de tabla Delta (`v1, v2, v3...`) registra commit metadata (autor, workflow/run, tamaño, nº filas, hash/checkpoint) y **Schema Diff** automático (columnas añadidas, eliminadas o con cambio de tipo) en Praxis Catalog + OpenLineage.
+2. **Feature Distribution Sketches Persistidos y Mergeables (`feature_distribution_snapshots`):**
+   - Al emitir `table.committed` o `dataset.uploaded` en el Event Bus, un worker `cpu-light` calcula un **Profile Snapshot** *out-of-core* con **DuckDB SQL** (y opcionalmente **WhyLogs** sketches):
+     - **Numéricas:** `min`, `max`, `mean`, `std`, cuantiles KLL (`p1, p5, p25, p50, p75, p95, p99`), skewness, tasa de nulos/ceros, outliers IQR/Z-score e **histograma con bin edges fijos del baseline** (imprescindible para calcular PSI exacto).
+     - **Categóricas / Texto:** cardinalidad (HyperLogLog), Top-K frecuencias, entropía, tasa de categorías nuevas / Out-of-Vocabulary (OOV), distribución de longitud de texto e idioma.
+   - Los snapshots ocupan KB (no GB), son **mergeables entre ventanas** (horarias → diarias → semanales) y permiten calcular **PSI, Wasserstein, Jensen-Shannon, KS aproximado y Chi-cuadrado en milisegundos** sin releer datasets completos.
+3. **Tres Modos de Monitorización Unificados:**
+   - **Snapshot Profile:** Evolución entre versiones de un dataset (`vN` vs. `vN-1` o vs. Baseline fija de entrenamiento) + alertas de **Schema Drift**.
+   - **Time-Series Profile:** Ventanas deslizantes (`1h`, `1d`, `7d`) sobre tablas Bronze/Silver/Gold particionadas por timestamp.
+   - **Inference Profile (integrado con Fase 4.1 Inference Tables):**
+     - **Feature Drift** (inputs en producción vs. baseline de entrenamiento).
+     - **Prediction Drift** (distribución de probabilidades/clases + incertidumbre/entropía).
+     - **Concept Drift / Accuracy real** (join asíncrono por `request_id` cuando llegan *ground-truth labels* diferidas).
+     - **Slice Monitoring** (métricas desagregadas por segmento — ej. región, plan, grupo demográfico — para detectar degradaciones ocultas y sesgos).
+4. **Soporte Multimodal (Embedding Drift para NLP & CV):**
+   - Calcula **Embedding Drift** sobre `pgvector` (distancia coseno de centroides, MMD / Wasserstein sobre proyecciones PCA) comparando embeddings de inferencia vs. referencia, más estadísticas de resolución/brillo en CV y longitud/idioma en NLP.
+
+---
+
+## 7. Integración con el Platform Copilot (Tools Lakehouse & Workflows)
 
 Todos los módulos introducidos en Fase 3 registran automáticamente sus herramientas en el `CopilotToolRegistry` (creado en Fase 2):
 - **Catalog & Lineage (Tier 0):** `catalog.search_assets`, `catalog.describe_table`, `catalog.get_lineage`, `catalog.get_table_history`.
@@ -154,7 +184,7 @@ Todos los módulos introducidos en Fase 3 registran automáticamente sus herrami
 
 ---
 
-## 7. Endpoints API de Fase 3
+## 8. Endpoints API de Fase 3
 
 | Grupo | Método | Path | Descripción |
 |---|---|---|---|
@@ -170,10 +200,13 @@ Todos los módulos introducidos en Fase 3 registran automáticamente sus herrami
 | **Features** | `GET/POST` | `/api/v1/features/views` | Definir Feature Views (SQL/Polars) |
 | **Features** | `POST` | `/api/v1/features/views/{id}/materialize` | Materializar Offline (Delta) y Online (Redis) |
 | **Features** | `POST` | `/api/v1/features/online/lookup` | Lectura de baja latencia por `entity_id` |
+| **Monitoring** | `GET` | `/api/v1/monitoring/tables/{fqn}/profiles` | Histórico de snapshots de distribución de features por versión/ventana |
+| **Monitoring** | `GET` | `/api/v1/monitoring/tables/{fqn}/drift` | Comparación de sketches (vN vs baseline / ventanas) con PSI, Wasserstein, Schema Diff y slices |
+| **Monitoring** | `POST` | `/api/v1/monitoring/inference/{endpoint}/ground-truth` | Ingesta de etiquetas diferidas por `request_id` para Concept Drift y métricas reales |
 
 ---
 
-## 8. Riesgos y Mitigaciones
+## 9. Riesgos y Mitigaciones
 
 | Riesgo | Mitigación |
 |---|---|

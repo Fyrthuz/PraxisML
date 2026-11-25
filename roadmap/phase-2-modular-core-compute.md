@@ -1,7 +1,7 @@
 # Fase 2 — Modularización del Core, Compute Plane & Fundaciones Enterprise
 
 > **Timeline:** Q2 2027 (Abril — Junio)  
-> **Estado:** 🚧 Pendiente (Siguiente fase prioritaria)  
+> **Estado:** ✅ Completada (v1 implementada y verificada; evolución App Router completo / TanStack Query opcional en iteración UX)  
 > **Carácter:** Refactorización estructural + separación Control Plane / Compute Plane + seguridad Enterprise  
 > **Dependencias:** Fase 0 (Observabilidad) ✅ · Fase 1 (NLP Engine) ✅  
 > 📖 **Documento maestro:** [roadmap.md](../roadmap.md)
@@ -121,15 +121,26 @@ lakehouse = ["deltalake>=0.22", "duckdb>=1.1", "polars>=1.10", "openlineage-pyth
 cv        = ["ultralytics>=8.3", "albumentations>=1.4", "python-doctr>=0.9"]
 ts        = ["statsforecast>=1.7", "mlforecast>=0.13", "neuralforecast>=1.7"]
 serving   = ["ray[serve]>=2.38"]
+storage-s3         = ["boto3>=1.34"]
+storage-gcs        = ["google-cloud-storage>=2.18"]
+storage-azure      = ["azure-storage-blob>=12.23"]
+storage-multicloud = ["obstore>=0.4", "fsspec>=2024.9"]
 ```
 
-### Imágenes Docker Multi-Perfil (`backend/docker/`)
-| Imagen | Extras instalados | Tamaño objetivo | Uso |
+### Almacenamiento Multi-Cloud Desacoplado de `boto3`
+`StorageService` + `StorageBackendRegistry` cargan adaptadores de forma *lazy* (`local`, `minio`, `s3`, `gcs`, `azure`, `obstore`) y exponen contratos agnósticos (`upload`, `download`, `get_url`, `delete`, `exists`, `list_objects`, `get_uri`), evitando depender directamente de `boto3` en el core y permitiendo desplegar indistintamente sobre **AWS S3, GCP Cloud Storage, Azure Blob/ADLS Gen2 o MinIO**.
+
+### Imágenes Docker Multi-Perfil & Contenedores Opcionales por Dominio (`backend/docker/`)
+**Todos** los dominios (`tabular`, `nlp`, `cv`, `timeseries`) son 100% opcionales y activables mediante `ENABLED_PLUGINS` (ej. `ENABLED_PLUGINS=tabular`, `ENABLED_PLUGINS=nlp`, `ENABLED_PLUGINS=*` o `""` para solo Control Plane), permitiendo desplegar tanto un monolito modular ligero como **contenedores independientes por dominio** escalables por separado:
+
+| Imagen / Servicio | Extras instalados | `ENABLED_PLUGINS` | Uso |
 |---|---|---|---|
-| `praxisml-api` | Solo Core + `openai` + `pgvector` | ~350 MB | Control Plane FastAPI stateless (escalable horizontalmente) |
-| `praxisml-worker-cpu` | Core + `tabular` + `lakehouse` + `ts` | ~1.2 GB | Entrenamiento Sklearn/TS, profiling, drift, ETL |
-| `praxisml-worker-gpu` | Core + `pytorch` + `nlp` + `cv` (base CUDA) | ~4–5 GB | Fine-tuning Transformers, PyTorch MLP, CV, ONNX export |
-| `praxisml-beat` | Solo Core | ~300 MB | Scheduler periódico sin dependencias ML |
+| `praxisml-core-api` | Solo Core + `pgvector` | `""` (o `*` en single-node) | Control Plane stateless (Auth, Catalog, Workflows, Copilot, Observability) |
+| `praxisml-svc-tabular` *(opcional)* | Core + `tabular` + `lakehouse` | `tabular` | API/Worker dedicado para ML Tabular (Sklearn, SHAP, Drift, Preprocessing) |
+| `praxisml-svc-nlp` *(opcional)* | Core + `pytorch` + `nlp` | `nlp` | API/Worker GPU dedicado para Transformers, ONNX, Embeddings y LLM |
+| `praxisml-svc-cv` *(opcional, F4)* | Core + `pytorch` + `cv` | `cv` | API/Worker GPU dedicado para Clasificación, Segmentación, YOLO y OCR |
+| `praxisml-svc-ts` *(opcional, F4)* | Core + `lakehouse` + `ts` | `timeseries` | API/Worker CPU dedicado para Nixtla Forecasting y Anomalías |
+| `praxisml-beat` | Solo Core | `""` | Scheduler periódico sin dependencias ML |
 
 ### Descomposición de *Fat Routers*
 - `api/routes/v1/models.py` (838 LOC) → Router fino + `services/model_registry_service.py` + `repositories/model_repo.py`.
@@ -218,7 +229,58 @@ celery_app.conf.task_routes = {
 
 ---
 
-## 8. Riesgos y Mitigaciones
+## 8. Local AWS Sandbox & IaC Foundations — Terraform + LocalStack (Sub-fase 2.7)
+
+Para validar la plataforma en un entorno AWS realista desde fases tempranas (**a coste $0 en local y en CI**, antes de tocar producción AWS en Fase 5.5), se introduce un **sandbox híbrido 100% gratuito**:
+
+### Reparto de Emulación (Sin Dependencia de LocalStack Pro)
+| Servicio AWS | Emulación Local ($0) | Producción AWS (Fase 5.5) |
+|---|---|---|
+| **S3** (buckets Lakehouse, MLflow, DVC, lifecycle, versioning) | **LocalStack Community** (`:4566`) | AWS S3 |
+| **DynamoDB** (commit-locking de Delta Lake sobre S3 en Fase 3) | **LocalStack Community** (`:4566`) | AWS DynamoDB |
+| **IAM & STS (`AssumeRole`)** (credenciales temporales por tenant/workspace) | **LocalStack Community** (`:4566`) | AWS IAM / STS |
+| **Secrets Manager / SSM / KMS** (`SECRET_KEY`, credenciales DB, PATs) | **LocalStack Community** (`:4566`) | AWS Secrets Manager / KMS |
+| **SQS / SNS / CloudWatch** (alternativa AWS-native a colas/eventos/logs) | **LocalStack Community** (`:4566`) | AWS SQS / SNS / CloudWatch |
+| **Kubernetes + Helm + KEDA** | **`kind` o `k3d`** (EKS es LocalStack Pro) | AWS EKS |
+| **PostgreSQL (`pgvector`) + Redis** | Contenedores Docker / Helm locales (RDS/ElastiCache son Pro) | AWS RDS + ElastiCache |
+
+### Estructura Terraform Compartida (`infra/terraform/`)
+```text
+infra/terraform/
+├── modules/
+│   ├── s3_lakehouse/          # Buckets praxisml, praxisml-dvc, praxisml-lakehouse + versioning + encryption
+│   ├── delta_lock_dynamodb/   # Tabla DynamoDB para concurrencia ACID de Delta Lake
+│   ├── iam_tenant_roles/      # Políticas IAM por prefijo tenants/{id}/* para STS AssumeRole
+│   ├── secrets/               # Secrets Manager para SECRET_KEY, DB_URL y API keys
+│   └── messaging/             # Colas SQS / tópicos SNS opcionales
+├── environments/
+│   ├── localstack/            # Provider AWS con endpoints -> http://localhost:4566 (dev + CI $0)
+│   └── aws-prod/              # Reutiliza los mismos módulos + EKS, RDS pgvector, ElastiCache y BYOC (F5.5)
+```
+
+### Integración Docker Compose & CI
+- Nuevo servicio opcional `localstack` en `docker-compose.yml` bajo `profiles: ["aws-local"]` (`image: localstack/localstack:latest`, puerto `4566`, servicios `s3,dynamodb,iam,sts,sqs,sns,secretsmanager,ssm,kms,logs`).
+- Script `make aws-local-up` / `terraform -chdir=infra/terraform/environments/localstack apply -auto-approve` que aprovisiona automáticamente buckets, tabla lock y secretos locales.
+- Job en `.github/workflows/ci.yml` que ejecuta `terraform fmt -check`, `terraform validate` y un smoke test de `STORAGE_BACKEND=s3` contra LocalStack.
+
+---
+
+## 8.5 On-Demand Model Serving Endpoints — Lite Serving v1 (Sub-fase 2.8)
+
+Permite exponer cualquier modelo registrado (`MLModel`) bajo demanda como un **endpoint REST dedicado** sin esperar al clúster Ray Serve de Fase 4.1:
+
+- **Modelo de datos (`model_endpoints`):** `(id, tenant_id, workspace_id, name, slug, description, model_id, secondary_model_id, traffic_split_pct, preprocessing_pipeline_path, status, auth_mode, request_count, error_count, avg_latency_ms, last_invoked_at, created_at, updated_at)`.
+- **Control Plane:** `GET/POST /api/v1/serving/endpoints`, `GET/PATCH/DELETE /api/v1/serving/endpoints/{id}` para desplegar, pausar, cambiar de versión o ajustar pesos Canary/A-B (`0–100%`).
+- **Invocación dedicada:** `POST /serving/v1/{slug}/invocations` (y alias `/api/v1/serving/endpoints/{slug}/invocations`) autenticado vía **API Key (`X-API-Key` / `Bearer px_...`)** o JWT.
+  - Acepta registro único (`{"inputs": {...}}`) o batch (`{"inputs": [{...}, ...]}`).
+  - Aplica automáticamente el `preprocessing_pipeline_path` vinculado al endpoint/modelo si el payload llega en formato crudo.
+  - Enruta entre `model_id` (primario) y `secondary_model_id` (canary) según `traffic_split_pct`.
+  - Registra latencia media, contadores de peticiones/errores, eventos en el Event Bus y trazabilidad en `audit_log`.
+- **UI:** Pestaña **Model Endpoints** para desplegar modelos en 1 clic, probar invocaciones JSON en vivo y copiar snippets `curl` listos para integrar en aplicaciones externas.
+
+---
+
+## 9. Riesgos y Mitigaciones
 
 | Riesgo | Mitigación |
 |---|---|

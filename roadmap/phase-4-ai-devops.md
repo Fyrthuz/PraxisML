@@ -215,7 +215,7 @@ Para escalar PraxisML desde despliegues Docker Compose hacia entornos SaaS multi
 |---|---|
 | **Helm Charts Oficiales (`infra/helm/praxisml/`)** | Despliegue declarativo separado por perfil: `api` (HPA por CPU/RPS), `worker-cpu`, `worker-gpu` (nodeSelector/tolerations GPU), `serving` (Ray Serve), `beat`, `event-consumer`, `frontend`, `mlflow`, `prometheus/grafana`. |
 | **KEDA Autoscaling** | Escalado dirigido por eventos: `worker-cpu` y `worker-gpu` escalan de `0 → N` réplicas según profundidad de colas Redis (`cpu-heavy`, `gpu-train`), backlog de Praxis Workflows y tráfico de Model Serving. |
-| **Terraform / IaC (`infra/terraform/`)** | Módulos reproducibles para AWS (EKS + RDS pgvector + S3 + ElastiCache), GCP (GKE + CloudSQL + GCS) y Azure (AKS). |
+| **Terraform / IaC (`infra/terraform/`)** | Reutiliza los módulos validados en LocalStack desde **Fase 2.7** (`s3_lakehouse`, `delta_lock_dynamodb`, `iam_tenant_roles`, `secrets`, `messaging`) y activa `environments/aws-prod/` (EKS + RDS pgvector + S3 + ElastiCache), más equivalentes GCP (GKE) y Azure (AKS). |
 | **BYOC (Bring Your Own Cloud — Opcional)** | El Control Plane (API, Catalog, Workflows, Copilot, UI) corre en infraestructura SaaS mientras el **Compute Plane + Data Lakehouse (S3/MinIO + Ray/K8s workers + Notebooks)** se ejecuta en la VPC privada del cliente vía túnel mTLS/outbound sin exponer datos crudos. |
 | **Multi-Región & DR** | Replicación de metadatos PostgreSQL, backups/Time Travel de tablas Delta Lake y pruebas periódicas de failover. |
 

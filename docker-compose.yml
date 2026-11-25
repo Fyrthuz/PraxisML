@@ -52,8 +52,9 @@ services:
     restart: always
   # 4. Object Storage — MinIO (self-hosted S3-compatible)
   minio:
-    image: minio/minio:latest
+    image: cgr.dev/chainguard/minio:latest
     container_name: praxisml_minio
+    user: "0:0"
     ports:
       - "9000:9000"   # S3 API
       - "9001:9001"   # MinIO Console UI
@@ -63,27 +64,39 @@ services:
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: always
 
-  # 4b. MinIO Initialization (creates the default bucket)
+  # 4b. MinIO Initialization (creates default buckets via boto3)
   minio-init:
-    image: minio/mc:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: praxisml_minio_init
     depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb myminio/praxisml || true;
-      /usr/bin/mc mb myminio/praxisml-dvc || true;
-      exit 0;
-      "
+      - minio
+    environment:
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - MINIO_ENDPOINT=http://minio:9000
+    command:
+      - python
+      - -c
+      - |
+        import os, time, boto3
+        from botocore.exceptions import ClientError
+        s3 = boto3.client("s3", endpoint_url=os.environ["MINIO_ENDPOINT"])
+        for _ in range(30):
+            try:
+                s3.list_buckets()
+                break
+            except Exception:
+                time.sleep(1)
+        for bucket in ("praxisml", "praxisml-dvc"):
+            try:
+                s3.head_bucket(Bucket=bucket)
+            except ClientError:
+                s3.create_bucket(Bucket=bucket)
+        print("MinIO buckets ready: praxisml, praxisml-dvc")
   # 5. FastAPI Backend
   api:
     build:
@@ -98,7 +111,7 @@ services:
       mlflow:
         condition: service_started
       minio:
-        condition: service_healthy
+        condition: service_started
     env_file:
       - .env
     environment:
@@ -133,7 +146,7 @@ services:
       redis:
         condition: service_started
       minio:
-        condition: service_healthy
+        condition: service_started
     env_file:
       - .env
     environment:
@@ -146,7 +159,7 @@ services:
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
       - AWS_ENDPOINT_URL_S3=http://minio:9000
-    command: [ "uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--pool=prefork", "--concurrency=2" ]
+    command: [ "uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--pool=prefork", "--concurrency=2", "--queues=cpu-light,cpu-heavy,system-beat,gpu-train,celery" ]
     volumes:
       - ./backend/app:/app/app
       - ./backend/MRI:/app/MRI
@@ -154,6 +167,45 @@ services:
       - ./backend/data:/app/data
       - ./backend/migrations:/app/migrations
     restart: always
+
+  # 6a. Celery GPU Worker (opcional, perfil "gpu" — pool solo para CUDA seguro)
+  gpu-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: praxisml_gpu_worker
+    profiles: ["gpu"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/praxisml_db
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - STORAGE_BACKEND=minio
+      - MINIO_ENDPOINT=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_ENDPOINT_URL_S3=http://minio:9000
+    command: [ "uv", "run", "celery", "-A", "app.worker.celery_app", "worker", "--loglevel=info", "--pool=solo", "--concurrency=1", "--queues=gpu-train" ]
+    volumes:
+      - ./backend/app:/app/app
+      - ./backend/models:/app/models
+      - ./backend/data:/app/data
+      - ./backend/migrations:/app/migrations
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    restart: unless-stopped
 
   # 6b. Celery Beat — planificador de tareas periódicas
   celery-beat:
@@ -251,9 +303,25 @@ services:
       - prometheus
     restart: always
 
+  # 10. LocalStack Community — emulador AWS local (opcional, profile "aws-local")
+  localstack:
+    image: localstack/localstack:latest
+    container_name: praxisml_localstack
+    profiles: ["aws-local"]
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3,dynamodb,iam,sts,sqs,sns,secretsmanager,ssm,kms,logs
+      - DEFAULT_REGION=us-east-1
+      - PERSISTENCE=1
+    volumes:
+      - localstack_data:/var/lib/localstack
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   minio_data:
   prometheus_data:
   grafana_data:
   vllm_cache:
+  localstack_data:
